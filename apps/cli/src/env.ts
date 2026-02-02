@@ -1,4 +1,10 @@
 import { z } from "zod";
+import dotenv from "dotenv";
+import path from "path";
+
+const repoRoot = path.resolve(__dirname, "../../..");
+dotenv.config({ path: path.join(repoRoot, ".env"), override: true });
+dotenv.config({ path: path.join(repoRoot, "apps/cli/.env"), override: true });
 
 const envSchema = z.object({
   API_BASE_URL: z.string().min(1)

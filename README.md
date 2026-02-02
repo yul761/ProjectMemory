@@ -47,6 +47,16 @@ No-LLM smoke test:
 ./scripts/smoke-no-llm.sh
 ```
 
+LLM smoke test:
+```bash
+FEATURE_LLM=true OPENAI_API_KEY=... ./scripts/smoke-llm.sh
+```
+
+Reminder smoke test:
+```bash
+./scripts/smoke-reminders.sh
+```
+
 ## Config matrix
 
 Required for all:
@@ -97,6 +107,12 @@ await client.ingestEvent({
 
 ## FEATURE_LLM
 Set `FEATURE_LLM=true` and provide `OPENAI_API_KEY` to enable `/memory/answer` and digest jobs. If disabled, the API returns a clear error and worker jobs fail fast.
+
+## Troubleshooting
+- If `DATABASE_URL` is missing during Prisma commands, copy `.env` to `packages/db/.env`.
+- If API or worker says `FEATURE_LLM disabled` but `.env` is set, restart the process after updating `.env`.
+- Ensure Postgres port mapping matches `DATABASE_URL` (e.g. `5433:5432` in `docker-compose.yml`).
+- Reminder smoke test depends on the worker’s 60s scheduler; if it times out, re-run or keep the worker running a bit longer.
 
 ## Repo structure
 - `apps/api` NestJS REST API

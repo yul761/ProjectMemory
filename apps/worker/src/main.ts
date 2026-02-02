@@ -87,7 +87,11 @@ new Worker(
     return { ok: true };
   },
   { connection }
-);
+).on("completed", (job) => {
+  logger.info({ jobId: job.id, name: job.name }, "Digest job completed");
+}).on("failed", (job, err) => {
+  logger.error({ jobId: job?.id, name: job?.name, err }, "Digest job failed");
+});
 
 new Worker(
   "reminder",
@@ -110,7 +114,11 @@ new Worker(
     return { ok: true };
   },
   { connection }
-);
+).on("completed", (job) => {
+  logger.info({ jobId: job.id, name: job.name }, "Reminder job completed");
+}).on("failed", (job, err) => {
+  logger.error({ jobId: job?.id, name: job?.name, err }, "Reminder job failed");
+});
 
 setInterval(() => {
   reminderQueue.add("send_reminders", {}, { removeOnComplete: true, removeOnFail: true });

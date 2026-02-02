@@ -271,8 +271,7 @@ export class LlmClient {
           },
           body: JSON.stringify({
             model: this.model,
-            messages,
-            temperature: 0.4
+            messages
           }),
           signal: controller.signal
         });
