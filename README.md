@@ -22,6 +22,8 @@ pnpm install
 ```bash
 cp .env.example .env
 ```
+Apps will auto-load the repo root `.env` on startup.
+You can override per app by creating `apps/<app>/.env` (for example `apps/worker/.env`).
 
 4) **DB migrate + seed**
 ```bash
@@ -39,7 +41,7 @@ pnpm dev:telegram
 
 Optional CLI:
 ```bash
-pnpm dev:cli -- pm scopes
+pnpm dev:cli -- scopes
 ```
 
 No-LLM smoke test:
@@ -55,6 +57,11 @@ FEATURE_LLM=true OPENAI_API_KEY=... ./scripts/smoke-llm.sh
 Reminder smoke test:
 ```bash
 ./scripts/smoke-reminders.sh
+```
+
+All smoke tests:
+```bash
+pnpm smoke
 ```
 
 ## Config matrix
@@ -73,7 +80,7 @@ Worker (`apps/worker`):
 Telegram adapter (`apps/adapter-telegram`):
 - `FEATURE_TELEGRAM=true`
 - `TELEGRAM_BOT_TOKEN`, `PUBLIC_BASE_URL`, `TELEGRAM_WEBHOOK_PATH`, `API_BASE_URL`
- - `ADAPTER_PORT` (optional)
+- `ADAPTER_PORT` (optional)
 
 CLI (`apps/cli`):
 - `API_BASE_URL`
@@ -109,10 +116,10 @@ await client.ingestEvent({
 Set `FEATURE_LLM=true` and provide `OPENAI_API_KEY` to enable `/memory/answer` and digest jobs. If disabled, the API returns a clear error and worker jobs fail fast.
 
 ## Troubleshooting
-- If `DATABASE_URL` is missing during Prisma commands, copy `.env` to `packages/db/.env`.
+- Prisma runs from `packages/db`, so copy `.env` to `packages/db/.env` before `pnpm db:migrate`.
 - If API or worker says `FEATURE_LLM disabled` but `.env` is set, restart the process after updating `.env`.
 - Ensure Postgres port mapping matches `DATABASE_URL` (e.g. `5433:5432` in `docker-compose.yml`).
-- Reminder smoke test depends on the worker’s 60s scheduler; if it times out, re-run or keep the worker running a bit longer.
+- Reminder smoke test depends on the worker’s 60s scheduler; keep the worker running and allow ~1–2 minutes.
 
 ## Repo structure
 - `apps/api` NestJS REST API
