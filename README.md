@@ -134,3 +134,4 @@ Set `FEATURE_LLM=true` and provide `OPENAI_API_KEY` to enable `/memory/answer` a
 - `packages/db` Prisma schema + client
 
 See `docs/api.md` for endpoint details.
+See `docs/glossary.md` for term definitions.
