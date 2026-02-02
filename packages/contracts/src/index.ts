@@ -142,6 +142,3 @@ export const ReminderCancelOutput = z.object({
 export const HealthOutput = z.object({
   status: z.literal("ok")
 });
-export const HealthOutput = z.object({
-  status: z.literal("ok")
-});

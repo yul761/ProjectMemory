@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req } from "@nestjs/common";
 import {
   AnswerInput,
   DigestRequestInput,
@@ -16,7 +16,7 @@ import { answerSystemPrompt, answerUserPrompt } from "@project-memory/prompts";
 export class MemoryController {
   private llm: LlmClient | null = null;
 
-  constructor(private readonly domain: DomainService) {
+  constructor(@Inject(DomainService) private readonly domain: DomainService) {
     if (apiEnv.featureLlm && apiEnv.openaiApiKey) {
       this.llm = new LlmClient({
         apiKey: apiEnv.openaiApiKey,

@@ -8,3 +8,28 @@ Principles:
 - **Two memory types**: stream (append-only) and document (upsert by key).
 - **Adapters are references**: Telegram + CLI show how to integrate.
 - **Replaceable intelligence**: LLM is optional and swappable.
+
+## Memory Flow (High-Level)
+
+```mermaid
+flowchart TD
+  A[Client/Adapter/SDK] -->|POST /memory/events| B[API]
+  B --> C[(Postgres: MemoryEvent)]
+
+  A -->|POST /memory/digest| B
+  B -->|enqueue digest_scope| Q[Queue]
+  Q --> W[Worker]
+  W -->|fetch last digest + recent events| C
+  W -->|if FEATURE_LLM=true| L[LLM]
+  L --> W
+  W --> D[(Postgres: Digest)]
+
+  A -->|POST /memory/retrieve| B
+  B -->|get last digest + recent events| C
+  B --> R[Retrieve Output]
+
+  A -->|POST /memory/answer| B
+  B -->|retrieve| C
+  B -->|if FEATURE_LLM=true| L
+  B --> O[Answer Output]
+```

@@ -42,6 +42,11 @@ Optional CLI:
 pnpm dev:cli -- pm scopes
 ```
 
+No-LLM smoke test:
+```bash
+./scripts/smoke-no-llm.sh
+```
+
 ## Config matrix
 
 Required for all:

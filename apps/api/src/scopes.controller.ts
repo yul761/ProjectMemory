@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, Post, Req } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post, Req } from "@nestjs/common";
 import { ScopeCreateInput } from "@project-memory/contracts";
 import { DomainService } from "./domain.service";
 import type { RequestWithUser } from "./types";
 
 @Controller()
 export class ScopesController {
-  constructor(private readonly domain: DomainService) {}
+  constructor(@Inject(DomainService) private readonly domain: DomainService) {}
 
   @Post("/scopes")
   async createScope(@Req() req: RequestWithUser, @Body() body: unknown) {

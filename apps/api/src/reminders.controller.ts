@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Post, Query, Req } from "@nestjs/common";
 import { ReminderCreateInput, ReminderStatus } from "@project-memory/contracts";
 import { DomainService } from "./domain.service";
 import type { RequestWithUser } from "./types";
@@ -6,7 +6,7 @@ import { reminderQueue } from "./queue";
 
 @Controller()
 export class RemindersController {
-  constructor(private readonly domain: DomainService) {}
+  constructor(@Inject(DomainService) private readonly domain: DomainService) {}
 
   @Post("/reminders")
   async createReminder(@Req() req: RequestWithUser, @Body() body: unknown) {
