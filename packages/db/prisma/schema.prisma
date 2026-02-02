@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStage {
+  idea
+  build
+  test
+  launch
+}
+
+enum MemoryType {
+  stream
+  document
+}
+
+enum MemorySource {
+  telegram
+  cli
+  api
+  sdk
+}
+
+enum ReminderStatus {
+  scheduled
+  sent
+  cancelled
+}
+
+model User {
+  id             String   @id @default(uuid())
+  telegramUserId String?  @unique
+  createdAt      DateTime @default(now())
+
+  scopes    ProjectScope[]
+  state     UserState?
+  memories  MemoryEvent[]
+  reminders Reminder[]
+}
+
+model ProjectScope {
+  id        String       @id @default(uuid())
+  userId    String
+  name      String
+  goal      String?
+  stage     ProjectStage @default(idea)
+  createdAt DateTime     @default(now())
+
+  user       User          @relation(fields: [userId], references: [id])
+  memories   MemoryEvent[]
+  digests    Digest[]
+  reminders  Reminder[]
+  userStates UserState[]
+
+  @@index([userId])
+}
+
+model UserState {
+  userId          String  @id
+  activeProjectId String?
+
+  user          User          @relation(fields: [userId], references: [id])
+  activeProject ProjectScope? @relation(fields: [activeProjectId], references: [id])
+}
+
+model MemoryEvent {
+  id          String       @id @default(uuid())
+  userId      String
+  scopeId     String
+  type        MemoryType
+  source      MemorySource @default(api)
+  key         String?
+  content     String
+  contentHash String?
+  chatId      String?
+  messageId   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime?
+
+  user  User         @relation(fields: [userId], references: [id])
+  scope ProjectScope @relation(fields: [scopeId], references: [id])
+
+  @@unique([scopeId, key])
+  @@index([userId, scopeId, createdAt])
+  @@index([scopeId, key])
+}
+
+model Digest {
+  id        String   @id @default(uuid())
+  scopeId   String
+  summary   String
+  changes   String
+  nextSteps Json
+  createdAt DateTime @default(now())
+
+  scope ProjectScope @relation(fields: [scopeId], references: [id])
+
+  @@index([scopeId, createdAt])
+}
+
+model Reminder {
+  id        String         @id @default(uuid())
+  userId    String
+  scopeId   String?
+  dueAt     DateTime
+  text      String
+  status    ReminderStatus @default(scheduled)
+  createdAt DateTime       @default(now())
+
+  user  User          @relation(fields: [userId], references: [id])
+  scope ProjectScope? @relation(fields: [scopeId], references: [id])
+
+  @@index([userId, status, dueAt])
+}

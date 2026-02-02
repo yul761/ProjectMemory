@@ -1,0 +1,26 @@
+{
+  "name": "project-memory",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "pnpm --filter @project-memory/api dev",
+    "dev:worker": "pnpm --filter @project-memory/worker dev",
+    "dev:telegram": "pnpm --filter @project-memory/adapter-telegram dev",
+    "dev:cli": "pnpm --filter @project-memory/cli dev",
+    "db:migrate": "pnpm --filter @project-memory/db prisma migrate dev",
+    "db:generate": "pnpm --filter @project-memory/db prisma generate",
+    "db:studio": "pnpm --filter @project-memory/db prisma studio",
+    "seed": "pnpm --filter @project-memory/db seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  }
+}
