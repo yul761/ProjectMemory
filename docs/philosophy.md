@@ -44,3 +44,5 @@ flowchart TD
   B -->|if FEATURE_LLM=true| L
   B --> O[Answer Output]
 ```
+
+For implementation details of each stage, see `docs/technical-overview.md`.

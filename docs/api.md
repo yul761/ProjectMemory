@@ -1,6 +1,8 @@
 # API Primitives
 
-All endpoints require an identity header:\n- `x-user-id` for developer/self-host\n- `x-telegram-user-id` for adapter usage
+All endpoints require an identity header:
+- `x-user-id` for developer/self-host
+- `x-telegram-user-id` for adapter usage
 
 ## Ingest
 - **POST /memory/events**

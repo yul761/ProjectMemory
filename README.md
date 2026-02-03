@@ -133,6 +133,25 @@ Digest is processed as a controlled pipeline (not a single LLM call):
 - Consistency checks + retry (`DIGEST_MAX_RETRIES`)
 - Rebuild/backfill endpoint: `POST /memory/digest/rebuild`
 
+## Workflow Diagram
+```mermaid
+flowchart LR
+  U[Adapter / CLI / SDK] --> A[API]
+  A --> DB[(Postgres)]
+  A --> Q[(Redis Queue)]
+  Q --> W[Worker]
+  W --> LLM[OpenAI-compatible LLM]
+  W --> DB
+  A --> U
+```
+
+## How It Works (Technical)
+- API validates input with shared Zod contracts and scopes all requests by user identity.
+- Core engine (`packages/core`) performs selection/delta/state/consistency logic.
+- Worker executes digest and rebuild jobs asynchronously via BullMQ.
+- Digests are stored as first-class records, with optional `rebuildGroupId` for backfills.
+- SDK and adapters call API only (no direct database coupling).
+
 ## Troubleshooting
 - Prisma runs from `packages/db`, so copy `.env` to `packages/db/.env` before `pnpm db:migrate`.
 - If API or worker says `FEATURE_LLM disabled` but `.env` is set, restart the process after updating `.env`.
@@ -154,3 +173,4 @@ Digest is processed as a controlled pipeline (not a single LLM call):
 
 See `docs/api.md` for endpoint details.
 See `docs/glossary.md` for term definitions.
+See `docs/technical-overview.md` for architecture and pipeline internals.
