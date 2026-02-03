@@ -69,6 +69,11 @@ Core unit tests (digest control layer):
 pnpm --filter @project-memory/core test
 ```
 
+Benchmark (performance + reliability score):
+```bash
+pnpm benchmark
+```
+
 ## Config matrix
 
 Required for all:
@@ -152,6 +157,21 @@ flowchart LR
 - Digests are stored as first-class records, with optional `rebuildGroupId` for backfills.
 - SDK and adapters call API only (no direct database coupling).
 
+## Evidence-Based Performance Claims
+Use the built-in benchmark runner to generate reproducible metrics and a score report:
+
+- Ingest throughput + p95 latency
+- Retrieve hit-rate + p95 latency
+- Digest success/consistency/latency (when `FEATURE_LLM=true`)
+- Reminder due-to-sent delay
+
+Run:
+```bash
+pnpm benchmark
+```
+
+Reports are generated in `benchmark-results/` as JSON + Markdown.
+
 ## Troubleshooting
 - Prisma runs from `packages/db`, so copy `.env` to `packages/db/.env` before `pnpm db:migrate`.
 - If API or worker says `FEATURE_LLM disabled` but `.env` is set, restart the process after updating `.env`.
@@ -174,3 +194,4 @@ flowchart LR
 See `docs/api.md` for endpoint details.
 See `docs/glossary.md` for term definitions.
 See `docs/technical-overview.md` for architecture and pipeline internals.
+See `docs/benchmarking.md` for benchmark methodology and scoring.

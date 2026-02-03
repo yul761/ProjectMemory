@@ -118,6 +118,18 @@ Enable debug details with:
 
 - `DIGEST_DEBUG=true`
 
+## Benchmarking and Scoring
+
+Use `pnpm benchmark` to generate reproducible performance/reliability reports.
+
+The benchmark currently measures:
+- ingest throughput and latency
+- retrieve latency and hit-rate
+- digest success + consistency + latency (when LLM enabled)
+- reminder due-to-sent latency
+
+Reports are written to `benchmark-results/` as JSON and Markdown.
+
 ## Current Limitations
 
 - Retrieval is heuristic (no vector index yet).
