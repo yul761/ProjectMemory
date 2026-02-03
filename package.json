@@ -14,6 +14,7 @@
     "dev:worker": "pnpm --filter @project-memory/worker dev",
     "dev:telegram": "pnpm --filter @project-memory/adapter-telegram dev",
     "dev:cli": "pnpm --filter @project-memory/cli dev",
+    "test:core": "pnpm --filter @project-memory/core test",
     "smoke:no-llm": "./scripts/smoke-no-llm.sh",
     "smoke:llm": "./scripts/smoke-llm.sh",
     "smoke:reminders": "./scripts/smoke-reminders.sh",

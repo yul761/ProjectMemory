@@ -42,6 +42,7 @@ export interface Digest {
   summary: string;
   changes: string;
   nextSteps: string[];
+  rebuildGroupId?: string | null;
   createdAt: Date;
 }
 
@@ -89,7 +90,7 @@ export interface MemoryRepo {
 }
 
 export interface DigestRepo {
-  create: (data: { scopeId: string; summary: string; changes: string; nextSteps: string[] }) => Promise<Digest>;
+  create: (data: { scopeId: string; summary: string; changes: string; nextSteps: string[]; rebuildGroupId?: string | null }) => Promise<Digest>;
   listRecent: (scopeId: string, limit: number, cursor?: string | null) => Promise<{ items: Digest[]; nextCursor: string | null }>;
   findLatest: (scopeId: string) => Promise<Digest | null>;
 }
@@ -172,8 +173,8 @@ export class MemoryService {
 export class DigestService {
   constructor(private digests: DigestRepo) {}
 
-  async createDigest(scopeId: string, summary: string, changes: string, nextSteps: string[]) {
-    return this.digests.create({ scopeId, summary, changes, nextSteps });
+  async createDigest(scopeId: string, summary: string, changes: string, nextSteps: string[], rebuildGroupId?: string | null) {
+    return this.digests.create({ scopeId, summary, changes, nextSteps, rebuildGroupId });
   }
 
   async listDigests(scopeId: string, limit: number, cursor?: string | null) {
@@ -281,7 +282,7 @@ export class LlmClient {
           throw new Error(`LLM error ${response.status}: ${text}`);
         }
 
-        const data = await response.json();
+        const data: any = await response.json();
         const content = data?.choices?.[0]?.message?.content;
         if (!content) {
           throw new Error("LLM response missing content");
@@ -393,3 +394,5 @@ export async function generateAnswer(input: {
     { role: "user", content: userPrompt }
   ]);
 }
+
+export * from "./digest-control";

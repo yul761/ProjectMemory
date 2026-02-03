@@ -64,6 +64,11 @@ All smoke tests:
 pnpm smoke
 ```
 
+Core unit tests (digest control layer):
+```bash
+pnpm --filter @project-memory/core test
+```
+
 ## Config matrix
 
 Required for all:
@@ -76,6 +81,10 @@ API (`apps/api`):
 Worker (`apps/worker`):
 - `FEATURE_LLM=true` + `OPENAI_*` for digests
 - Optional Telegram reminder delivery: `FEATURE_TELEGRAM=true` + `TELEGRAM_BOT_TOKEN`
+- Digest control vars:
+  - `DIGEST_EVENT_BUDGET_TOTAL`, `DIGEST_EVENT_BUDGET_DOCS`, `DIGEST_EVENT_BUDGET_STREAM`
+  - `DIGEST_NOVELTY_THRESHOLD`, `DIGEST_MAX_RETRIES`
+  - `DIGEST_USE_LLM_CLASSIFIER`, `DIGEST_DEBUG`, `DIGEST_REBUILD_CHUNK_SIZE`
 
 Telegram adapter (`apps/adapter-telegram`):
 - `FEATURE_TELEGRAM=true`
@@ -115,11 +124,21 @@ await client.ingestEvent({
 ## FEATURE_LLM
 Set `FEATURE_LLM=true` and provide `OPENAI_API_KEY` to enable `/memory/answer` and digest jobs. If disabled, the API returns a clear error and worker jobs fail fast.
 
+## Digest Control Layer
+Digest is processed as a controlled pipeline (not a single LLM call):
+- Event selection with dedupe and per-type budgets
+- Delta detection with novelty threshold
+- Protected deterministic state merge for stable facts
+- LLM stage with strict JSON schema
+- Consistency checks + retry (`DIGEST_MAX_RETRIES`)
+- Rebuild/backfill endpoint: `POST /memory/digest/rebuild`
+
 ## Troubleshooting
 - Prisma runs from `packages/db`, so copy `.env` to `packages/db/.env` before `pnpm db:migrate`.
 - If API or worker says `FEATURE_LLM disabled` but `.env` is set, restart the process after updating `.env`.
 - Ensure Postgres port mapping matches `DATABASE_URL` (e.g. `5433:5432` in `docker-compose.yml`).
 - Reminder smoke test depends on the worker’s 60s scheduler; keep the worker running and allow ~1–2 minutes.
+- Digest and rebuild endpoints require `FEATURE_LLM=true`; otherwise API returns an actionable 400 message.
 
 ## Repo structure
 - `apps/api` NestJS REST API

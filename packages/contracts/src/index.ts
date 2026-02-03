@@ -89,6 +89,13 @@ export const DigestEnqueueOutput = z.object({
   jobId: z.string()
 });
 
+export const DigestRebuildInput = z.object({
+  scopeId: z.string().uuid(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  strategy: z.enum(["full", "since_last_good"]).optional()
+});
+
 export const RetrieveInput = z.object({
   scopeId: z.string().uuid(),
   query: z.string().min(1),
@@ -142,3 +149,31 @@ export const ReminderCancelOutput = z.object({
 export const HealthOutput = z.object({
   status: z.literal("ok")
 });
+
+// Internal digest control layer models (not API payloads)
+export const MemoryEventKind = z.enum(["decision", "constraint", "todo", "note", "status", "question", "noise"]);
+export type MemoryEventKind = z.infer<typeof MemoryEventKind>;
+
+export const EventFeatures = z.object({
+  kind: MemoryEventKind,
+  importanceScore: z.number().min(0).max(1),
+  noveltyScore: z.number().min(0).max(1),
+  docKey: z.string().optional(),
+  references: z.array(z.string()).optional()
+});
+export type EventFeatures = z.infer<typeof EventFeatures>;
+
+export const DigestState = z.object({
+  stableFacts: z.object({
+    goal: z.string().optional(),
+    constraints: z.array(z.string()).optional(),
+    decisions: z.array(z.string())
+  }),
+  workingNotes: z.object({
+    openQuestions: z.array(z.string()).optional(),
+    risks: z.array(z.string()).optional(),
+    context: z.string().optional()
+  }),
+  todos: z.array(z.string())
+});
+export type DigestState = z.infer<typeof DigestState>;

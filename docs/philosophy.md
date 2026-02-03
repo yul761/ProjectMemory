@@ -8,6 +8,17 @@ Principles:
 - **Two memory types**: stream (append-only) and document (upsert by key).
 - **Adapters are references**: Telegram + CLI show how to integrate.
 - **Replaceable intelligence**: LLM is optional and swappable.
+- **Digest control layer**: selection, deltas, protected merge, consistency checks, and retry.
+
+## Digest Control Layer
+
+Digest generation is a controlled pipeline:
+1. Select events (dedupe + budget + latest docs)
+2. Detect deltas (novelty threshold, always keep decision/constraint)
+3. Protect state (conservative deterministic merge)
+4. Generate digest via LLM with structured output
+5. Run consistency checks and retry when needed
+6. Support rebuild/backfill when a digest chain drifts
 
 ## Memory Flow (High-Level)
 

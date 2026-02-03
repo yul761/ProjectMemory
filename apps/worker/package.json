@@ -15,7 +15,6 @@
     "@project-memory/prompts": "workspace:*",
     "bullmq": "^5.22.2",
     "pino": "^9.5.0",
-    "dotenv": "^16.4.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {

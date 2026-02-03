@@ -11,6 +11,16 @@ export class DomainService {
   public reminderService: ReminderService;
 
   constructor() {
+    const toDigest = (row: { id: string; scopeId: string; summary: string; changes: string; nextSteps: unknown; createdAt: Date; rebuildGroupId?: string | null }) => ({
+      id: row.id,
+      scopeId: row.scopeId,
+      summary: row.summary,
+      changes: row.changes,
+      nextSteps: Array.isArray(row.nextSteps) ? (row.nextSteps as string[]) : [],
+      createdAt: row.createdAt,
+      rebuildGroupId: row.rebuildGroupId ?? null
+    });
+
     const projectsRepo = {
       create: (data: { userId: string; name: string; goal?: string | null; stage?: "idea" | "build" | "test" | "launch" }) =>
         prisma.projectScope.create({ data }),
@@ -63,8 +73,10 @@ export class DomainService {
     };
 
     const digestRepo = {
-      create: (data: { scopeId: string; summary: string; changes: string; nextSteps: string[] }) =>
-        prisma.digest.create({ data: { ...data, nextSteps: data.nextSteps } }),
+      create: async (data: { scopeId: string; summary: string; changes: string; nextSteps: string[]; rebuildGroupId?: string | null }) => {
+        const created = await prisma.digest.create({ data: { ...data, nextSteps: data.nextSteps, ...(data.rebuildGroupId ? ({ rebuildGroupId: data.rebuildGroupId } as any) : {}) } as any });
+        return toDigest(created as any);
+      },
       listRecent: async (scopeId: string, limit: number, cursor?: string | null) => {
         const items = await prisma.digest.findMany({
           where: { scopeId },
@@ -73,9 +85,12 @@ export class DomainService {
           ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
         });
         const next = items.length > limit ? items.pop() : null;
-        return { items, nextCursor: next ? next.id : null };
+        return { items: items.map((item) => toDigest(item as any)), nextCursor: next ? next.id : null };
       },
-      findLatest: (scopeId: string) => prisma.digest.findFirst({ where: { scopeId }, orderBy: { createdAt: "desc" } })
+      findLatest: async (scopeId: string) => {
+        const found = await prisma.digest.findFirst({ where: { scopeId }, orderBy: { createdAt: "desc" } });
+        return found ? toDigest(found as any) : null;
+      }
     };
 
     const reminderRepo = {

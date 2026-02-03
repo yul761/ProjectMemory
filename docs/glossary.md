@@ -17,6 +17,9 @@ Upserted event identified by a `key`. Good for notes, specs, and state summaries
 ## Digest
 A structured summary that compresses recent events, layered on top of the last digest. Digests are first-class objects stored in the database.
 
+## Digest Rebuild
+A recovery workflow that regenerates digest chains for a scope over a time range. Rebuild outputs are marked with a `rebuildGroupId` for traceability.
+
 ## Layered Memory
 A digesting strategy where each new digest is generated from the last digest plus recent events. This keeps summaries short while preserving long-term context.
 

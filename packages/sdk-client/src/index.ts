@@ -2,6 +2,7 @@ import {
   AnswerInput,
   AnswerOutput,
   DigestEnqueueOutput,
+  DigestRebuildInput,
   DigestListOutput,
   DigestRequestInput,
   MemoryEventInput,
@@ -89,6 +90,13 @@ export class ProjectMemoryClient {
     return this.request("/memory/digest", DigestEnqueueOutput, {
       method: "POST",
       body: JSON.stringify(DigestRequestInput.parse(input))
+    });
+  }
+
+  rebuildDigest(input: z.input<typeof DigestRebuildInput>) {
+    return this.request("/memory/digest/rebuild", DigestEnqueueOutput, {
+      method: "POST",
+      body: JSON.stringify(DigestRebuildInput.parse(input))
     });
   }
 

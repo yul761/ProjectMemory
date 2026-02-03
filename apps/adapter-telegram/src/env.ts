@@ -1,15 +1,24 @@
+import { existsSync, readFileSync } from "fs";
 import { z } from "zod";
-import dotenv from "dotenv";
 import path from "path";
 
-const repoRoot = path.resolve(__dirname, "../../..");
-dotenv.config({ path: path.join(repoRoot, ".env"), override: true });
-dotenv.config({ path: path.join(repoRoot, "apps/adapter-telegram/.env"), override: true });
+function loadEnvFile(filePath: string) {
+  if (!existsSync(filePath)) return;
+  const lines = readFileSync(filePath, "utf8").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const idx = trimmed.indexOf("=");
+    if (idx < 0) continue;
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    process.env[key] = value;
+  }
+}
 
-const booleanString = z
-  .string()
-  .optional()
-  .transform((value) => value === "true");
+const repoRoot = path.resolve(__dirname, "../../..");
+loadEnvFile(path.join(repoRoot, ".env"));
+loadEnvFile(path.join(repoRoot, "apps/adapter-telegram/.env"));
 
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
@@ -17,16 +26,7 @@ const envSchema = z.object({
   TELEGRAM_WEBHOOK_PATH: z.string().optional(),
   API_BASE_URL: z.string().min(1),
   ADAPTER_PORT: z.string().optional(),
-  FEATURE_TELEGRAM: booleanString.default("false")
-}).superRefine((env, ctx) => {
-  if (env.FEATURE_TELEGRAM === "true") {
-    if (!env.TELEGRAM_BOT_TOKEN) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "TELEGRAM_BOT_TOKEN required when FEATURE_TELEGRAM=true" });
-    }
-    if (!env.PUBLIC_BASE_URL) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "PUBLIC_BASE_URL required when FEATURE_TELEGRAM=true" });
-    }
-  }
+  FEATURE_TELEGRAM: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -37,6 +37,19 @@ if (!parsed.success) {
 }
 
 const env = parsed.data;
+const featureTelegram = env.FEATURE_TELEGRAM === "true";
+
+if (featureTelegram) {
+  const result = z.object({
+    TELEGRAM_BOT_TOKEN: z.string().min(1),
+    PUBLIC_BASE_URL: z.string().min(1)
+  }).safeParse(env);
+  if (!result.success) {
+    // eslint-disable-next-line no-console
+    console.error("Invalid environment variables", result.error.flatten().fieldErrors);
+    process.exit(1);
+  }
+}
 
 export const adapterEnv = {
   botToken: env.TELEGRAM_BOT_TOKEN || "",
@@ -44,5 +57,5 @@ export const adapterEnv = {
   webhookPath: env.TELEGRAM_WEBHOOK_PATH || "/telegram/webhook",
   apiBaseUrl: env.API_BASE_URL,
   port: Number(env.ADAPTER_PORT || 3001),
-  featureTelegram: env.FEATURE_TELEGRAM || false
+  featureTelegram
 };

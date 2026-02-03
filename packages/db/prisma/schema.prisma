@@ -91,16 +91,18 @@ model MemoryEvent {
 }
 
 model Digest {
-  id        String   @id @default(uuid())
-  scopeId   String
-  summary   String
-  changes   String
-  nextSteps Json
-  createdAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  scopeId        String
+  summary        String
+  changes        String
+  nextSteps      Json
+  rebuildGroupId String?
+  createdAt      DateTime @default(now())
 
   scope ProjectScope @relation(fields: [scopeId], references: [id])
 
   @@index([scopeId, createdAt])
+  @@index([scopeId, rebuildGroupId])
 }
 
 model Reminder {

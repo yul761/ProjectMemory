@@ -1,0 +1,18 @@
+Context:
+Scope: {{scopeName}}
+Goal: {{scopeGoal}}
+Stage: {{scopeStage}}
+
+Previous digest:
+{{lastDigest}}
+
+Protected state:
+{{protectedState}}
+
+Delta candidates:
+{{deltaCandidates}}
+
+Latest documents:
+{{documents}}
+
+Return JSON: {"summary": string, "changes": string[], "nextSteps": string[]}

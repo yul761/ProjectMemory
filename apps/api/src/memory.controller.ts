@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req } from "@nestjs/common";
 import {
   AnswerInput,
+  DigestRebuildInput,
   DigestRequestInput,
   MemoryEventInput,
   RetrieveInput
@@ -91,12 +92,35 @@ export class MemoryController {
 
   @Post("/memory/digest")
   async enqueueDigest(@Req() req: RequestWithUser, @Body() body: unknown) {
+    if (!apiEnv.featureLlm) {
+      throw new BadRequestException("FEATURE_LLM disabled. Enable FEATURE_LLM=true and set OPENAI_API_KEY to run digest.");
+    }
     const input = DigestRequestInput.parse(body);
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) {
       return { error: "Scope not found" };
     }
     const job = await digestQueue.add("digest_scope", { userId: req.userId, scopeId: input.scopeId });
+    return { jobId: job.id };
+  }
+
+  @Post("/memory/digest/rebuild")
+  async rebuildDigest(@Req() req: RequestWithUser, @Body() body: unknown) {
+    if (!apiEnv.featureLlm) {
+      throw new BadRequestException("FEATURE_LLM disabled. Enable FEATURE_LLM=true and set OPENAI_API_KEY to run digest rebuild.");
+    }
+    const input = DigestRebuildInput.parse(body);
+    const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
+    if (!scope) {
+      return { error: "Scope not found" };
+    }
+    const job = await digestQueue.add("rebuild_digest_chain", {
+      userId: req.userId,
+      scopeId: input.scopeId,
+      from: input.from,
+      to: input.to,
+      strategy: input.strategy ?? "full"
+    });
     return { jobId: job.id };
   }
 

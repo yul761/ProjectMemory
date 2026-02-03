@@ -1,0 +1,4 @@
+Events:
+{{events}}
+
+Classify each event by semantic kind and importance score (0..1).

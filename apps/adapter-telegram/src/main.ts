@@ -13,7 +13,7 @@ async function apiFetch(path: string, telegramUserId: string, options?: RequestI
       ...(options?.headers || {})
     }
   });
-  return response.json();
+  return response.json() as Promise<any>;
 }
 
 async function sendMessage(chatId: number, text: string) {

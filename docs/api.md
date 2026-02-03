@@ -10,6 +10,11 @@ All endpoints require an identity header:\n- `x-user-id` for developer/self-host
 ## Digest
 - **POST /memory/digest**
   - body: `{ scopeId }` (enqueue job)
+- requires `FEATURE_LLM=true` and `OPENAI_API_KEY`
+- returns actionable error when disabled
+- **POST /memory/digest/rebuild**
+  - body: `{ scopeId, from?, to?, strategy?: 'full'|'since_last_good' }`
+  - enqueues `rebuild_digest_chain`
 - **GET /memory/digests?scopeId=&limit=&cursor=**
 
 ## Retrieve

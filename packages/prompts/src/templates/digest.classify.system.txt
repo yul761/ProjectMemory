@@ -1,0 +1,3 @@
+Classify memory events for digest selection.
+Return strict JSON array where each item has:
+{id:string, kind:'decision'|'constraint'|'todo'|'note'|'status'|'question'|'noise', importanceScore:number}
