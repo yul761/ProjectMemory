@@ -1,0 +1,54 @@
+{
+  "startedAt": "2026-02-03T06:43:34.256Z",
+  "config": {
+    "apiBaseUrl": "http://localhost:3000",
+    "userId": "benchmark-user",
+    "events": 60,
+    "concurrency": 12,
+    "retrieveQueries": 16,
+    "digestRuns": 3,
+    "timeoutMs": 180000,
+    "outputDir": "benchmark-results",
+    "featureLlm": true,
+    "profile": "balanced"
+  },
+  "metrics": {
+    "scopeId": "d8732945-6caa-447f-a353-b7c3173a2402",
+    "ingest": {
+      "total": 60,
+      "success": 60,
+      "failure": 0,
+      "throughputEventsPerSec": 351.03,
+      "p50Ms": 24.98,
+      "p95Ms": 66.58
+    },
+    "retrieve": {
+      "total": 16,
+      "success": 16,
+      "strictHitRate": 1,
+      "hitRate": 1,
+      "p50Ms": 10.97,
+      "p95Ms": 19.29
+    },
+    "digest": {
+      "enabled": true,
+      "runs": 3,
+      "success": 3,
+      "consistencyPassRate": 1,
+      "avgLatencyMs": 78401.15
+    },
+    "reminder": {
+      "success": 1,
+      "delayMs": 45241
+    }
+  },
+  "scores": {
+    "ingest": 100,
+    "retrieve": 100,
+    "digest": 80,
+    "reminder": 100,
+    "overall": 94
+  },
+  "notes": [],
+  "endedAt": "2026-02-03T06:54:40.748Z"
+}

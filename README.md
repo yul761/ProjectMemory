@@ -161,13 +161,18 @@ flowchart LR
 Use the built-in benchmark runner to generate reproducible metrics and a score report:
 
 - Ingest throughput + p95 latency
-- Retrieve hit-rate + p95 latency
+- Retrieve semantic/strict hit-rate + p95 latency
 - Digest success/consistency/latency (when `FEATURE_LLM=true`)
 - Reminder due-to-sent delay
 
 Run:
 ```bash
 pnpm benchmark
+```
+
+Optional profile:
+```bash
+BENCH_PROFILE=stress pnpm benchmark
 ```
 
 Reports are generated in `benchmark-results/` as JSON + Markdown.

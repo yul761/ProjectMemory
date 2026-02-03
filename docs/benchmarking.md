@@ -27,7 +27,8 @@ Outputs are written to `benchmark-results/`:
 
 2. Retrieve
 - p50/p95 latency
-- hit rate (keyword-grounded heuristic check)
+- semantic hit rate (concept + alias grounded check)
+- strict hit rate (exact keyword check)
 
 3. Digest (when `FEATURE_LLM=true`)
 - success rate
@@ -46,12 +47,22 @@ Weighted score:
 
 Each component score is derived from thresholds on latency/success/hit-rate.
 
+## Profiles And Tuning
+
+`BENCH_PROFILE` presets:
+- `quick`: fast smoke benchmark
+- `balanced` (default): stable local comparison
+- `stress`: higher load for saturation checks
+
+Env values still override profile defaults.
+
 ## Tuning via Env
 
-- `BENCH_EVENTS` (default 300)
-- `BENCH_INGEST_CONCURRENCY` (default 20)
-- `BENCH_RETRIEVE_QUERIES` (default 12)
-- `BENCH_DIGEST_RUNS` (default 2)
+- `BENCH_PROFILE` (default balanced)
+- `BENCH_EVENTS` (profile default)
+- `BENCH_INGEST_CONCURRENCY` (profile default)
+- `BENCH_RETRIEVE_QUERIES` (profile default)
+- `BENCH_DIGEST_RUNS` (profile default)
 - `BENCH_TIMEOUT_MS` (default 180000)
 - `BENCH_USER_ID` (default benchmark-user)
 - `BENCH_OUTPUT_DIR` (default benchmark-results)

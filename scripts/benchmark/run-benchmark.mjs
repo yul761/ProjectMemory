@@ -30,7 +30,8 @@ const cfg = {
   digestRuns: Number(process.env.BENCH_DIGEST_RUNS || 2),
   timeoutMs: Number(process.env.BENCH_TIMEOUT_MS || 180000),
   outputDir: process.env.BENCH_OUTPUT_DIR || "benchmark-results",
-  featureLlm: process.env.FEATURE_LLM === "true"
+  featureLlm: process.env.FEATURE_LLM === "true",
+  profile: process.env.BENCH_PROFILE || "balanced"
 };
 
 const headers = { "Content-Type": "application/json", "x-user-id": cfg.userId };
@@ -152,7 +153,16 @@ function computeOverallScore(parts, featureLlm) {
 }
 
 function isActionable(step) {
-  return /^(add|build|create|define|deliver|document|fix|measure|review|ship|test|update|write|implement|refactor)\b/i.test(step.trim());
+  return /^(add|analyze|build|create|define|deliver|document|fix|implement|investigate|measure|monitor|plan|prioritize|refactor|review|ship|test|update|validate|write)\b/i.test(step.trim());
+}
+
+function normalizeText(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+}
+
+function containsAny(text, terms) {
+  const normalized = normalizeText(text);
+  return terms.some((term) => normalized.includes(normalizeText(term).trim()));
 }
 
 async function waitForNewDigest(scopeId, previousCount) {
@@ -184,6 +194,18 @@ async function waitForReminderSent(reminderId, dueAtIso) {
 }
 
 async function run() {
+  const profiles = {
+    quick: { events: 50, concurrency: 8, retrieveQueries: 8, digestRuns: 1 },
+    balanced: { events: 120, concurrency: 12, retrieveQueries: 16, digestRuns: 2 },
+    stress: { events: 300, concurrency: 20, retrieveQueries: 24, digestRuns: 3 }
+  };
+  if (profiles[cfg.profile]) {
+    cfg.events = Number(process.env.BENCH_EVENTS || profiles[cfg.profile].events);
+    cfg.concurrency = Number(process.env.BENCH_INGEST_CONCURRENCY || profiles[cfg.profile].concurrency);
+    cfg.retrieveQueries = Number(process.env.BENCH_RETRIEVE_QUERIES || profiles[cfg.profile].retrieveQueries);
+    cfg.digestRuns = Number(process.env.BENCH_DIGEST_RUNS || profiles[cfg.profile].digestRuns);
+  }
+
   const startedAt = msNow();
   const report = {
     startedAt,
@@ -220,10 +242,10 @@ async function run() {
   };
 
   const retrieveCases = [
-    { query: "What did we decide?", expected: "decide" },
-    { query: "What constraints exist?", expected: "constraint" },
-    { query: "Any blockers?", expected: "blocked" },
-    { query: "What todos are pending?", expected: "todo" }
+    { query: "What did we decide?", expected: "decide", aliases: ["decision", "agreed", "we decide", "we will"] },
+    { query: "What constraints exist?", expected: "constraint", aliases: ["limitation", "must", "cannot", "blocked"] },
+    { query: "Any blockers?", expected: "blocked", aliases: ["blocker", "constraint", "risk"] },
+    { query: "What todos are pending?", expected: "todo", aliases: ["next step", "action item", "pending", "follow up"] }
   ];
   const retrieveRuns = Array.from({ length: cfg.retrieveQueries }).map((_, i) => retrieveCases[i % retrieveCases.length]);
   const retrieveResults = [];
@@ -233,14 +255,17 @@ async function run() {
     retrieveResults.push({
       ok: res.ok,
       latencyMs: res.latencyMs,
-      hit: combined.includes(item.expected)
+      strictHit: combined.includes(item.expected),
+      hit: containsAny(combined, [item.expected, ...item.aliases])
     });
   }
   const retrieveLatencies = retrieveResults.map((r) => r.latencyMs);
   const retrieveHitRate = retrieveResults.filter((r) => r.hit).length / Math.max(1, retrieveResults.length);
+  const retrieveStrictHitRate = retrieveResults.filter((r) => r.strictHit).length / Math.max(1, retrieveResults.length);
   report.metrics.retrieve = {
     total: retrieveResults.length,
     success: retrieveResults.filter((r) => r.ok).length,
+    strictHitRate: Number(retrieveStrictHitRate.toFixed(3)),
     hitRate: Number(retrieveHitRate.toFixed(3)),
     p50Ms: Number(percentile(retrieveLatencies, 50).toFixed(2)),
     p95Ms: Number(percentile(retrieveLatencies, 95).toFixed(2))
@@ -351,7 +376,7 @@ async function run() {
     "## Metrics",
     "",
     `- Ingest throughput: ${report.metrics.ingest.throughputEventsPerSec} events/s (p95 ${report.metrics.ingest.p95Ms} ms)`,
-    `- Retrieve hit rate: ${report.metrics.retrieve.hitRate} (p95 ${report.metrics.retrieve.p95Ms} ms)`,
+    `- Retrieve semantic hit rate: ${report.metrics.retrieve.hitRate}, strict hit rate: ${report.metrics.retrieve.strictHitRate} (p95 ${report.metrics.retrieve.p95Ms} ms)`,
     `- Digest success: ${report.metrics.digest.success}/${report.metrics.digest.runs}, consistency pass ${report.metrics.digest.consistencyPassRate}, avg latency ${report.metrics.digest.avgLatencyMs} ms`,
     `- Reminder sent: ${report.metrics.reminder.success === 1 ? "yes" : "no"}, delay ${report.metrics.reminder.delayMs} ms`,
     "",

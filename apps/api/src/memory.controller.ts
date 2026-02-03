@@ -160,7 +160,7 @@ export class MemoryController {
       return { error: "Scope not found" };
     }
     const limit = input.limit ?? 20;
-    const result = await this.domain.retrieveService.retrieve(input.scopeId, limit);
+    const result = await this.domain.retrieveService.retrieve(input.scopeId, limit, input.query);
     return {
       digest: result.digest ? result.digest.summary : null,
       events: result.events.map((event) => ({
@@ -181,7 +181,7 @@ export class MemoryController {
     if (!scope) {
       return { error: "Scope not found" };
     }
-    const result = await this.domain.retrieveService.retrieve(input.scopeId, 25);
+    const result = await this.domain.retrieveService.retrieve(input.scopeId, 25, input.question);
     const digestText = result.digest ? result.digest.summary : null;
     const eventsText = result.events.map((event) => `- ${event.createdAt.toISOString()}: ${event.content}`).join("\n");
 

@@ -1,0 +1,52 @@
+{
+  "startedAt": "2026-02-03T06:26:13.065Z",
+  "config": {
+    "apiBaseUrl": "http://localhost:3000",
+    "userId": "benchmark-user",
+    "events": 60,
+    "concurrency": 12,
+    "retrieveQueries": 16,
+    "digestRuns": 3,
+    "timeoutMs": 180000,
+    "outputDir": "benchmark-results",
+    "featureLlm": true
+  },
+  "metrics": {
+    "scopeId": "ec9f8182-9aaa-4842-8cb0-60c43b0fef30",
+    "ingest": {
+      "total": 60,
+      "success": 60,
+      "failure": 0,
+      "throughputEventsPerSec": 366.17,
+      "p50Ms": 23.71,
+      "p95Ms": 65.03
+    },
+    "retrieve": {
+      "total": 16,
+      "success": 16,
+      "hitRate": 1,
+      "p50Ms": 10.72,
+      "p95Ms": 20.1
+    },
+    "digest": {
+      "enabled": true,
+      "runs": 3,
+      "success": 3,
+      "consistencyPassRate": 0,
+      "avgLatencyMs": 126673.63
+    },
+    "reminder": {
+      "success": 1,
+      "delayMs": 5110
+    }
+  },
+  "scores": {
+    "ingest": 100,
+    "retrieve": 100,
+    "digest": 45,
+    "reminder": 100,
+    "overall": 83.5
+  },
+  "notes": [],
+  "endedAt": "2026-02-03T06:32:58.726Z"
+}

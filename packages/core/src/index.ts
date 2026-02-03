@@ -189,10 +189,65 @@ export class DigestService {
 export class RetrieveService {
   constructor(private digests: DigestRepo, private memories: MemoryRepo) {}
 
-  async retrieve(scopeId: string, limit: number) {
+  private queryAliases: Record<string, string[]> = {
+    decision: ["decide", "decision", "agreed", "we will", "chose"],
+    constraint: ["constraint", "blocked", "blocker", "limitation", "must", "cannot"],
+    todo: ["todo", "next step", "action item", "follow up", "pending"],
+    status: ["status", "progress", "done", "shipped", "completed"]
+  };
+
+  private tokenize(text: string) {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\\s]/g, " ")
+      .split(/\\s+/)
+      .filter((token) => token.length > 2);
+  }
+
+  private scoreByQuery(query: string, content: string) {
+    const queryTokens = new Set(this.tokenize(query));
+    for (const [concept, aliases] of Object.entries(this.queryAliases)) {
+      if (!aliases.some((alias) => query.toLowerCase().includes(alias))) continue;
+      queryTokens.add(concept);
+      for (const alias of aliases) {
+        for (const token of this.tokenize(alias)) queryTokens.add(token);
+      }
+    }
+    if (!queryTokens.size) return 0;
+    const contentTokens = this.tokenize(content);
+    const overlap = contentTokens.filter((token) => queryTokens.has(token)).length;
+    const phraseBoost = [...queryTokens].some((token) => content.toLowerCase().includes(token)) ? 0.15 : 0;
+    return Math.min(1, overlap / queryTokens.size + phraseBoost);
+  }
+
+  async retrieve(scopeId: string, limit: number, query?: string) {
     const digest = await this.digests.findLatest(scopeId);
-    const events = await this.memories.listRecent(scopeId, limit);
-    return { digest, events: events.items };
+    const candidateSize = Math.min(Math.max(limit * 4, 40), 200);
+    const events = await this.memories.listRecent(scopeId, candidateSize);
+    if (!query || !query.trim()) {
+      return { digest, events: events.items.slice(0, limit) };
+    }
+
+    const newestTs = events.items[0]?.createdAt.getTime() ?? Date.now();
+    const oldestTs = events.items[events.items.length - 1]?.createdAt.getTime() ?? newestTs;
+    const timeRange = Math.max(1, newestTs - oldestTs);
+
+    const ranked = events.items
+      .map((event) => ({
+        event,
+        score: this.scoreByQuery(query, event.content),
+        recency: (event.createdAt.getTime() - oldestTs) / timeRange
+      }))
+      .sort((a, b) => {
+        const combinedA = a.score * 0.8 + a.recency * 0.2;
+        const combinedB = b.score * 0.8 + b.recency * 0.2;
+        if (combinedB !== combinedA) return combinedB - combinedA;
+        return b.event.createdAt.getTime() - a.event.createdAt.getTime();
+      })
+      .map((item) => item.event)
+      .slice(0, limit);
+
+    return { digest, events: ranked };
   }
 }
 
@@ -200,7 +255,7 @@ export class AnswerService {
   constructor(private retrieveService: RetrieveService, private llm: LlmClient) {}
 
   async answer(scopeId: string, question: string, prompts: { system: string; user: string }) {
-    const result = await this.retrieveService.retrieve(scopeId, 25);
+    const result = await this.retrieveService.retrieve(scopeId, 25, question);
     const digestText = result.digest ? result.digest.summary : null;
     const eventsText = result.events.map((event) => `- ${event.createdAt.toISOString()}: ${event.content}`).join("\n");
     return generateAnswer({

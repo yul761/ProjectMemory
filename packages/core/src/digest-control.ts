@@ -160,6 +160,19 @@ function dedupeConsecutiveEvents(events: MemoryEvent[], rationale: string[]) {
   return output;
 }
 
+function dedupeNearDuplicateEvents(events: MemoryEvent[], rationale: string[]) {
+  const kept: MemoryEvent[] = [];
+  for (const event of events) {
+    const duplicate = kept.find((existing) => jaccardSimilarity(existing.content, event.content) >= 0.92);
+    if (duplicate) {
+      rationale.push(`dedup_near:${event.id}`);
+      continue;
+    }
+    kept.push(event);
+  }
+  return kept;
+}
+
 function latestDocumentsByKey(events: MemoryEvent[]) {
   const map = new Map<string, MemoryEvent>();
   for (const event of events) {
@@ -180,21 +193,33 @@ export function selectEventsForDigest(input: {
 }): SelectionResult {
   const rationale: string[] = [];
   const sorted = [...input.recentEvents].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  const deduped = dedupeConsecutiveEvents(sorted, rationale);
+  const dedupedConsecutive = dedupeConsecutiveEvents(sorted, rationale);
+  const deduped = dedupeNearDuplicateEvents(dedupedConsecutive, rationale);
 
   const docs = latestDocumentsByKey(deduped)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, input.eventBudgetDocs);
 
   const docsById = new Set(docs.map((doc) => doc.id));
+  const newestTs = deduped[0]?.createdAt.getTime() ?? Date.now();
+  const oldestTs = deduped[deduped.length - 1]?.createdAt.getTime() ?? newestTs;
+  const timeRange = Math.max(1, newestTs - oldestTs);
   const streamCandidates = deduped
     .filter((event) => !docsById.has(event.id) && event.type === "stream")
-    .map((event) => ({ event, features: makeFeatures(event) }))
-    .sort((a, b) => b.features.importanceScore - a.features.importanceScore)
+    .map((event) => {
+      const features = makeFeatures(event);
+      const recency = (event.createdAt.getTime() - oldestTs) / timeRange;
+      const keywordBoost = /\b(decide|decision|we will|constraint|blocked|todo|next|risk|goal)\b/i.test(event.content) ? 0.1 : 0;
+      const score = features.importanceScore * 0.7 + recency * 0.3 + keywordBoost;
+      return { event, features, score };
+    })
+    .sort((a, b) => b.score - a.score)
     .slice(0, input.eventBudgetStream);
 
-  const docSelected = docs.map((event) => ({ event, features: makeFeatures(event) }));
-  const merged = [...docSelected, ...streamCandidates].slice(0, input.eventBudgetTotal);
+  const docSelected = docs.map((event) => ({ event, features: makeFeatures(event), score: 1 }));
+  const merged = [...docSelected, ...streamCandidates]
+    .slice(0, input.eventBudgetTotal)
+    .map(({ event, features }) => ({ event, features }));
 
   rationale.push(`selected_docs:${docSelected.length}`);
   rationale.push(`selected_stream:${Math.max(0, merged.length - docSelected.length)}`);
