@@ -200,3 +200,11 @@ See `docs/api.md` for endpoint details.
 See `docs/glossary.md` for term definitions.
 See `docs/technical-overview.md` for architecture and pipeline internals.
 See `docs/benchmarking.md` for benchmark methodology and scoring.
+See `docs/release.md` for release/versioning workflow.
+
+## OSS Project Hygiene
+- Contribution guide: `CONTRIBUTING.md`
+- Code of conduct: `CODE_OF_CONDUCT.md`
+- Security policy: `SECURITY.md`
+- Changelog: `CHANGELOG.md`
+- CI workflow: `.github/workflows/ci.yml`
