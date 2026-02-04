@@ -6,6 +6,8 @@ The format loosely follows Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-02-04
+
 ### Added
 - Benchmark suite and comparison reporting (`benchmark-results/compare-all.md`).
 - Digest control pipeline (selection, delta detection, state protection, consistency checks, retries).
@@ -19,4 +21,3 @@ The format loosely follows Keep a Changelog and Semantic Versioning.
 
 ### Docs
 - Expanded technical and benchmarking docs.
-

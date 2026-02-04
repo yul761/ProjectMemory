@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
-  "changelog": ["@changesets/changelog-github", { "repo": "https://github.com/yul761/ProjectMemory" }],
+  "changelog": ["@changesets/changelog-github", { "repo": "yul761/ProjectMemory" }],
   "commit": false,
   "fixed": [],
   "linked": [],

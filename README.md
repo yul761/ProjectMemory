@@ -1,5 +1,10 @@
 # Project Memory
 
+[![CI](https://github.com/yul761/ProjectMemory/actions/workflows/ci.yml/badge.svg)](https://github.com/yul761/ProjectMemory/actions/workflows/ci.yml)
+[![Integration Smoke](https://github.com/yul761/ProjectMemory/actions/workflows/integration-smoke.yml/badge.svg)](https://github.com/yul761/ProjectMemory/actions/workflows/integration-smoke.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Latest Release](https://img.shields.io/github/v/release/yul761/ProjectMemory)](https://github.com/yul761/ProjectMemory/releases)
+
 An open-source **long-term memory engine** for developers. It provides primitives to ingest events, produce layered digests, retrieve memory, and (optionally) answer questions grounded in that memory.
 
 This is **not** a consumer assistant app. You bring your own infrastructure and secrets via environment variables.
@@ -201,6 +206,7 @@ See `docs/glossary.md` for term definitions.
 See `docs/technical-overview.md` for architecture and pipeline internals.
 See `docs/benchmarking.md` for benchmark methodology and scoring.
 See `docs/release.md` for release/versioning workflow.
+See `docs/release-v0.1.0.md` for the initial release notes draft.
 See `ROADMAP.md` for planned milestones.
 
 ## OSS Project Hygiene
