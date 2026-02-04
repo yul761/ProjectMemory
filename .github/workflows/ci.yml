@@ -27,6 +27,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint (TypeScript strict check)
+        run: pnpm lint
+
       - name: Build workspace
         run: pnpm -r --filter "./apps/**" --filter "./packages/**" build
 

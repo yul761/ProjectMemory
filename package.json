@@ -15,6 +15,9 @@
     "dev:telegram": "pnpm --filter @project-memory/adapter-telegram dev",
     "dev:cli": "pnpm --filter @project-memory/cli dev",
     "test:core": "pnpm --filter @project-memory/core test",
+    "lint": "pnpm -r --filter \"./apps/**\" --filter \"./packages/**\" exec tsc -p tsconfig.json --noEmit",
+    "format": "node ./scripts/format/fix-format.mjs",
+    "format:check": "node ./scripts/format/check-format.mjs",
     "build": "pnpm -r --filter \"./apps/**\" --filter \"./packages/**\" build",
     "changeset": "pnpm dlx changeset",
     "release:status": "pnpm dlx changeset status",
@@ -24,6 +27,7 @@
     "smoke:reminders": "./scripts/smoke-reminders.sh",
     "smoke": "pnpm smoke:no-llm && pnpm smoke:llm && pnpm smoke:reminders",
     "db:migrate": "pnpm --filter @project-memory/db prisma migrate dev",
+    "db:deploy": "pnpm --filter @project-memory/db prisma migrate deploy",
     "db:generate": "pnpm --filter @project-memory/db prisma generate",
     "db:studio": "pnpm --filter @project-memory/db prisma studio",
     "seed": "pnpm --filter @project-memory/db seed"

@@ -201,6 +201,7 @@ See `docs/glossary.md` for term definitions.
 See `docs/technical-overview.md` for architecture and pipeline internals.
 See `docs/benchmarking.md` for benchmark methodology and scoring.
 See `docs/release.md` for release/versioning workflow.
+See `ROADMAP.md` for planned milestones.
 
 ## OSS Project Hygiene
 - Contribution guide: `CONTRIBUTING.md`
@@ -208,3 +209,10 @@ See `docs/release.md` for release/versioning workflow.
 - Security policy: `SECURITY.md`
 - Changelog: `CHANGELOG.md`
 - CI workflow: `.github/workflows/ci.yml`
+
+## Quality Gates
+- `pnpm format:check` for formatting checks
+- `pnpm lint` for strict TypeScript checks across workspaces
+- `pnpm build` for full workspace compilation
+- `pnpm --filter @project-memory/core test` for core unit tests
+- `.github/workflows/integration-smoke.yml` runs API + worker smoke tests (no LLM)
