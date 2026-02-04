@@ -11,7 +11,17 @@ export class DomainService {
   public reminderService: ReminderService;
 
   constructor() {
-    const toDigest = (row: { id: string; scopeId: string; summary: string; changes: string; nextSteps: unknown; createdAt: Date; rebuildGroupId?: string | null }) => ({
+    type DigestRow = {
+      id: string;
+      scopeId: string;
+      summary: string;
+      changes: string;
+      nextSteps: unknown;
+      createdAt: Date;
+      rebuildGroupId?: string | null;
+    };
+
+    const toDigest = (row: DigestRow) => ({
       id: row.id,
       scopeId: row.scopeId,
       summary: row.summary,
@@ -85,7 +95,7 @@ export class DomainService {
           ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
         });
         const next = items.length > limit ? items.pop() : null;
-        return { items: items.map((item) => toDigest(item as any)), nextCursor: next ? next.id : null };
+        return { items: items.map((item: DigestRow) => toDigest(item)), nextCursor: next ? next.id : null };
       },
       findLatest: async (scopeId: string) => {
         const found = await prisma.digest.findFirst({ where: { scopeId }, orderBy: { createdAt: "desc" } });
