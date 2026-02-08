@@ -1,0 +1,69 @@
+{
+  "startedAt": "2026-02-08T06:23:36.563Z",
+  "commit": "9839ea228f117e179d180783b346cb96997effc8",
+  "describe": "v0.1.0-11-g9839ea2",
+  "environment": {
+    "node": "v22.10.0",
+    "platform": "darwin",
+    "arch": "x64",
+    "cpu": "Intel(R) Core(TM) i7-8850H CPU @ 2.60GHz",
+    "cores": 12,
+    "memoryGb": 16
+  },
+  "config": {
+    "apiBaseUrl": "http://localhost:3000",
+    "userId": "benchmark-user",
+    "events": 60,
+    "concurrency": 12,
+    "retrieveQueries": 16,
+    "digestRuns": 3,
+    "timeoutMs": 120000,
+    "outputDir": "benchmark-results",
+    "featureLlm": true,
+    "profile": "quick",
+    "seed": 42,
+    "fixture": "benchmark-fixtures/basic.json",
+    "ablationName": "small_budget"
+  },
+  "metrics": {
+    "scopeId": "990e5aee-49df-48dd-8f05-84ed491a80ed",
+    "ingest": {
+      "total": 9,
+      "success": 9,
+      "failure": 0,
+      "throughputEventsPerSec": 102.96,
+      "p50Ms": 80.85,
+      "p95Ms": 86.58
+    },
+    "retrieve": {
+      "total": 16,
+      "success": 16,
+      "strictHitRate": 1,
+      "hitRate": 1,
+      "p50Ms": 14.38,
+      "p95Ms": 20.33
+    },
+    "digest": {
+      "enabled": true,
+      "runs": 3,
+      "success": 3,
+      "consistencyPassRate": 0.667,
+      "avgLatencyMs": 13077.64
+    },
+    "reminder": {
+      "success": 1,
+      "delayMs": 60267
+    }
+  },
+  "scores": {
+    "ingest": 100,
+    "retrieve": 100,
+    "digest": 88.34,
+    "reminder": 99.95,
+    "overall": 96.49
+  },
+  "notes": [
+    "Using fixture: /Users/yuchenlin/ProjectMemoryApi/project-memory/benchmark-fixtures/basic.json"
+  ],
+  "endedAt": "2026-02-08T06:25:36.599Z"
+}
