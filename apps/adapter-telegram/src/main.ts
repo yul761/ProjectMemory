@@ -5,15 +5,56 @@ const app = express();
 app.use(express.json());
 
 async function apiFetch(path: string, telegramUserId: string, options?: RequestInit) {
-  const response = await fetch(`${adapterEnv.apiBaseUrl}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      "x-telegram-user-id": telegramUserId,
-      ...(options?.headers || {})
+  const url = `${adapterEnv.apiBaseUrl}${path}`;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "x-telegram-user-id": telegramUserId,
+          ...(options?.headers || {})
+        }
+      });
+      const data = await readJsonSafe(response);
+      if (!response.ok) {
+        if (shouldRetry(response.status) && attempt < 2) {
+          await sleep(backoff(attempt));
+          continue;
+        }
+        return data ?? { error: `HTTP ${response.status}` };
+      }
+      return data;
+    } catch (err) {
+      lastError = err;
+      if (attempt < 2) {
+        await sleep(backoff(attempt));
+        continue;
+      }
     }
-  });
-  return response.json() as Promise<any>;
+  }
+  return { error: "request_failed", detail: String(lastError ?? "") };
+}
+
+function shouldRetry(status: number) {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+function backoff(attempt: number) {
+  return Math.min(200 * Math.pow(2, attempt), 1000);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readJsonSafe(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 async function sendMessage(chatId: number, text: string) {

@@ -25,17 +25,40 @@ export interface ClientOptions {
   baseUrl: string;
   userId?: string;
   telegramUserId?: string;
+  retry?: {
+    retries?: number;
+    minDelayMs?: number;
+    maxDelayMs?: number;
+  };
+}
+
+export class ApiError extends Error {
+  status: number;
+  data: unknown;
+
+  constructor(message: string, status: number, data?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+  }
 }
 
 export class ProjectMemoryClient {
   private baseUrl: string;
   private userId?: string;
   private telegramUserId?: string;
+  private retry: { retries: number; minDelayMs: number; maxDelayMs: number };
 
   constructor(options: ClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.userId = options.userId;
     this.telegramUserId = options.telegramUserId;
+    this.retry = {
+      retries: options.retry?.retries ?? 2,
+      minDelayMs: options.retry?.minDelayMs ?? 200,
+      maxDelayMs: options.retry?.maxDelayMs ?? 1000
+    };
   }
 
   private headers() {
@@ -47,12 +70,58 @@ export class ProjectMemoryClient {
   }
 
   private async request<T>(path: string, schema: z.ZodType<T>, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: { ...this.headers(), ...(init?.headers || {}) }
-    });
-    const data = await response.json();
-    return schema.parse(data);
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.retry.retries; attempt += 1) {
+      try {
+        const response = await fetch(`${this.baseUrl}${path}`, {
+          ...init,
+          headers: { ...this.headers(), ...(init?.headers || {}) }
+        });
+        const data = await this.readJsonSafe(response);
+        if (!response.ok) {
+          if (this.shouldRetry(response.status) && attempt < this.retry.retries) {
+            await this.sleep(this.backoff(attempt));
+            continue;
+          }
+          throw new ApiError(`Request failed with status ${response.status}`, response.status, data);
+        }
+        return schema.parse(data);
+      } catch (err) {
+        lastError = err;
+        if (attempt < this.retry.retries && this.isRetryableError(err)) {
+          await this.sleep(this.backoff(attempt));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError ?? new Error("Request failed");
+  }
+
+  private async readJsonSafe(response: Response) {
+    try {
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  private shouldRetry(status: number) {
+    return status === 429 || status === 502 || status === 503 || status === 504;
+  }
+
+  private isRetryableError(err: unknown) {
+    if (err instanceof ApiError) return this.shouldRetry(err.status);
+    return err instanceof TypeError;
+  }
+
+  private backoff(attempt: number) {
+    const base = this.retry.minDelayMs * Math.pow(2, attempt);
+    return Math.min(base, this.retry.maxDelayMs);
+  }
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   listScopes() {
