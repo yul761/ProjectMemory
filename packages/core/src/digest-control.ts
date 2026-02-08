@@ -111,6 +111,10 @@ function jaccardSimilarity(a: string, b: string) {
   return union === 0 ? 0 : intersection / union;
 }
 
+function sameDedupeGroup(a: MemoryEvent, b: MemoryEvent) {
+  return a.type === b.type && (a.key ?? "") === (b.key ?? "");
+}
+
 function extractKind(content: string): MemoryEventKind {
   const text = content.toLowerCase();
   if (/\b(decide|decision|we will|agreed|approved)\b/.test(text)) return "decision";
@@ -150,7 +154,7 @@ function dedupeConsecutiveEvents(events: MemoryEvent[], rationale: string[]) {
   const output: MemoryEvent[] = [];
   let prev: MemoryEvent | null = null;
   for (const event of events) {
-    if (prev && jaccardSimilarity(prev.content, event.content) >= 0.92) {
+    if (prev && sameDedupeGroup(prev, event) && jaccardSimilarity(prev.content, event.content) >= 0.92) {
       rationale.push(`dedup:${event.id}`);
       continue;
     }
@@ -163,7 +167,9 @@ function dedupeConsecutiveEvents(events: MemoryEvent[], rationale: string[]) {
 function dedupeNearDuplicateEvents(events: MemoryEvent[], rationale: string[]) {
   const kept: MemoryEvent[] = [];
   for (const event of events) {
-    const duplicate = kept.find((existing) => jaccardSimilarity(existing.content, event.content) >= 0.92);
+    const duplicate = kept.find(
+      (existing) => sameDedupeGroup(existing, event) && jaccardSimilarity(existing.content, event.content) >= 0.92
+    );
     if (duplicate) {
       rationale.push(`dedup_near:${event.id}`);
       continue;
@@ -464,9 +470,10 @@ export function consistencyCheck(input: {
   }
 
   if (input.previousDigest) {
-    const prevChanges = input.previousDigest.changes.split("\n").map(normalizeBullet).filter(Boolean).join("|");
-    const nextChanges = input.output.changes.map(normalizeBullet).filter(Boolean).join("|");
-    if (prevChanges && prevChanges === nextChanges) {
+    const prevChanges = new Set(input.previousDigest.changes.split("\n").map(normalizeBullet).filter(Boolean));
+    const nextChanges = new Set(input.output.changes.map(normalizeBullet).filter(Boolean));
+    const overlap = [...nextChanges].some((change) => prevChanges.has(change));
+    if (overlap) {
       errors.push("changes_repeated_from_previous_digest");
     }
   }
@@ -601,8 +608,11 @@ export async function runDigestControlPipeline(input: {
   }
 
   const tDelta = Date.now();
+  const lastDigestText = input.lastDigest
+    ? [input.lastDigest.summary, input.lastDigest.changes, input.lastDigest.nextSteps.join(" ")].join("\n")
+    : undefined;
   const deltas = detectDeltas({
-    lastDigestText: input.lastDigest?.summary,
+    lastDigestText,
     selectedEvents: selection.selectedEvents,
     noveltyThreshold: input.config.noveltyThreshold
   });

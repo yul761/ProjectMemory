@@ -110,6 +110,7 @@ describe("consistencyCheck", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain("goal_contradiction");
+    expect(result.errors).toContain("changes_repeated_from_previous_digest");
     expect(result.errors).toContain("vague_next_step");
   });
 });
