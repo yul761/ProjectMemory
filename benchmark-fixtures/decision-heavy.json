@@ -1,0 +1,32 @@
+{
+  "events": [
+    { "type": "document", "key": "doc:goal", "content": "goal: maximize digest consistency under noisy streams" },
+    { "type": "document", "key": "doc:constraints", "content": "constraint: avoid hosted dependencies\nconstraint: keep api stable" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 0" },
+    { "type": "stream", "content": "TODO: validate consistency metric 1" },
+    { "type": "stream", "content": "Status update: processed consistency item 2" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 3" },
+    { "type": "stream", "content": "Blocked by queue latency 4" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 5" },
+    { "type": "stream", "content": "Status update: processed consistency item 6" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 7" },
+    { "type": "stream", "content": "TODO: validate consistency metric 8" },
+    { "type": "stream", "content": "Status update: processed consistency item 9" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 10" },
+    { "type": "stream", "content": "Blocked by queue latency 11" },
+    { "type": "stream", "content": "Status update: processed consistency item 12" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 13" },
+    { "type": "stream", "content": "TODO: validate consistency metric 14" },
+    { "type": "stream", "content": "Status update: processed consistency item 15" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 16" },
+    { "type": "stream", "content": "Blocked by queue latency 17" },
+    { "type": "stream", "content": "Status update: processed consistency item 18" },
+    { "type": "stream", "content": "We decide to prioritize consistency batch 19" }
+  ],
+  "retrieveCases": [
+    { "query": "What did we decide?", "expected": "decide", "aliases": ["decision", "agreed", "we decide", "we will"] },
+    { "query": "What constraints exist?", "expected": "constraint", "aliases": ["limitation", "must", "cannot", "blocked"] },
+    { "query": "Any blockers?", "expected": "blocked", "aliases": ["blocker", "constraint", "risk"] },
+    { "query": "What todos are pending?", "expected": "todo", "aliases": ["next step", "action item", "pending", "follow up"] }
+  ]
+}

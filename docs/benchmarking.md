@@ -19,6 +19,11 @@ Reproducible run (fixed seed + fixture):
 BENCH_SEED=42 BENCH_FIXTURE=benchmark-fixtures/basic.json pnpm benchmark
 ```
 
+Generate additional fixtures:
+```bash
+node scripts/benchmark/generate-fixtures.mjs
+```
+
 Outputs are written to `benchmark-results/`:
 - `benchmark-*.json`
 - `benchmark-*.md`

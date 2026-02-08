@@ -1,0 +1,31 @@
+{
+  "events": [
+    { "type": "document", "key": "doc:goal", "content": "goal: evaluate retrieval robustness under noise" },
+    { "type": "document", "key": "doc:constraints", "content": "constraint: no vector index\nconstraint: deterministic scoring" },
+    { "type": "stream", "content": "noise ping 101" },
+    { "type": "stream", "content": "noise ping 102" },
+    { "type": "stream", "content": "noise ping 103" },
+    { "type": "stream", "content": "Status update: processed retrieval item 4" },
+    { "type": "stream", "content": "noise ping 105" },
+    { "type": "stream", "content": "noise ping 106" },
+    { "type": "stream", "content": "TODO: validate retrieval metric 7" },
+    { "type": "stream", "content": "noise ping 108" },
+    { "type": "stream", "content": "noise ping 109" },
+    { "type": "stream", "content": "Blocked by index drift 10" },
+    { "type": "stream", "content": "noise ping 111" },
+    { "type": "stream", "content": "noise ping 112" },
+    { "type": "stream", "content": "Status update: processed retrieval item 13" },
+    { "type": "stream", "content": "noise ping 114" },
+    { "type": "stream", "content": "noise ping 115" },
+    { "type": "stream", "content": "noise ping 116" },
+    { "type": "stream", "content": "TODO: validate retrieval metric 17" },
+    { "type": "stream", "content": "noise ping 118" },
+    { "type": "stream", "content": "noise ping 119" }
+  ],
+  "retrieveCases": [
+    { "query": "What did we decide?", "expected": "decide", "aliases": ["decision", "agreed", "we decide", "we will"] },
+    { "query": "What constraints exist?", "expected": "constraint", "aliases": ["limitation", "must", "cannot", "blocked"] },
+    { "query": "Any blockers?", "expected": "blocked", "aliases": ["blocker", "constraint", "risk"] },
+    { "query": "What todos are pending?", "expected": "todo", "aliases": ["next step", "action item", "pending", "follow up"] }
+  ]
+}

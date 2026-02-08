@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { performance } from "perf_hooks";
 import { fileURLToPath } from "url";
+import os from "os";
+import { execSync } from "child_process";
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return;
@@ -51,6 +53,25 @@ function clamp(v, min = 0, max = 100) {
 
 function msNow() {
   return new Date().toISOString();
+}
+
+function getGitCommit() {
+  try {
+    return execSync("git rev-parse HEAD", { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return process.env.GIT_COMMIT || "unknown";
+  }
+}
+
+function getEnvSnapshot() {
+  return {
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    cpu: os.cpus()[0]?.model || "unknown",
+    cores: os.cpus().length,
+    memoryGb: Number((os.totalmem() / (1024 ** 3)).toFixed(2))
+  };
 }
 
 async function apiFetch(method, endpoint, body) {
@@ -237,6 +258,8 @@ async function run() {
   const startedAt = msNow();
   const report = {
     startedAt,
+    commit: getGitCommit(),
+    environment: getEnvSnapshot(),
     config: cfg,
     metrics: {},
     scores: {},
@@ -399,6 +422,9 @@ async function run() {
     `- API: ${cfg.apiBaseUrl}`,
     `- Seed: ${cfg.seed}`,
     `- Fixture: ${cfg.fixture || "(none)"}`,
+    `- Commit: ${report.commit}`,
+    `- Node: ${report.environment.node} (${report.environment.platform}/${report.environment.arch})`,
+    `- CPU: ${report.environment.cpu} (${report.environment.cores} cores, ${report.environment.memoryGb} GB)` ,
     "",
     "## Scores",
     "",
