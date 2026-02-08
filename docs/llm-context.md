@@ -63,7 +63,7 @@ Important env vars:
 
 ## Known Current Limitations
 - Retrieval is heuristic (no vector search yet).
-- Internal digest state is derived/reconstructed, not a dedicated persisted state table.
+- Digest state is rule-based and stored as snapshots; no semantic entity graph yet.
 
 ## Good Next Improvements (Optional)
 - Add vector retrieval behind existing interfaces.

@@ -95,6 +95,10 @@ flowchart TD
 - Retry with corrective instruction up to:
   - `DIGEST_MAX_RETRIES`
 
+## Digest State Snapshots
+
+After each digest, the worker persists a `DigestStateSnapshot` row. When the next digest runs, the snapshot is used as the previous protected state (fallback to derived state if no snapshot exists). This keeps state evolution deterministic and avoids reconstructing from text when possible.
+
 ## Rebuild / Backfill
 
 `POST /memory/digest/rebuild` enqueues rebuild job:
@@ -134,7 +138,6 @@ Reports are written to `benchmark-results/` as JSON and Markdown.
 
 - Retrieval is heuristic (no vector index yet).
 - State extraction is rule-based; no semantic entity graph.
-- Digest state is internal and reconstructed from previous digest text when needed.
 
 ## Extension Paths
 

@@ -574,6 +574,7 @@ export async function generateDigestStage2(input: {
 export async function runDigestControlPipeline(input: {
   scope: ProjectScope;
   lastDigest?: Digest | null;
+  prevState?: DigestState | null;
   recentEvents: MemoryEvent[];
   llm: { chat: (messages: { role: "system" | "user"; content: string }[]) => Promise<string> };
   prompts: {
@@ -620,7 +621,7 @@ export async function runDigestControlPipeline(input: {
 
   const tMerge = Date.now();
   const state = protectedStateMerge({
-    prevState: deriveStateFromDigest(input.lastDigest),
+    prevState: input.prevState ?? deriveStateFromDigest(input.lastDigest),
     deltaCandidates: deltas,
     documents: selection.documents
   });

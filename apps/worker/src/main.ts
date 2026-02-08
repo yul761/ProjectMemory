@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Queue, Worker } from "bullmq";
 import { prisma } from "@project-memory/db";
 import { LlmClient, logger, runDigestControlPipeline } from "@project-memory/core";
+import type { DigestState } from "@project-memory/core";
 import {
   digestClassifySystemPrompt,
   digestClassifyUserPrompt,
@@ -62,6 +63,11 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
     orderBy: { createdAt: "desc" }
   });
 
+  const lastStateRow = await prisma.digestStateSnapshot.findFirst({
+    where: { scopeId: data.scopeId },
+    orderBy: { createdAt: "desc" }
+  });
+
   const since = new Date(Date.now() - workerEnv.maxDaysLookback * 24 * 60 * 60 * 1000);
   const recentEvents = await prisma.memoryEvent.findMany({
     where: { scopeId: data.scopeId, createdAt: { gte: since } },
@@ -72,6 +78,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
   const result = await runDigestControlPipeline({
     scope,
     lastDigest: lastDigestRow ? toCoreDigest(lastDigestRow) : null,
+    prevState: (lastStateRow?.state as DigestState) ?? null,
     recentEvents,
     llm,
     prompts: {
@@ -91,12 +98,20 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
     }
   });
 
-  await prisma.digest.create({
+  const createdDigest = await prisma.digest.create({
     data: {
       scopeId: data.scopeId,
       summary: result.digest.summary,
       changes: result.digest.changes.map((c) => `- ${c}`).join("\n"),
       nextSteps: result.digest.nextSteps
+    } as any
+  });
+
+  await prisma.digestStateSnapshot.create({
+    data: {
+      scopeId: data.scopeId,
+      digestId: createdDigest.id,
+      state: result.state as any
     } as any
   });
 
@@ -182,6 +197,11 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
   let lastDigest = data.strategy === "full"
     ? null
     : await prisma.digest.findFirst({ where: { scopeId: data.scopeId }, orderBy: { createdAt: "desc" } });
+  let lastState: DigestState | null = null;
+  if (lastDigest && data.strategy !== "full") {
+    const snapshot = await prisma.digestStateSnapshot.findUnique({ where: { digestId: lastDigest.id } });
+    lastState = (snapshot?.state as DigestState) ?? null;
+  }
 
   for (let i = 0; i < events.length; i += workerEnv.digestRebuildChunkSize) {
     const chunk = events.slice(i, i + workerEnv.digestRebuildChunkSize).reverse();
@@ -189,6 +209,7 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
     const result = await runDigestControlPipeline({
       scope,
       lastDigest: lastDigest ? toCoreDigest(lastDigest) : null,
+      prevState: lastState,
       recentEvents: chunk,
       llm,
       prompts: {
@@ -217,6 +238,16 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
         rebuildGroupId
       } as any
     });
+
+    await prisma.digestStateSnapshot.create({
+      data: {
+        scopeId: data.scopeId,
+        digestId: lastDigest.id,
+        state: result.state as any
+      } as any
+    });
+
+    lastState = result.state;
   }
 
   logger.info({ scopeId: data.scopeId, rebuildGroupId, eventCount: events.length }, "Digest rebuild chain completed");

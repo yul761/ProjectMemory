@@ -52,11 +52,12 @@ model ProjectScope {
   stage     ProjectStage @default(idea)
   createdAt DateTime     @default(now())
 
-  user       User          @relation(fields: [userId], references: [id])
-  memories   MemoryEvent[]
-  digests    Digest[]
-  reminders  Reminder[]
-  userStates UserState[]
+  user         User                  @relation(fields: [userId], references: [id])
+  memories     MemoryEvent[]
+  digests      Digest[]
+  digestStates DigestStateSnapshot[]
+  reminders    Reminder[]
+  userStates   UserState[]
 
   @@index([userId])
 }
@@ -100,10 +101,24 @@ model Digest {
   rebuildGroupId String?
   createdAt      DateTime @default(now())
 
-  scope ProjectScope @relation(fields: [scopeId], references: [id])
+  scope          ProjectScope        @relation(fields: [scopeId], references: [id])
+  stateSnapshot  DigestStateSnapshot?
 
   @@index([scopeId, createdAt])
   @@index([scopeId, rebuildGroupId])
+}
+
+model DigestStateSnapshot {
+  id        String   @id @default(uuid())
+  scopeId   String
+  digestId  String   @unique
+  state     Json
+  createdAt DateTime @default(now())
+
+  scope  ProjectScope @relation(fields: [scopeId], references: [id])
+  digest Digest       @relation(fields: [digestId], references: [id])
+
+  @@index([scopeId, createdAt])
 }
 
 model Reminder {
