@@ -2,9 +2,9 @@ import { prisma } from "./index";
 
 async function main() {
   const user = await prisma.user.upsert({
-    where: { telegramUserId: "seed-telegram" },
+    where: { identity: "seed:local" },
     update: {},
-    create: { telegramUserId: "seed-telegram" }
+    create: { identity: "seed:local" }
   });
 
   const scope = await prisma.projectScope.create({

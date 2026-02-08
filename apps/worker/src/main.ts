@@ -27,11 +27,10 @@ const llm = workerEnv.featureLlm && workerEnv.openaiApiKey
 
 async function sendTelegramMessage(telegramUserId: string, text: string) {
   if (!workerEnv.featureTelegram || !workerEnv.telegramBotToken) return;
-  const userId = telegramUserId.replace("telegram:", "");
   await fetch(`https://api.telegram.org/bot${workerEnv.telegramBotToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: userId, text })
+    body: JSON.stringify({ chat_id: telegramUserId, text })
   });
 }
 
@@ -256,7 +255,7 @@ new Worker(
 
     for (const reminder of due) {
       await prisma.reminder.update({ where: { id: reminder.id }, data: { status: "sent" } });
-      if (reminder.user.telegramUserId?.startsWith("telegram:")) {
+      if (reminder.user.telegramUserId) {
         await sendTelegramMessage(reminder.user.telegramUserId, `Reminder: ${reminder.text}`);
       }
     }

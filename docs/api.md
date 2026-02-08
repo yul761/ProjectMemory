@@ -4,6 +4,8 @@ All endpoints require an identity header:
 - `x-user-id` for developer/self-host
 - `x-telegram-user-id` for adapter usage
 
+Server stores a normalized `identity` per user (e.g. `user:...`, `local:...`, `telegram:...`), while `telegramUserId` is reserved for raw Telegram IDs used by reminder delivery.
+
 ## Ingest
 - **POST /memory/events**
   - body: `{ scopeId, type: 'stream'|'document', source?, key?, content }`

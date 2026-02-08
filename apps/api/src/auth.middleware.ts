@@ -3,11 +3,11 @@ import { prisma } from "@project-memory/db";
 import type { RequestWithUser } from "./types";
 import { apiEnv } from "./env";
 
-async function getOrCreateUserByExternalId(externalId: string) {
+async function getOrCreateUserByIdentity(identity: string, telegramUserId?: string) {
   return prisma.user.upsert({
-    where: { telegramUserId: externalId },
-    update: {},
-    create: { telegramUserId: externalId }
+    where: { identity },
+    update: telegramUserId ? { telegramUserId } : {},
+    create: { identity, telegramUserId }
   });
 }
 
@@ -21,14 +21,14 @@ export async function authMiddleware(req: RequestWithUser, res: Response, next: 
 
   try {
     if (telegramUserId) {
-      const user = await getOrCreateUserByExternalId(`telegram:${telegramUserId}`);
+      const user = await getOrCreateUserByIdentity(`telegram:${telegramUserId}`, telegramUserId);
       req.userId = user.id;
       return next();
     }
 
     if (userIdToken) {
       const identity = userIdToken === apiEnv.localUserToken ? `local:${userIdToken}` : `user:${userIdToken}`;
-      const user = await getOrCreateUserByExternalId(identity);
+      const user = await getOrCreateUserByIdentity(identity);
       req.userId = user.id;
       return next();
     }
