@@ -38,7 +38,11 @@ const envSchema = z.object({
   DIGEST_MAX_RETRIES: z.string().optional(),
   DIGEST_USE_LLM_CLASSIFIER: z.string().optional(),
   DIGEST_DEBUG: z.string().optional(),
-  DIGEST_REBUILD_CHUNK_SIZE: z.string().optional()
+  DIGEST_REBUILD_CHUNK_SIZE: z.string().optional(),
+  DIGEST_CONCURRENCY: z.string().optional(),
+  REMINDER_CONCURRENCY: z.string().optional(),
+  REMINDER_BATCH_SIZE: z.string().optional(),
+  REMINDER_MAX_BATCHES: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -75,5 +79,9 @@ export const workerEnv = {
   digestMaxRetries: Number(env.DIGEST_MAX_RETRIES || 1),
   digestUseLlmClassifier: toBool(env.DIGEST_USE_LLM_CLASSIFIER),
   digestDebug: toBool(env.DIGEST_DEBUG),
-  digestRebuildChunkSize: Number(env.DIGEST_REBUILD_CHUNK_SIZE || 80)
+  digestRebuildChunkSize: Number(env.DIGEST_REBUILD_CHUNK_SIZE || 80),
+  digestConcurrency: Number(env.DIGEST_CONCURRENCY || 2),
+  reminderConcurrency: Number(env.REMINDER_CONCURRENCY || 1),
+  reminderBatchSize: Number(env.REMINDER_BATCH_SIZE || 50),
+  reminderMaxBatches: Number(env.REMINDER_MAX_BATCHES || 4)
 };

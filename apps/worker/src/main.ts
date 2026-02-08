@@ -266,7 +266,7 @@ new Worker(
       return { ok: true };
     }
   },
-  { connection }
+  { connection, concurrency: workerEnv.digestConcurrency }
 ).on("completed", (job) => {
   logger.info({ jobId: job.id, name: job.name }, "Digest job completed");
 }).on("failed", (job, err) => {
@@ -277,23 +277,32 @@ new Worker(
   "reminder",
   async (job) => {
     if (job.name !== "send_reminders") return;
-    const due = await prisma.reminder.findMany({
-      where: { status: "scheduled", dueAt: { lte: new Date() } },
-      orderBy: { dueAt: "asc" },
-      take: 50,
-      include: { user: true }
-    });
+    const now = new Date();
+    let batches = 0;
+    while (batches < workerEnv.reminderMaxBatches) {
+      const due = await prisma.reminder.findMany({
+        where: { status: "scheduled", dueAt: { lte: now } },
+        orderBy: { dueAt: "asc" },
+        take: workerEnv.reminderBatchSize,
+        include: { user: true }
+      });
 
-    for (const reminder of due) {
-      await prisma.reminder.update({ where: { id: reminder.id }, data: { status: "sent" } });
-      if (reminder.user.telegramUserId) {
-        await sendTelegramMessage(reminder.user.telegramUserId, `Reminder: ${reminder.text}`);
+      if (!due.length) break;
+
+      for (const reminder of due) {
+        await prisma.reminder.update({ where: { id: reminder.id }, data: { status: "sent" } });
+        if (reminder.user.telegramUserId) {
+          await sendTelegramMessage(reminder.user.telegramUserId, `Reminder: ${reminder.text}`);
+        }
       }
+
+      batches += 1;
+      if (due.length < workerEnv.reminderBatchSize) break;
     }
 
     return { ok: true };
   },
-  { connection }
+  { connection, concurrency: workerEnv.reminderConcurrency }
 ).on("completed", (job) => {
   logger.info({ jobId: job.id, name: job.name }, "Reminder job completed");
 }).on("failed", (job, err) => {
@@ -301,7 +310,11 @@ new Worker(
 });
 
 setInterval(() => {
-  reminderQueue.add("send_reminders", {}, { removeOnComplete: true, removeOnFail: true });
+  reminderQueue.add(
+    "send_reminders",
+    {},
+    { jobId: "send_reminders_tick", removeOnComplete: true, removeOnFail: true }
+  );
 }, 60_000);
 
 logger.info("Worker started");
