@@ -34,6 +34,3 @@ A scheduled item with a due time and text. The worker periodically checks due re
 
 ## Adapter
 A reference integration that converts external signals into memory events (e.g., Telegram). Adapters call the API and never touch the database directly.
-
-## SDK
-Client libraries that wrap the API. `@projectmemory/client` is the base TypeScript client; `@projectmemory/react` provides lightweight hooks.

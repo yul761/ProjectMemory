@@ -1,9 +1,8 @@
 # Frontend Options (Out of Scope)
 
-This repo ships **no UI**. Official integrations are adapters and SDKs:
+This repo ships **no UI**. Official integrations are adapters:
 - Telegram adapter (webhook receiver)
 - CLI
-- SDKs: `@projectmemory/client` and `@projectmemory/react`
 
 Possible future frontends:
 - Web app (Next.js) for digests + timelines

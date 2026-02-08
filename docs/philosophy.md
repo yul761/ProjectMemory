@@ -24,7 +24,7 @@ Digest generation is a controlled pipeline:
 
 ```mermaid
 flowchart TD
-  A[Client/Adapter/SDK] -->|POST /memory/events| B[API]
+  A[Client/Adapter] -->|POST /memory/events| B[API]
   B --> C[(Postgres: MemoryEvent)]
 
   A -->|POST /memory/digest| B

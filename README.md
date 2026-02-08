@@ -116,26 +116,6 @@ Set `PUBLIC_BASE_URL` and call the adapter:
 curl -X POST "http://localhost:3001/telegram/webhook/set"
 ```
 
-## SDK usage (chat app integration)
-```ts
-import { ProjectMemoryClient } from "@projectmemory/client";
-
-const client = new ProjectMemoryClient({ baseUrl: process.env.API_BASE_URL!, userId: "dev-user" });
-const scope = await client.createScope({ name: "Chat App" });
-await client.ingestEvent({ scopeId: scope.id, type: "stream", source: "sdk", content: "User asked about pricing" });
-```
-
-## SDK usage (note app integration)
-```ts
-await client.ingestEvent({
-  scopeId: scope.id,
-  type: "document",
-  source: "sdk",
-  key: "note:roadmap",
-  content: "Updated roadmap draft"
-});
-```
-
 ## FEATURE_LLM
 Set `FEATURE_LLM=true` and provide `OPENAI_API_KEY` to enable `/memory/answer` and digest jobs. If disabled, the API returns a clear error and worker jobs fail fast.
 
@@ -151,7 +131,7 @@ Digest is processed as a controlled pipeline (not a single LLM call):
 ## Workflow Diagram
 ```mermaid
 flowchart LR
-  U[Adapter / CLI / SDK] --> A[API]
+  U[Adapter / CLI] --> A[API]
   A --> DB[(Postgres)]
   A --> Q[(Redis Queue)]
   Q --> W[Worker]
@@ -165,7 +145,7 @@ flowchart LR
 - Core engine (`packages/core`) performs selection/delta/state/consistency logic.
 - Worker executes digest and rebuild jobs asynchronously via BullMQ.
 - Digests are stored as first-class records, with optional `rebuildGroupId` for backfills.
-- SDK and adapters call API only (no direct database coupling).
+- Adapters call API only (no direct database coupling).
 
 ## Evidence-Based Performance Claims
 Use the built-in benchmark runner to generate reproducible metrics and a score report:
@@ -202,8 +182,6 @@ Reports are generated in `benchmark-results/` as JSON + Markdown.
 - `packages/core` domain services + pipelines
 - `packages/contracts` Zod schemas + shared enums
 - `packages/prompts` prompt templates
-- `packages/sdk-client` `@projectmemory/client`
-- `packages/sdk-react` `@projectmemory/react` (hooks only)
 - `packages/db` Prisma schema + client
 
 See `docs/api.md` for endpoint details.

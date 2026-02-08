@@ -13,20 +13,20 @@ This document explains the backend architecture, technology choices, and the dig
 - Contracts: Zod schemas (`packages/contracts`)
 - Engine: Pure domain logic (`packages/core`)
 - Prompt assets: `packages/prompts`
-- Integrations: Telegram adapter + CLI + SDK client/react
+- Integrations: Telegram adapter + CLI
 
 ## Why This Split
 
 - `packages/core` keeps memory logic independent from transport/UI.
 - `apps/api` handles auth, validation, and queueing.
 - `apps/worker` runs asynchronous/expensive memory jobs.
-- Adapters/SDKs only call API, never direct DB access.
+- Adapters only call API, never direct DB access.
 
 ## End-to-End Workflow
 
 ```mermaid
 flowchart LR
-  U[Adapter / CLI / SDK] --> A[API]
+  U[Adapter / CLI] --> A[API]
   A --> DB[(Postgres)]
   A --> Q[(Redis Queue)]
   Q --> W[Worker]

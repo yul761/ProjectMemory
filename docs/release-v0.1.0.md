@@ -4,7 +4,7 @@ Project Memory v0.1.0 is the first public OSS release of the developer-first lon
 
 ## Highlights
 
-- Long-term memory primitives via API + SDK:
+- Long-term memory primitives via API:
   - ingest events (stream/document)
   - layered digest generation
   - retrieval

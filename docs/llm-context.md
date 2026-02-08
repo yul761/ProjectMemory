@@ -1,7 +1,7 @@
 # LLM Context: Project Memory
 
 ## One-Line Summary
-Project Memory is an OSS, developer-first long-term memory engine (API + worker + adapters + SDKs), not a consumer assistant app.
+Project Memory is an OSS, developer-first long-term memory engine (API + worker + adapters), not a consumer assistant app.
 
 ## Scope and Boundaries
 - Backend-only system (no UI/mobile).
@@ -22,7 +22,6 @@ Project Memory is an OSS, developer-first long-term memory engine (API + worker 
 - Queue: Redis + BullMQ
 - Contracts: Zod (`packages/contracts`)
 - Prompts: `packages/prompts`
-- SDKs: `packages/sdk-client`, `packages/sdk-react`
 - Adapters: Telegram (`apps/adapter-telegram`), CLI (`apps/cli`)
 
 ## Digest Control Pipeline
@@ -67,5 +66,4 @@ Important env vars:
 
 ## Good Next Improvements (Optional)
 - Add vector retrieval behind existing interfaces.
-- Add explicit persisted digest-state snapshots.
 - Add stronger drift auditing and replay tooling.
