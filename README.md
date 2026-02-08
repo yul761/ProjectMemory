@@ -177,6 +177,7 @@ BENCH_SEED=42 BENCH_FIXTURE=benchmark-fixtures/basic.json pnpm benchmark
 - Evaluation protocol: `docs/evaluation-protocol.md`
 - Research questions: `docs/research-questions.md`
 - Report template: `docs/research-report-template.md`
+- Ablation results (2026-02-08): `docs/ablation-results-2026-02-08.md`
 
 ## Troubleshooting
 - Prisma runs from `packages/db`, so copy `.env` to `packages/db/.env` before `pnpm db:migrate`.
