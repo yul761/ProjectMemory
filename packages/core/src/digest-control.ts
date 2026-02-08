@@ -472,8 +472,8 @@ export function consistencyCheck(input: {
   if (input.previousDigest) {
     const prevChanges = new Set(input.previousDigest.changes.split("\n").map(normalizeBullet).filter(Boolean));
     const nextChanges = new Set(input.output.changes.map(normalizeBullet).filter(Boolean));
-    const overlap = [...nextChanges].some((change) => prevChanges.has(change));
-    if (overlap) {
+    const allRepeated = nextChanges.size > 0 && [...nextChanges].every((change) => prevChanges.has(change));
+    if (allRepeated) {
       errors.push("changes_repeated_from_previous_digest");
     }
   }
