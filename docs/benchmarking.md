@@ -24,6 +24,11 @@ Generate additional fixtures:
 node scripts/benchmark/generate-fixtures.mjs
 ```
 
+Run ablations (controlled variable sweeps):
+```bash
+node scripts/benchmark/run-ablations.mjs
+```
+
 Outputs are written to `benchmark-results/`:
 - `benchmark-*.json`
 - `benchmark-*.md`

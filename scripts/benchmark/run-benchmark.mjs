@@ -63,6 +63,17 @@ function getGitCommit() {
   }
 }
 
+function getGitDescribe() {
+  try {
+    const base = execSync("git describe --tags --always --dirty", { cwd: root, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    return base || "unknown";
+  } catch {
+    return process.env.GIT_DESCRIBE || "unknown";
+  }
+}
+
 function getEnvSnapshot() {
   return {
     node: process.version,
@@ -259,12 +270,16 @@ async function run() {
   const report = {
     startedAt,
     commit: getGitCommit(),
+    describe: getGitDescribe(),
     environment: getEnvSnapshot(),
     config: cfg,
     metrics: {},
     scores: {},
     notes: []
   };
+  if (process.env.ABLATION_NAME) {
+    report.config.ablationName = process.env.ABLATION_NAME;
+  }
 
   const scopeResp = await apiFetch("POST", "/scopes", { name: `Benchmark ${Date.now()}` });
   if (!scopeResp.ok || !scopeResp.json.id) {
@@ -423,6 +438,7 @@ async function run() {
     `- Seed: ${cfg.seed}`,
     `- Fixture: ${cfg.fixture || "(none)"}`,
     `- Commit: ${report.commit}`,
+    `- Describe: ${report.describe}`,
     `- Node: ${report.environment.node} (${report.environment.platform}/${report.environment.arch})`,
     `- CPU: ${report.environment.cpu} (${report.environment.cores} cores, ${report.environment.memoryGb} GB)` ,
     "",
