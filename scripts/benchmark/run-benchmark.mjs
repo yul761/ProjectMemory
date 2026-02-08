@@ -31,7 +31,9 @@ const cfg = {
   timeoutMs: Number(process.env.BENCH_TIMEOUT_MS || 180000),
   outputDir: process.env.BENCH_OUTPUT_DIR || "benchmark-results",
   featureLlm: process.env.FEATURE_LLM === "true",
-  profile: process.env.BENCH_PROFILE || "balanced"
+  profile: process.env.BENCH_PROFILE || "balanced",
+  seed: Number(process.env.BENCH_SEED || 42),
+  fixture: process.env.BENCH_FIXTURE || ""
 };
 
 const headers = { "Content-Type": "application/json", "x-user-id": cfg.userId };
@@ -88,7 +90,32 @@ async function withConcurrency(items, limit, worker) {
   return results;
 }
 
-function generateEvents(total) {
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), t | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function loadFixture(fixturePath) {
+  if (!fixturePath) return null;
+  const fullPath = path.isAbsolute(fixturePath) ? fixturePath : path.join(root, fixturePath);
+  const raw = readFileSync(fullPath, "utf8");
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed.events)) {
+    throw new Error("invalid_fixture: missing events array");
+  }
+  return {
+    events: parsed.events,
+    retrieveCases: Array.isArray(parsed.retrieveCases) ? parsed.retrieveCases : null,
+    source: fullPath
+  };
+}
+
+function generateEvents(total, rng) {
   const events = [];
   for (let i = 0; i < total; i += 1) {
     if (i % 60 === 0) {
@@ -115,7 +142,8 @@ function generateEvents(total) {
       events.push({ type: "stream", content: `Status update: processed event ${i}` });
       continue;
     }
-    events.push({ type: "stream", content: `noise ping ${Math.floor(i / 3)}` });
+    const noise = rng ? Math.floor(rng() * 1000) : Math.floor(i / 3);
+    events.push({ type: "stream", content: `noise ping ${noise}` });
   }
   return events;
 }
@@ -222,7 +250,12 @@ async function run() {
   const scopeId = scopeResp.json.id;
   report.metrics.scopeId = scopeId;
 
-  const events = generateEvents(cfg.events);
+  const rng = mulberry32(cfg.seed);
+  const fixture = loadFixture(cfg.fixture);
+  if (fixture?.source) {
+    report.notes.push(`Using fixture: ${fixture.source}`);
+  }
+  const events = fixture?.events ?? generateEvents(cfg.events, rng);
   const ingestStart = performance.now();
   const ingestResults = await withConcurrency(events, cfg.concurrency, async (item) => {
     const body = { scopeId, source: "sdk", ...item };
@@ -241,7 +274,7 @@ async function run() {
     p95Ms: Number(percentile(ingestLatencies, 95).toFixed(2))
   };
 
-  const retrieveCases = [
+  const retrieveCases = fixture?.retrieveCases ?? [
     { query: "What did we decide?", expected: "decide", aliases: ["decision", "agreed", "we decide", "we will"] },
     { query: "What constraints exist?", expected: "constraint", aliases: ["limitation", "must", "cannot", "blocked"] },
     { query: "Any blockers?", expected: "blocked", aliases: ["blocker", "constraint", "risk"] },
@@ -364,6 +397,8 @@ async function run() {
     `- Started: ${report.startedAt}`,
     `- Ended: ${report.endedAt}`,
     `- API: ${cfg.apiBaseUrl}`,
+    `- Seed: ${cfg.seed}`,
+    `- Fixture: ${cfg.fixture || "(none)"}`,
     "",
     "## Scores",
     "",

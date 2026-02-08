@@ -1,0 +1,19 @@
+{
+  "events": [
+    { "type": "document", "key": "doc:goal", "content": "goal: ship a research-grade memory engine" },
+    { "type": "document", "key": "doc:constraints", "content": "constraint: keep api stable\nconstraint: avoid hosted dependencies" },
+    { "type": "stream", "content": "We decide to focus on digest consistency" },
+    { "type": "stream", "content": "Blocked by queue visibility timeout on reminders" },
+    { "type": "stream", "content": "TODO: add consistency pass rate tracking" },
+    { "type": "stream", "content": "Status update: ingestion throughput stable" },
+    { "type": "stream", "content": "noise ping 1" },
+    { "type": "stream", "content": "noise ping 2" },
+    { "type": "stream", "content": "noise ping 3" }
+  ],
+  "retrieveCases": [
+    { "query": "What did we decide?", "expected": "decide", "aliases": ["decision", "agreed", "we decide", "we will"] },
+    { "query": "What constraints exist?", "expected": "constraint", "aliases": ["limitation", "must", "cannot", "blocked"] },
+    { "query": "Any blockers?", "expected": "blocked", "aliases": ["blocker", "constraint", "risk"] },
+    { "query": "What todos are pending?", "expected": "todo", "aliases": ["next step", "action item", "pending", "follow up"] }
+  ]
+}

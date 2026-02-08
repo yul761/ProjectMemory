@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Latest Release](https://img.shields.io/github/v/release/yul761/ProjectMemory)](https://github.com/yul761/ProjectMemory/releases)
 
-An open-source **long-term memory engine** for developers. It provides primitives to ingest events, produce layered digests, retrieve memory, and (optionally) answer questions grounded in that memory.
+An open-source **research-grade long-term memory engine**. It provides primitives to ingest events, produce layered digests, retrieve memory, and (optionally) answer questions grounded in that memory.
 
-This is **not** a consumer assistant app. You bring your own infrastructure and secrets via environment variables.
+This is **not** a consumer assistant app. You bring your own infrastructure and secrets via environment variables. The primary goal is reproducible evaluation of memory systems and digest reliability.
 
 ## Quickstart in 5 minutes
 
@@ -147,7 +147,7 @@ flowchart LR
 - Digests are stored as first-class records, with optional `rebuildGroupId` for backfills.
 - Adapters call API only (no direct database coupling).
 
-## Evidence-Based Performance Claims
+## Research Benchmarks
 Use the built-in benchmark runner to generate reproducible metrics and a score report:
 
 - Ingest throughput + p95 latency
@@ -166,6 +166,17 @@ BENCH_PROFILE=stress pnpm benchmark
 ```
 
 Reports are generated in `benchmark-results/` as JSON + Markdown.
+
+Reproducible run example:
+```bash
+BENCH_SEED=42 BENCH_FIXTURE=benchmark-fixtures/basic.json pnpm benchmark
+```
+
+## Research Artifacts
+- Research overview: `docs/research-overview.md`
+- Evaluation protocol: `docs/evaluation-protocol.md`
+- Research questions: `docs/research-questions.md`
+- Report template: `docs/research-report-template.md`
 
 ## Troubleshooting
 - Prisma runs from `packages/db`, so copy `.env` to `packages/db/.env` before `pnpm db:migrate`.

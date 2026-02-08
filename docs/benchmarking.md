@@ -1,6 +1,6 @@
 # Benchmarking
 
-Project Memory includes a reproducible benchmark runner for developer-facing claims (latency, throughput, reliability, digest consistency).
+Project Memory includes a reproducible benchmark runner for research-facing claims (latency, throughput, reliability, digest consistency).
 
 ## Run
 
@@ -12,6 +12,11 @@ Prerequisites:
 Command:
 ```bash
 pnpm benchmark
+```
+
+Reproducible run (fixed seed + fixture):
+```bash
+BENCH_SEED=42 BENCH_FIXTURE=benchmark-fixtures/basic.json pnpm benchmark
 ```
 
 Outputs are written to `benchmark-results/`:
@@ -66,6 +71,16 @@ Env values still override profile defaults.
 - `BENCH_TIMEOUT_MS` (default 180000)
 - `BENCH_USER_ID` (default benchmark-user)
 - `BENCH_OUTPUT_DIR` (default benchmark-results)
+- `BENCH_SEED` (default 42)
+- `BENCH_FIXTURE` (path to JSON fixture; optional)
+
+## Reproducibility Protocol
+
+To compare results across machines:
+1. Use a fixed `BENCH_SEED`.
+2. Use the same `BENCH_FIXTURE` file (or none).
+3. Keep the same `BENCH_PROFILE` or explicit env overrides.
+4. Report the generated JSON with config metadata.
 
 ## Interpreting Results
 
