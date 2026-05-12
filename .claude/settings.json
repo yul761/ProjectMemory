@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "statecore": {
+      "command": "npx",
+      "args": ["tsx", "C:\\StateCore\\StateCore\\apps\\adapter-mcp\\src\\main.ts"],
+      "env": {
+        "STATECORE_API_URL": "http://localhost:3000",
+        "STATECORE_TOKEN": "local-dev-user"
+      }
+    }
+  }
+}
