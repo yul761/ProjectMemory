@@ -12,6 +12,8 @@ import {
 } from "@statecore/core";
 import type { DigestConsistencyResult, DigestState, WorkingMemorySnapshot, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import { apiEnv } from "./env";
+import { registerLiteHandlers } from "./queue";
+import { selectWorkingMemoryEvents } from "@statecore/core";
 
 @Injectable()
 export class DomainService {
@@ -232,6 +234,35 @@ export class DomainService {
       embeddingCandidateLimit: apiEnv.retrieveEmbeddingCandidateLimit
     });
     this.reminderService = new ReminderService(reminderRepo);
+
+    if (process.env["STATECORE_MODE"] === "lite") {
+      const wmMaxTurns = apiEnv.workingMemoryMaxRecentTurns;
+      const wmSvc = this.workingMemoryService;
+      registerLiteHandlers({
+        workingMemory: async (_jobName, data) => {
+          const { scopeId } = data as { userId: string; scopeId: string };
+          const take = Math.max(wmMaxTurns * 3, wmMaxTurns + 8);
+          const { prisma: db } = await import("@statecore/db");
+          const recentEvents = await db.memoryEvent.findMany({
+            where: { scopeId },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            take
+          });
+          const selected = selectWorkingMemoryEvents(
+            recentEvents.reverse().map((event) => ({
+              id: event.id,
+              type: event.type as "stream" | "document",
+              key: event.key ?? null,
+              content: event.content,
+              createdAt: event.createdAt,
+              role: /^assistant reply:/i.test(event.content.trim()) ? "assistant" as const : "user" as const
+            })),
+            wmMaxTurns
+          );
+          await wmSvc.updateFromEvents(scopeId, selected);
+        }
+      });
+    }
   }
 
   async getLatestDigestState(scopeId: string): Promise<{ digestId: string; state: DigestState; consistency: DigestConsistencyResult | null; createdAt: Date } | null> {

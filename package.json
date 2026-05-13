@@ -17,6 +17,7 @@
     "dev:demo-stack": "./scripts/dev-demo-stack.sh",
     "dev:cli": "STATECORE_CLI_BASE_DIR=\"$PWD\" pnpm --filter @statecore/cli dev",
     "dev:mcp": "pnpm --filter @statecore/adapter-mcp dev",
+    "dev:lite": "pnpm dev:api",
     "test:core": "pnpm --filter @statecore/core test",
     "lint": "pnpm -r --filter \"./apps/**\" --filter \"./packages/**\" exec tsc -p tsconfig.json --noEmit",
     "format": "node ./scripts/format/fix-format.mjs",
