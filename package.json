@@ -41,6 +41,8 @@
     "db:migrate": "pnpm --filter @statecore/db prisma migrate dev",
     "db:deploy": "pnpm --filter @statecore/db prisma migrate deploy",
     "db:generate": "pnpm --filter @statecore/db prisma generate",
+    "db:generate:lite": "pnpm --filter @statecore/db generate:lite",
+    "db:push:lite": "DATABASE_URL=file:./statecore.db pnpm --filter @statecore/db push:lite",
     "db:studio": "pnpm --filter @statecore/db prisma studio",
     "seed": "pnpm --filter @statecore/db seed"
   },

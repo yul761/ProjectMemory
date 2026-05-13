@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "prisma": "prisma",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "generate:lite": "prisma generate --schema=prisma/schema.lite.prisma",
+    "push:lite": "prisma db push --schema=prisma/schema.lite.prisma"
   },
   "prisma": {
     "seed": "tsx src/seed.ts"
