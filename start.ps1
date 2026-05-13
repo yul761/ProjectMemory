@@ -32,3 +32,7 @@ try {
 } catch {
     Write-Host "API not responding yet — give it a few more seconds" -ForegroundColor Yellow
 }
+
+# Open status widget
+Write-Host "Opening status widget..." -ForegroundColor Cyan
+Start-Process msedge --ArgumentList "--app=file:///$root/status.html", "--window-size=340,340", "--window-position=1560,20"

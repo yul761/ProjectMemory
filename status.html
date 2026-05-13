@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>StateCore</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', monospace;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 12px;
+    font-size: 12px;
+    user-select: none;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #21262d;
+    padding-bottom: 8px;
+  }
+  .title { font-weight: 700; font-size: 13px; color: #58a6ff; letter-spacing: 0.5px; }
+  .refresh-time { color: #484f58; font-size: 10px; }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid #161b22;
+  }
+  .row:last-child { border-bottom: none; }
+  .label { color: #8b949e; }
+  .value { font-weight: 600; }
+  .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .green { background: #3fb950; box-shadow: 0 0 4px #3fb95080; }
+  .red { background: #f85149; }
+  .yellow { background: #d29922; }
+  .gray { background: #484f58; }
+  .scope-select {
+    background: #161b22;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    font-size: 11px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    max-width: 160px;
+    cursor: pointer;
+  }
+  .section {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #21262d;
+  }
+  .section-title { color: #484f58; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .events-today { font-size: 20px; font-weight: 700; color: #58a6ff; }
+  .mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+  .mini-card { background: #161b22; border-radius: 6px; padding: 6px 8px; }
+  .mini-val { font-size: 16px; font-weight: 700; color: #e6edf3; }
+  .mini-label { font-size: 10px; color: #484f58; margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="title">⚡ StateCore</span>
+  <span class="refresh-time" id="last-refresh">—</span>
+</div>
+
+<div class="row">
+  <span class="label">API</span>
+  <span class="value" id="api-status"><span class="dot gray"></span>—</span>
+</div>
+
+<div class="row">
+  <span class="label">Scope</span>
+  <select class="scope-select" id="scope-select" onchange="onScopeChange()">
+    <option value="">loading...</option>
+  </select>
+</div>
+
+<div class="section">
+  <div class="section-title">Memory Layers</div>
+
+  <div class="row">
+    <span class="label">Working Memory</span>
+    <span class="value" id="wm-version">—</span>
+  </div>
+  <div class="row">
+    <span class="label">State Layer</span>
+    <span class="value" id="state-version">—</span>
+  </div>
+  <div class="row">
+    <span class="label">Last Event</span>
+    <span class="value" id="last-event">—</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="mini-grid">
+    <div class="mini-card">
+      <div class="mini-val" id="events-today">—</div>
+      <div class="mini-label">events today</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-val" id="wm-items">—</div>
+      <div class="mini-label">WM items</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:3002';
+const TOKEN = 'local-dev-user';
+
+let currentScopeId = null;
+
+function headers() {
+  return { 'x-user-id': TOKEN };
+}
+
+async function get(path) {
+  const r = await fetch(API + path, { headers: headers() });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+function dot(color) {
+  return `<span class="dot ${color}"></span>`;
+}
+
+function timeAgo(isoStr) {
+  if (!isoStr) return '—';
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
+}
+
+function onScopeChange() {
+  const sel = document.getElementById('scope-select');
+  currentScopeId = sel.value || null;
+  refreshScope();
+}
+
+async function refreshStatus() {
+  // API health
+  try {
+    await get('/health');
+    document.getElementById('api-status').innerHTML = dot('green') + 'running';
+  } catch {
+    document.getElementById('api-status').innerHTML = dot('red') + 'offline';
+    document.getElementById('wm-version').textContent = '—';
+    document.getElementById('state-version').textContent = '—';
+    document.getElementById('last-event').textContent = '—';
+    document.getElementById('events-today').textContent = '—';
+    document.getElementById('wm-items').textContent = '—';
+    return;
+  }
+
+  // Scopes
+  try {
+    const data = await get('/scopes');
+    const scopes = data.items || [];
+    const sel = document.getElementById('scope-select');
+    const prev = currentScopeId;
+    sel.innerHTML = scopes.length
+      ? scopes.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
+      : '<option value="">no scopes</option>';
+    if (prev && scopes.find(s => s.id === prev)) {
+      sel.value = prev;
+    } else if (scopes.length) {
+      currentScopeId = scopes[0].id;
+      sel.value = currentScopeId;
+    }
+  } catch {}
+
+  await refreshScope();
+
+  document.getElementById('last-refresh').textContent =
+    new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+async function refreshScope() {
+  if (!currentScopeId) return;
+
+  // Working memory
+  try {
+    const wm = await get(`/memory/working-state?scopeId=${currentScopeId}`);
+    document.getElementById('wm-version').innerHTML =
+      wm.version ? dot('green') + `v${wm.version}` : dot('gray') + 'empty';
+
+    // Count WM items
+    let items = 0;
+    if (wm.state) {
+      const s = wm.state;
+      items += (s.decisions?.length || 0) + (s.constraints?.length || 0) + (s.todos?.length || 0);
+    }
+    document.getElementById('wm-items').textContent = items || '—';
+  } catch {
+    document.getElementById('wm-version').innerHTML = dot('gray') + '—';
+  }
+
+  // Stable state
+  try {
+    const state = await get(`/memory/stable-state?scopeId=${currentScopeId}`);
+    document.getElementById('state-version').innerHTML =
+      state.version ? dot('green') + `v${state.version}` : dot('gray') + 'no digest';
+  } catch {
+    document.getElementById('state-version').innerHTML = dot('gray') + '—';
+  }
+
+  // Recent events
+  try {
+    const evts = await get(`/memory/events?scopeId=${currentScopeId}&limit=1`);
+    const latest = evts.items?.[0];
+    document.getElementById('last-event').textContent =
+      latest ? timeAgo(latest.createdAt) : 'none';
+  } catch {}
+
+  // Events today
+  try {
+    const evts = await get(`/memory/events?scopeId=${currentScopeId}&limit=100`);
+    const today = new Date().toDateString();
+    const count = (evts.items || []).filter(e =>
+      new Date(e.createdAt).toDateString() === today
+    ).length;
+    document.getElementById('events-today').textContent = count;
+  } catch {}
+}
+
+refreshStatus();
+setInterval(refreshStatus, 5000);
+</script>
+</body>
+</html>
