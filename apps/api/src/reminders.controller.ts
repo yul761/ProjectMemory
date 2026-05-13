@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Inject, NotFoundException, Param, Post, Query, Req } from "@nestjs/common";
 import { ReminderCreateInput, ReminderStatus } from "@statecore/contracts";
 import { DomainService } from "./domain.service";
 import type { RequestWithUser } from "./types";
@@ -13,7 +13,7 @@ export class RemindersController {
     const input = ReminderCreateInput.parse(body);
     if (input.scopeId) {
       const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
-      if (!scope) return { error: "Scope not found" };
+      if (!scope) throw new NotFoundException("Scope not found");
     }
     const reminder = await this.domain.reminderService.createReminder(
       req.userId,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Post, Req } from "@nestjs/common";
+import { Body, Controller, Get, Inject, NotFoundException, Param, Post, Req } from "@nestjs/common";
 import { ScopeActivationOutput, ScopeCreateInput, ScopeListOutput, ScopeOutput, StateOutput } from "@statecore/contracts";
 import { DomainService } from "./domain.service";
 import { parseOutput } from "./output";
@@ -39,7 +39,7 @@ export class ScopesController {
   async setActiveScope(@Req() req: RequestWithUser, @Param("id") scopeId: string) {
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const state = await this.domain.projectService.setActiveScope(req.userId, scopeId);
     return parseOutput(ScopeActivationOutput, { activeScopeId: state.activeProjectId ?? null });
