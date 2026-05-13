@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Query, Req } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, NotFoundException, Param, Post, Query, Req } from "@nestjs/common";
 import { createHash, randomUUID } from "crypto";
 import {
   AGENT_SCENARIOS,
@@ -483,11 +483,11 @@ export class MemoryController {
   async ingestEvent(@Req() req: RequestWithUser, @Body() body: unknown) {
     const input = MemoryEventInput.parse(body);
     if (input.type === "document" && !input.key) {
-      return { error: "key required for document events" };
+      throw new BadRequestException("key required for document events");
     }
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const event = await this.domain.memoryService.ingestEvent({
       userId: req.userId,
@@ -517,10 +517,10 @@ export class MemoryController {
     @Query("limit") limit?: string,
     @Query("cursor") cursor?: string
   ) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const parsed = Number(limit ?? 20);
     const take = Math.min(Number.isFinite(parsed) ? parsed : 20, 100);
@@ -549,7 +549,7 @@ export class MemoryController {
     const input = DigestRequestInput.parse(body);
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const job = await digestQueue.add("digest_scope", { userId: req.userId, scopeId: input.scopeId });
     return parseOutput(DigestEnqueueOutput, { jobId: String(job.id) });
@@ -563,7 +563,7 @@ export class MemoryController {
     const input = DigestRebuildInput.parse(body);
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const rebuildGroupId = randomUUID();
     const job = await digestQueue.add("rebuild_digest_chain", {
@@ -585,10 +585,10 @@ export class MemoryController {
     @Query("cursor") cursor?: string,
     @Query("rebuildGroupId") rebuildGroupId?: string
   ) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const parsed = Number(limit ?? 20);
     const take = Math.min(Number.isFinite(parsed) ? parsed : 20, 100);
@@ -611,10 +611,10 @@ export class MemoryController {
 
   @Get("/memory/state")
   async getLatestDigestState(@Req() req: RequestWithUser, @Query("scopeId") scopeId?: string) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const snapshot = await this.domain.getLatestDigestState(scopeId);
     if (!snapshot) {
@@ -630,10 +630,10 @@ export class MemoryController {
 
   @Get("/memory/stable-state")
   async getStableState(@Req() req: RequestWithUser, @Query("scopeId") scopeId?: string) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const snapshot = await this.domain.getStateLayerView(scopeId);
     if (!snapshot) {
@@ -650,10 +650,10 @@ export class MemoryController {
 
   @Get("/memory/working-state")
   async getWorkingState(@Req() req: RequestWithUser, @Query("scopeId") scopeId?: string) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const snapshot = await this.domain.getLatestWorkingMemory(scopeId);
     if (!snapshot) {
@@ -674,10 +674,10 @@ export class MemoryController {
     @Query("scopeId") scopeId?: string,
     @Query("message") message?: string
   ) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const resolvedMessage = message || "Show the current fast-layer context.";
     const recall = await this.resolveRuntimeRecall(scopeId, resolvedMessage);
@@ -706,10 +706,10 @@ export class MemoryController {
     @Query("scopeId") scopeId?: string,
     @Query("message") message?: string
   ) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const resolvedMessage = message || "What is the current architecture goal?";
     const recall = await this.resolveRuntimeRecall(scopeId, resolvedMessage);
@@ -723,10 +723,10 @@ export class MemoryController {
     @Query("limit") limit?: string,
     @Query("rebuildGroupId") rebuildGroupId?: string
   ) {
-    if (!scopeId) return { error: "scopeId required" };
+    if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const parsed = Number(limit ?? 10);
     const take = Math.min(Number.isFinite(parsed) ? parsed : 10, 50);
@@ -746,7 +746,7 @@ export class MemoryController {
     const input = RetrieveInput.parse(body);
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const limit = input.limit ?? 20;
     const result = await this.domain.retrieveService.retrieve(input.scopeId, limit, input.query);
@@ -769,7 +769,7 @@ export class MemoryController {
     const input = AnswerInput.parse(body);
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
     const result = await this.domain.retrieveService.retrieve(input.scopeId, 25, input.question);
     const snapshot = await this.domain.getLatestDigestState(input.scopeId);
@@ -805,7 +805,7 @@ export class MemoryController {
     const input = RuntimeTurnInput.parse(body);
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) {
-      return { error: "Scope not found" };
+      throw new NotFoundException("Scope not found");
     }
 
     return parseOutput(RuntimeTurnOutput, await this.executeRuntimeTurn(req.userId, input));
