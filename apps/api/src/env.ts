@@ -24,7 +24,8 @@ loadEnvFile(path.join(repoRoot, "apps/api/.env"));
 const envSchema = z.object({
   PORT: z.string().optional(),
   DATABASE_URL: z.string().min(1),
-  REDIS_URL: z.string().min(1),
+  REDIS_URL: z.string().optional(),
+  STATECORE_MODE: z.enum(["lite", "full"]).optional(),
   LOG_LEVEL: z.string().optional(),
   LOCAL_USER_TOKEN: z.string().optional(),
   FEATURE_LLM: z.string().optional(),
@@ -69,6 +70,14 @@ const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
   // eslint-disable-next-line no-console
   console.error("Invalid environment variables", parsed.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+// Validate REDIS_URL requirement based on mode
+const parsedMode = process.env["STATECORE_MODE"] === "lite" ? "lite" : "full";
+if (parsedMode !== "lite" && !process.env["REDIS_URL"]) {
+  // eslint-disable-next-line no-console
+  console.error("REDIS_URL is required in full mode. Set STATECORE_MODE=lite for zero-dependency development.");
   process.exit(1);
 }
 
@@ -130,7 +139,8 @@ if (toBool(env.FEATURE_LLM) && embeddingModelName && requiresApiKeyForBaseUrl(em
 export const apiEnv = {
   port: Number(env.PORT || 3000),
   databaseUrl: env.DATABASE_URL,
-  redisUrl: env.REDIS_URL,
+  redisUrl: env.REDIS_URL ?? "",
+  mode: (env.STATECORE_MODE ?? "full") as "lite" | "full",
   logLevel: env.LOG_LEVEL || "info",
   localUserToken: env.LOCAL_USER_TOKEN || "local-dev-user",
   featureLlm: toBool(env.FEATURE_LLM),

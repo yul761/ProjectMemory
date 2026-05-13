@@ -4,7 +4,8 @@ import { InMemoryQueueAdapter, BullMqQueueAdapter } from "./queue-adapter";
 describe("InMemoryQueueAdapter", () => {
   it("resolves without error when no handler registered", async () => {
     const adapter = new InMemoryQueueAdapter();
-    await expect(adapter.add("test-job", { x: 1 })).resolves.toBeUndefined();
+    const result = await adapter.add("test-job", { x: 1 });
+    expect(result).toHaveProperty("id");
   });
 
   it("calls registered handler with job name and data via setImmediate", async () => {
