@@ -3,6 +3,7 @@ import { NestFactory } from "@nestjs/core";
 import type { Request, Response, NextFunction } from "express";
 import { AppModule } from "./app.module";
 import { apiEnv } from "./env";
+import { GlobalErrorFilter } from "./error.filter";
 
 type RateBucket = {
   count: number;
@@ -65,6 +66,7 @@ function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { logger: ["log", "error", "warn"] });
   app.use(rateLimitMiddleware);
+  app.useGlobalFilters(new GlobalErrorFilter());
   await app.listen(apiEnv.port);
 }
 
