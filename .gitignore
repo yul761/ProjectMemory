@@ -1,5 +1,6 @@
 node_modules/
 statecore.db
+mcp-usage-log/
 .env
 .env.production
 dist/

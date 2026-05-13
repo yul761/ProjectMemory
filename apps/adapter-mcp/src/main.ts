@@ -2,6 +2,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { appendFileSync, mkdirSync } from "fs";
+import path from "path";
 import { z } from "zod";
 import { apiFetch } from "./api-client";
 import { mcpEnv } from "./env";
@@ -9,6 +11,19 @@ import { ScopeManager } from "./scope-manager";
 
 const scopeManager = new ScopeManager();
 const server = new McpServer({ name: "statecore", version: "1.0.0" });
+
+// JSONL usage log — written to mcp-usage-log/ at repo root, gitignored
+const logDir = path.resolve(__dirname, "../../../mcp-usage-log");
+const logFile = path.join(logDir, `usage-${new Date().toISOString().slice(0, 10)}.jsonl`);
+
+function logEvent(entry: Record<string, unknown>) {
+  try {
+    mkdirSync(logDir, { recursive: true });
+    appendFileSync(logFile, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n");
+  } catch {
+    // logging failure must never break tool execution
+  }
+}
 
 function fetch_(path: string, options?: RequestInit) {
   return apiFetch(path, mcpEnv.token, mcpEnv.apiBaseUrl, options);
@@ -32,7 +47,9 @@ tool(
     const params = new URLSearchParams({ scopeId });
     if (message) params.set("message", message);
     const data = await fetch_(`/memory/fast-view?${params}`);
-    return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    const text = JSON.stringify(data, null, 2);
+    logEvent({ tool: "get_context", scopeId, message: message ?? null, resultBytes: text.length });
+    return { content: [{ type: "text" as const, text }] };
   }
 );
 
@@ -46,6 +63,7 @@ tool(
       method: "POST",
       body: JSON.stringify({ scopeId, type: "stream", source: "claude-code", content })
     });
+    logEvent({ tool: "save_turn", scopeId, contentLength: content.length, preview: content.slice(0, 120) });
     return { content: [{ type: "text" as const, text: "Saved." }] };
   }
 );
@@ -61,6 +79,7 @@ tool(
       body: JSON.stringify({ scopeId, question })
     }) as { answer?: string; error?: string };
     const text = data.answer ?? data.error ?? JSON.stringify(data);
+    logEvent({ tool: "recall", scopeId, question, answered: !!data.answer, answerLength: text.length });
     return { content: [{ type: "text" as const, text }] };
   }
 );
@@ -72,7 +91,9 @@ tool(
   async () => {
     const scopeId = await scopeManager.getScopeId();
     const data = await fetch_(`/memory/working-state?scopeId=${scopeId}`);
-    return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    const text = JSON.stringify(data, null, 2);
+    logEvent({ tool: "get_working_state", scopeId, resultBytes: text.length });
+    return { content: [{ type: "text" as const, text }] };
   }
 );
 
@@ -87,9 +108,12 @@ tool(
       body: JSON.stringify({ scopeId })
     }) as { jobId?: string; error?: string };
     const text = data.jobId ? `Digest queued. Job: ${data.jobId}` : (data.error ?? JSON.stringify(data));
+    logEvent({ tool: "force_digest", scopeId, jobId: data.jobId ?? null, error: data.error ?? null });
     return { content: [{ type: "text" as const, text }] };
   }
 );
+
+logEvent({ tool: "server_start", scopeName: path.basename(process.cwd()) });
 
 async function main() {
   const transport = new StdioServerTransport();
