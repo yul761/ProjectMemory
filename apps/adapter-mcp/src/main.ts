@@ -61,7 +61,7 @@ tool(
     const scopeId = await scopeManager.getScopeId();
     await fetch_("/memory/events", {
       method: "POST",
-      body: JSON.stringify({ scopeId, type: "stream", source: "claude-code", content })
+      body: JSON.stringify({ scopeId, type: "stream", source: "api", content })
     });
     logEvent({ tool: "save_turn", scopeId, contentLength: content.length, preview: content.slice(0, 120) });
     return { content: [{ type: "text" as const, text: "Saved." }] };

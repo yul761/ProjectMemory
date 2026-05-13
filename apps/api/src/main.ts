@@ -65,6 +65,7 @@ function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { logger: ["log", "error", "warn"] });
+  app.enableCors({ origin: "*" });
   app.use(rateLimitMiddleware);
   app.useGlobalFilters(new GlobalErrorFilter());
   await app.listen(apiEnv.port);
