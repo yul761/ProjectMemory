@@ -1,7 +1,21 @@
 // apps/adapter-mcp/src/scope-manager.ts
+import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { apiFetch } from "./api-client";
 import { mcpEnv } from "./env";
+
+function readProjectScopeName(cwd: string): string | null {
+  const filePath = path.join(cwd, ".statecore");
+  if (!existsSync(filePath)) return null;
+  try {
+    const raw = readFileSync(filePath, "utf8").trim();
+    const parsed = JSON.parse(raw) as { scope?: string };
+    return parsed.scope ?? null;
+  } catch {
+    return null;
+  }
+}
+
 
 interface ScopeItem {
   id: string;
@@ -22,8 +36,7 @@ export class ScopeManager {
   private cachedScopeId: string | null = null;
 
   constructor(cwd: string = process.cwd()) {
-    const base = path.basename(cwd);
-    this.scopeName = `project:${base}`;
+    this.scopeName = mcpEnv.scopeName ?? readProjectScopeName(cwd) ?? `project:${path.basename(cwd)}`;
   }
 
   async getScopeId(): Promise<string> {

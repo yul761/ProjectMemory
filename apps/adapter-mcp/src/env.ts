@@ -22,7 +22,8 @@ loadEnvFile(path.join(repoRoot, ".env"));
 const envSchema = z.object({
   STATECORE_API_URL: z.string().default("http://localhost:3000"),
   STATECORE_TOKEN: z.string().default("local-dev-user"),
-  STATECORE_USER_ID: z.string().default("mcp-user")
+  STATECORE_USER_ID: z.string().default("mcp-user"),
+  STATECORE_SCOPE_NAME: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -34,5 +35,6 @@ if (!parsed.success) {
 export const mcpEnv = {
   apiBaseUrl: parsed.data.STATECORE_API_URL,
   token: parsed.data.STATECORE_TOKEN,
-  userId: parsed.data.STATECORE_USER_ID
+  userId: parsed.data.STATECORE_USER_ID,
+  scopeName: parsed.data.STATECORE_SCOPE_NAME
 };
