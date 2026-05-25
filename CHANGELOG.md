@@ -6,6 +6,25 @@ The format loosely follows Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- `apps/adapter-mcp`: `list_scopes` tool — discover all available scopes before cross-scope recall.
+- `apps/adapter-mcp`: `recall` now accepts optional `scopeId` parameter for querying any scope, not just the current project scope.
+- `apps/adapter-mcp`: scope resolution from `.statecore` project file or `STATECORE_SCOPE_NAME` env var, with directory-name fallback.
+- `apps/adapter-mcp`: `save_turn` now uses `/memory/runtime/turn` endpoint for richer digest handling.
+- `GET /diagnostics/queues` — active/waiting/failed counts for digest and workingMemory queues.
+- `GET /diagnostics/mcp-usage` — today's MCP tool call counts from JSONL usage log.
+- `docker-compose.local.yml` — full local Docker stack (Postgres 16, Redis 7, API, Worker).
+- `Makefile` — local dev shortcuts (`start`, `stop`, `logs`, `rebuild`, `clean`).
+- `start.ps1` — Windows startup script with health polling and status widget auto-launch.
+- `status.html` — floating real-time status widget.
+- `scripts/ingest-docs.ts` — bulk-ingest a folder of markdown/text files into a scope (`pnpm ingest:docs`).
+- `scripts/wake-monitor.ps1` / `wake-recovery.ps1` — Windows background monitor that restores Docker networking after sleep/wake.
+- `CLAUDE.md` — Claude Code project context for this repo.
+
+### Fixed
+- `apps/api/src/auth.middleware.ts`: health check bypass now uses `originalUrl` to correctly match `/health`.
+- `Dockerfile`: now copies `apps/adapter-mcp/package.json` in the dependency-install stage.
+
 ## [1.0.0] - 2026-03-18
 
 ### Added

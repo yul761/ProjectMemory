@@ -88,6 +88,16 @@ These endpoints are useful for diagnosis, operator tooling, and inspector views.
 They are valid to expose in a developer console, but they should not be the main
 dependency of a product demo.
 
+### Queue And Usage Diagnostics
+
+- `GET /diagnostics/queues`
+  - returns active, waiting, and failed job counts for `digest` and `workingMemory` queues
+  - works in both full mode (BullMQ/Redis) and lite mode (in-memory, always returns zeros)
+- `GET /diagnostics/mcp-usage`
+  - returns today's MCP tool call counts aggregated from the JSONL usage log
+  - log file: `mcp-usage-log/usage-YYYY-MM-DD.jsonl` (written by `adapter-mcp`)
+  - returns `{ today, counts: { tool_name: count } }`
+
 ### Retrieval And Answer Inspection
 
 - `POST /memory/retrieve`

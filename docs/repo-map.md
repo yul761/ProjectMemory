@@ -16,10 +16,16 @@ These paths are the product-facing core:
   - NestJS API entrypoint
   - runtime turn endpoint
   - inspectable memory endpoints
+  - diagnostics endpoints (`/diagnostics/queues`, `/diagnostics/mcp-usage`)
 - `apps/worker`
   - BullMQ background jobs
   - Working Memory updates
   - State Layer digest jobs
+- `apps/adapter-mcp`
+  - MCP server adapter for Claude Code and other MCP clients
+  - tools: `save_turn`, `recall`, `list_scopes`
+  - scope auto-discovery via `.statecore` file, `STATECORE_SCOPE_NAME` env var, or directory name
+  - see `docs/mcp-adapter.md`
 - `apps/cli`
   - developer/operator diagnostics
   - `doctor`, `layer-status`, `turn`
@@ -39,6 +45,31 @@ These paths are the product-facing core:
 
 If you are adding a demo app, this is the part of the repo you should build on.
 For the shortest path to run the current demo, see `docs/demo-quickstart.md`.
+
+## Local Development
+
+These files configure the local Docker stack:
+
+- `docker-compose.local.yml` — full stack (Postgres, Redis, API, Worker) for local dev
+- `Makefile` — shortcuts: `make start`, `make stop`, `make logs`, `make rebuild`, `make clean`
+- `start.ps1` — Windows startup script with health check and status widget
+- `status.html` — floating status widget (auto-launched by `start.ps1`)
+
+Quick start:
+
+```bash
+make start
+# or on Windows:
+.\start.ps1
+```
+
+## Operator Scripts
+
+- `scripts/ingest-docs.ts` — bulk-ingest a folder of markdown/text files into a scope
+  - usage: `pnpm ingest:docs --dir <path> --scope <name-or-uuid>`
+  - options: `--ext`, `--no-digest`, `--dry-run`, `--token`, `--url`
+- `scripts/wake-monitor.ps1` — background process that restores Docker networking after Windows sleep/wake
+- `scripts/wake-recovery.ps1` — one-shot recovery script (called by the monitor)
 
 ## Research And Benchmarking
 
