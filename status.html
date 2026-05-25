@@ -99,6 +99,14 @@
     <span class="value" id="state-version">—</span>
   </div>
   <div class="row">
+    <span class="label">Digest Age</span>
+    <span class="value" id="digest-age">—</span>
+  </div>
+  <div class="row">
+    <span class="label">Goal</span>
+    <span class="value" id="current-goal" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#8b949e">—</span>
+  </div>
+  <div class="row">
     <span class="label">Last Event</span>
     <span class="value" id="last-event">—</span>
   </div>
@@ -114,7 +122,42 @@
       <div class="mini-val" id="wm-items">—</div>
       <div class="mini-label">WM items</div>
     </div>
+    <div class="mini-card">
+      <div class="mini-val" id="undigested">—</div>
+      <div class="mini-label">undigested</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-val" id="queue-active">—</div>
+      <div class="mini-label">jobs active</div>
+    </div>
   </div>
+</div>
+
+<div class="section">
+  <div class="section-title">MCP Today</div>
+  <div class="mini-grid">
+    <div class="mini-card">
+      <div class="mini-val" id="mcp-save">—</div>
+      <div class="mini-label">save_turn</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-val" id="mcp-recall">—</div>
+      <div class="mini-label">recall</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-val" id="mcp-context">—</div>
+      <div class="mini-label">get_context</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-val" id="mcp-digest">—</div>
+      <div class="mini-label">force_digest</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="warnings-section" style="display:none">
+  <div class="section-title">Warnings</div>
+  <div id="warnings-list" style="font-size:10px;color:#d29922;line-height:1.6"></div>
 </div>
 
 <script>
@@ -122,6 +165,7 @@ const API = 'http://localhost:3002';
 const TOKEN = 'local-dev-user';
 
 let currentScopeId = null;
+let scopeGoals = {};
 
 function headers() {
   return { 'x-user-id': TOKEN };
@@ -156,9 +200,9 @@ function onScopeChange() {
 }
 
 async function refreshStatus() {
-  // API health
+  // API health — use /scopes (requires auth header, proves API + DB both up)
   try {
-    await get('/health');
+    await get('/scopes');
     document.getElementById('api-status').innerHTML = dot('green') + 'running';
   } catch {
     document.getElementById('api-status').innerHTML = dot('red') + 'offline';
@@ -176,6 +220,7 @@ async function refreshStatus() {
     const scopes = data.items || [];
     const sel = document.getElementById('scope-select');
     const prev = currentScopeId;
+    scopeGoals = Object.fromEntries(scopes.map(s => [s.id, s.goal]));
     sel.innerHTML = scopes.length
       ? scopes.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
       : '<option value="">no scopes</option>';
@@ -213,31 +258,82 @@ async function refreshScope() {
     document.getElementById('wm-version').innerHTML = dot('gray') + '—';
   }
 
-  // Stable state
+  // Stable state + digest age + goal
+  let digestCreatedAt = null;
   try {
     const state = await get(`/memory/stable-state?scopeId=${currentScopeId}`);
     document.getElementById('state-version').innerHTML =
-      state.version ? dot('green') + `v${state.version}` : dot('gray') + 'no digest';
+      state.digestId ? dot('green') + `digest` : dot('gray') + 'no digest';
+    digestCreatedAt = state.createdAt ?? null;
+    document.getElementById('digest-age').textContent =
+      digestCreatedAt ? timeAgo(digestCreatedAt) : '—';
+    const goal = state.view?.goal ?? scopeGoals[currentScopeId] ?? null;
+    document.getElementById('current-goal').textContent = goal ?? '—';
+    document.getElementById('current-goal').title = goal ?? '';
   } catch {
     document.getElementById('state-version').innerHTML = dot('gray') + '—';
+    document.getElementById('digest-age').textContent = '—';
+    document.getElementById('current-goal').textContent = '—';
   }
 
-  // Recent events
+  // Recent events + undigested count
   try {
-    const evts = await get(`/memory/events?scopeId=${currentScopeId}&limit=1`);
-    const latest = evts.items?.[0];
+    const evts = await get(`/memory/events?scopeId=${currentScopeId}&limit=200`);
+    const items = evts.items || [];
+    const latest = items[0];
     document.getElementById('last-event').textContent =
       latest ? timeAgo(latest.createdAt) : 'none';
-  } catch {}
 
-  // Events today
-  try {
-    const evts = await get(`/memory/events?scopeId=${currentScopeId}&limit=100`);
     const today = new Date().toDateString();
-    const count = (evts.items || []).filter(e =>
+    const todayCount = items.filter(e =>
       new Date(e.createdAt).toDateString() === today
     ).length;
-    document.getElementById('events-today').textContent = count;
+    document.getElementById('events-today').textContent = todayCount;
+
+    const undigested = digestCreatedAt
+      ? items.filter(e => new Date(e.createdAt) > new Date(digestCreatedAt)).length
+      : items.length;
+    document.getElementById('undigested').textContent = undigested || '0';
+  } catch {}
+
+  // Warnings
+  try {
+    const layer = await get(`/memory/layer-status?scopeId=${currentScopeId}`);
+    const warnings = layer.warnings || [];
+    const sec = document.getElementById('warnings-section');
+    const list = document.getElementById('warnings-list');
+    if (warnings.length) {
+      sec.style.display = '';
+      list.innerHTML = warnings.map(w => `⚠ ${w}`).join('<br>');
+    } else {
+      sec.style.display = 'none';
+    }
+  } catch {}
+
+  // Queue jobs
+  try {
+    const q = await get('/diagnostics/queues');
+    const active = (q.digest.active || 0) + (q.workingMemory.active || 0);
+    const waiting = (q.digest.waiting || 0) + (q.workingMemory.waiting || 0);
+    const failed = (q.digest.failed || 0) + (q.workingMemory.failed || 0);
+    let val = String(active);
+    if (waiting > 0) val += `+${waiting}w`;
+    const el = document.getElementById('queue-active');
+    el.textContent = val;
+    el.style.color = failed > 0 ? '#f85149' : active > 0 ? '#3fb950' : '#e6edf3';
+    if (failed > 0) el.textContent += ` ${failed}f`;
+  } catch {
+    document.getElementById('queue-active').textContent = '—';
+  }
+
+  // MCP usage today
+  try {
+    const mcp = await get('/diagnostics/mcp-usage');
+    const c = mcp.counts || {};
+    document.getElementById('mcp-save').textContent = c['save_turn'] ?? '0';
+    document.getElementById('mcp-recall').textContent = c['recall'] ?? '0';
+    document.getElementById('mcp-context').textContent = c['get_context'] ?? '0';
+    document.getElementById('mcp-digest').textContent = c['force_digest'] ?? '0';
   } catch {}
 }
 

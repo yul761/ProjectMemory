@@ -38,6 +38,7 @@
     "smoke:deploy": "./scripts/smoke-prod-compose.sh",
     "smoke:reminders": "./scripts/smoke-reminders.sh",
     "cleanup:demo-guests": "pnpm --filter @statecore/db exec tsx ../../scripts/cleanup-demo-guests.ts",
+    "ingest:docs": "pnpm --filter @statecore/db exec tsx ../../scripts/ingest-docs.ts",
     "smoke": "pnpm smoke:no-llm && pnpm smoke:llm && pnpm smoke:runtime && pnpm smoke:reminders",
     "db:migrate": "pnpm --filter @statecore/db prisma migrate dev",
     "db:deploy": "pnpm --filter @statecore/db prisma migrate deploy",
