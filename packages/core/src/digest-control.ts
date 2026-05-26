@@ -135,13 +135,13 @@ const DEFAULT_DIGEST_STATE: DigestState = {
 function deriveStateFromDigest(digest?: Digest | null): DigestState | null {
   if (!digest) return null;
   const decisions = digest.changes
-    .split("\\n")
-    .map((line) => line.replace(/^-\\s*/, "").trim())
-    .filter((line) => /\\b(decide|decision|we will|agreed)\\b/i.test(line));
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter((line) => /\b(decide|decision|we will|agreed)\b/i.test(line));
   const constraints = digest.changes
-    .split("\\n")
-    .map((line) => line.replace(/^-\\s*/, "").trim())
-    .filter((line) => /\\b(constraint|blocked|limitation)\\b/i.test(line));
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter((line) => /\b(constraint|blocked|limitation)\b/i.test(line));
   return {
     stableFacts: {
       goal: parseGoal(digest.summary),
@@ -1516,7 +1516,7 @@ export function consistencyCheck(input: {
     const keyTokens = tokenize(constraint).slice(0, 3);
     if (!keyTokens.length) continue;
     const mentionsConstraint = keyTokens.every((token) => summaryLower.includes(token));
-    if (/\\b(remove|drop|lift|no longer|ignore)\\b/.test(summaryLower) && mentionsConstraint) {
+    if (/\b(remove|drop|lift|no longer|ignore)\b/.test(summaryLower) && mentionsConstraint) {
       errors.push("constraint_contradiction");
       break;
     }
