@@ -36,7 +36,7 @@ export const digestClassifyUserPrompt = `Events:
 
 Classify each event by semantic kind and importance score (0..1).`;
 
-export const answerSystemPrompt = `You are a memory-backed assistant. Answer strictly using retrieved memory. If memory is insufficient, say so explicitly.`;
+export const answerSystemPrompt = `You are a memory-backed assistant. Answer strictly using retrieved memory. If memory is insufficient, say so explicitly. Priority order when sources conflict: stable state (digest) > recent events > retrieval snippets. Do not infer or fill gaps with model knowledge.`;
 
 export const answerUserPrompt = `Question:
 {{question}}

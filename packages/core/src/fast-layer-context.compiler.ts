@@ -88,6 +88,27 @@ function buildExclusions(workingMemory?: WorkingMemoryView | null, stateLayer?: 
   return exclusions.slice(0, 6);
 }
 
+const CONTEXT_SIZE_WARN_CHARS = 3000;
+
+function detectLayerConflicts(
+  workingView?: WorkingMemoryView | null,
+  stableView?: StateLayerView | null
+): string[] {
+  const conflicts: string[] = [];
+  const wGoal = workingView?.goal?.trim().toLowerCase();
+  const sGoal = stableView?.goal?.trim().toLowerCase();
+  if (wGoal && sGoal && wGoal !== sGoal) {
+    conflicts.push("goal_mismatch");
+  }
+  const wDecisions = (workingView?.decisions ?? []).map(d => d.trim().toLowerCase());
+  const sDecisions = (stableView?.decisions ?? []).map(d => d.trim().toLowerCase());
+  if (wDecisions.length > 0 && sDecisions.length > 0) {
+    const hasOverlap = wDecisions.some(wd => sDecisions.some(sd => sd.includes(wd.slice(0, 20)) || wd.includes(sd.slice(0, 20))));
+    if (!hasOverlap) conflicts.push("decision_divergence");
+  }
+  return conflicts;
+}
+
 export function compileFastLayerContext(input: {
   message: string;
   workingMemoryView?: WorkingMemoryView | null;
@@ -103,15 +124,25 @@ export function compileFastLayerContext(input: {
     priorityTerms: buildPriorityTerms(input.message, input.workingMemoryView, input.stateLayerView),
     exclusions: buildExclusions(input.workingMemoryView, input.stateLayerView)
   };
+
+  const conflicts = detectLayerConflicts(input.workingMemoryView, input.stateLayerView);
+  const conflictNote = conflicts.length > 0
+    ? ` Layer conflict detected (${conflicts.join(", ")}): prefer stable state over working memory where they disagree.`
+    : "";
+
+  const totalBlockSize = workingMemoryBlock.length + stableStateBlock.length + retrievalBlock.length + recentTurnsBlock.length;
+  const sizeWarning = totalBlockSize > CONTEXT_SIZE_WARN_CHARS ? "context_large" : null;
+
   const summaryParts = [
     input.workingMemoryView?.goal ? `working_goal:${input.workingMemoryView.goal}` : null,
     input.stateLayerView?.goal ? `stable_goal:${input.stateLayerView.goal}` : null,
     input.retrievalSnippets.length ? `retrieval:${input.retrievalSnippets.length}` : null,
-    input.recentTurns.length ? `recent_turns:${input.recentTurns.length}` : null
+    input.recentTurns.length ? `recent_turns:${input.recentTurns.length}` : null,
+    sizeWarning
   ].filter((item): item is string => Boolean(item));
 
   return {
-    systemContext: "Fast Layer: respond quickly using recent turns, retrieval snippets, working memory, and stable state. Stable state remains authoritative.",
+    systemContext: `Fast Layer: respond quickly using recent turns, retrieval snippets, working memory, and stable state. Stable state remains authoritative.${conflictNote}`,
     workingMemoryBlock,
     stableStateBlock,
     retrievalBlock,
