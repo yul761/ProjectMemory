@@ -243,11 +243,14 @@ export class DomainService {
           const { scopeId } = data as { userId: string; scopeId: string };
           const take = Math.max(wmMaxTurns * 3, wmMaxTurns + 8);
           const { prisma: db } = await import("@statecore/db");
-          const recentEvents = await db.memoryEvent.findMany({
-            where: { scopeId },
-            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-            take
-          });
+          const [recentEvents, scope] = await Promise.all([
+            db.memoryEvent.findMany({
+              where: { scopeId },
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+              take
+            }),
+            db.projectScope.findUnique({ where: { id: scopeId }, select: { goal: true } })
+          ]);
           const selected = selectWorkingMemoryEvents(
             recentEvents.reverse().map((event) => ({
               id: event.id,
@@ -259,7 +262,7 @@ export class DomainService {
             })),
             wmMaxTurns
           );
-          await wmSvc.updateFromEvents(scopeId, selected);
+          await wmSvc.updateFromEvents(scopeId, selected, scope?.goal);
         }
       });
     }

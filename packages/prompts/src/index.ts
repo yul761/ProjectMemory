@@ -1,6 +1,7 @@
 export const digestStage2SystemPrompt = `You are a long-term memory engine. Create a concise and faithful digest.
 Rules:
 - Output JSON only.
+- goal must be a single short line (the scope goal, verbatim or lightly refined).
 - summary must be <= 120 words.
 - changes must be <= 3 bullets.
 - nextSteps must be 1-3 concrete actionable tasks.
@@ -23,7 +24,8 @@ Delta candidates:
 Latest documents:
 {{documents}}
 
-Return JSON: {"summary": string, "changes": string[], "nextSteps": string[]}`;
+Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[]}
+goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).`;
 
 export const digestClassifySystemPrompt = `Classify memory events for digest selection.
 Return strict JSON array where each item has:

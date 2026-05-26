@@ -347,7 +347,7 @@ async function runWorkingMemoryUpdateJob(data: { userId: string; scopeId: string
   })), workerEnv.workingMemoryMaxRecentTurns);
 
   const startedAt = Date.now();
-  const snapshot = await workingMemoryService.updateFromEvents(data.scopeId, selectedEvents);
+  const snapshot = await workingMemoryService.updateFromEvents(data.scopeId, selectedEvents, scope.goal);
 
   logger.info({
     scopeId: data.scopeId,

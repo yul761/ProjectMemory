@@ -45,7 +45,7 @@ export class WorkingMemoryService {
     return this.repo.findLatest(scopeId);
   }
 
-  async updateFromEvents(scopeId: string, events: WorkingMemoryEventLike[]) {
+  async updateFromEvents(scopeId: string, events: WorkingMemoryEventLike[], scopeGoal?: string | null) {
     const previous = await this.repo.findLatest(scopeId);
     const extractedState = extractWorkingMemoryState(events, {
       maxItemsPerField: this.options?.maxItemsPerField
@@ -58,7 +58,7 @@ export class WorkingMemoryService {
           state: extractedState
         })
       : extractedState;
-    const view = compileWorkingMemoryView(state);
+    const view = compileWorkingMemoryView(state, scopeGoal);
     return this.repo.upsert({
       scopeId,
       version: (previous?.version ?? 0) + 1,

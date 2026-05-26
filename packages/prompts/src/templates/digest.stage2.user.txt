@@ -15,4 +15,5 @@ Delta candidates:
 Latest documents:
 {{documents}}
 
-Return JSON: {"summary": string, "changes": string[], "nextSteps": string[]}
+Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[]}
+goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).

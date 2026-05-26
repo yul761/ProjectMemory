@@ -31,9 +31,9 @@ export interface StateLayerView {
   risks: string[];
 }
 
-export function compileWorkingMemoryView(state?: WorkingMemoryState | null): WorkingMemoryView {
+export function compileWorkingMemoryView(state?: WorkingMemoryState | null, scopeGoal?: string | null): WorkingMemoryView {
   return {
-    goal: state?.currentGoal,
+    goal: state?.currentGoal || scopeGoal || undefined,
     constraints: state?.activeConstraints ?? [],
     decisions: state?.recentDecisions ?? [],
     progressSummary: state?.progressSummary,

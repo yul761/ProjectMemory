@@ -101,6 +101,7 @@ export interface DigestControlConfig {
 }
 
 export interface DigestOutput {
+  goal?: string;
   summary: string;
   changes: string[];
   nextSteps: string[];
@@ -113,6 +114,7 @@ export interface DigestConsistencyResult {
 }
 
 export const DigestOutputSchema = z.object({
+  goal: z.string().optional(),
   summary: z.string(),
   changes: z.array(z.string()),
   nextSteps: z.array(z.string())
@@ -1618,6 +1620,7 @@ export async function generateDigestStage2(input: {
     }
 
     const normalized: DigestOutput = {
+      goal: validated.data.goal?.trim() || undefined,
       summary: validated.data.summary.trim(),
       changes: validated.data.changes.map((c) => c.trim()).filter(Boolean).slice(0, 3),
       nextSteps: validated.data.nextSteps.map((n) => n.trim()).filter(Boolean).slice(0, 3)
@@ -1764,6 +1767,11 @@ export async function runDigestControlPipeline(input: {
     maxRetries: input.config.maxRetries
   });
   metrics.generationMs = Date.now() - tGenerate;
+
+  const resolvedGoal = digest.goal?.trim() || input.scope.goal?.trim() || undefined;
+  if (resolvedGoal && !state.stableFacts.goal) {
+    state.stableFacts.goal = resolvedGoal;
+  }
 
   const consistency = consistencyCheck({
     output: digest,

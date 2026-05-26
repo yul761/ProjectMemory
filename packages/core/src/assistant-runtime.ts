@@ -236,9 +236,10 @@ function normalizeLayerText(value?: string | null) {
 }
 
 function overlapCount(left?: string[] | null, right?: string[] | null) {
-  const leftSet = new Set((left ?? []).map((value) => normalizeLayerText(value)).filter(Boolean));
-  const rightSet = new Set((right ?? []).map((value) => normalizeLayerText(value)).filter(Boolean));
-  return [...leftSet].filter((value) => rightSet.has(value)).length;
+  const leftNorm = (left ?? []).map(normalizeLayerText).filter((s) => s.length >= 10);
+  const rightNorm = (right ?? []).map(normalizeLayerText).filter((s) => s.length >= 10);
+  if (!leftNorm.length || !rightNorm.length) return 0;
+  return leftNorm.filter((l) => rightNorm.some((r) => r.includes(l) || l.includes(r))).length;
 }
 
 function detectLayerWarnings(input: {
@@ -287,11 +288,11 @@ export function computeLayerDiagnostics(input: {
 }) {
   const sharedConstraintCount = overlapCount(input.workingMemoryView?.constraints, input.stableStateView?.constraints);
   const sharedDecisionCount = overlapCount(input.workingMemoryView?.decisions, input.stableStateView?.decisions);
+  const workingGoalNorm = normalizeLayerText(input.workingMemoryView?.goal);
+  // stable state may not have digested a goal yet; fall back to working memory goal so absence ≠ drift
+  const effectiveStableGoalNorm = normalizeLayerText(input.stableStateView?.goal) || workingGoalNorm;
   const layerAlignment: LayerAlignment = {
-    goalAligned: Boolean(
-      normalizeLayerText(input.workingMemoryView?.goal)
-      && normalizeLayerText(input.workingMemoryView?.goal) === normalizeLayerText(input.stableStateView?.goal)
-    ),
+    goalAligned: Boolean(workingGoalNorm && workingGoalNorm === effectiveStableGoalNorm),
     sharedConstraintCount,
     sharedDecisionCount,
     fastPathReady: Boolean(input.workingMemoryVersion && input.stableStateVersion)
