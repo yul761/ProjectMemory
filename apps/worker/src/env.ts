@@ -126,7 +126,7 @@ export const workerEnv = {
   workingMemoryEnabled: env.WORKING_MEMORY_ENABLED ? toBool(env.WORKING_MEMORY_ENABLED) : true,
   workingMemoryUseLlm: toBool(env.WORKING_MEMORY_USE_LLM),
   workingMemoryMaxRecentTurns: Number(env.WORKING_MEMORY_MAX_RECENT_TURNS || 6),
-  workingMemoryMaxItemsPerField: Number(env.WORKING_MEMORY_MAX_ITEMS_PER_FIELD || 5),
+  workingMemoryMaxItemsPerField: Number(env.WORKING_MEMORY_MAX_ITEMS_PER_FIELD || 10),
   featureTelegram: toBool(env.FEATURE_TELEGRAM),
   modelProvider,
   modelApiKey,

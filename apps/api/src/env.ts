@@ -147,7 +147,7 @@ export const apiEnv = {
   workingMemoryEnabled: env.WORKING_MEMORY_ENABLED ? toBool(env.WORKING_MEMORY_ENABLED) : true,
   workingMemoryUseLlm: toBool(env.WORKING_MEMORY_USE_LLM),
   workingMemoryMaxRecentTurns: Number(env.WORKING_MEMORY_MAX_RECENT_TURNS || 6),
-  workingMemoryMaxItemsPerField: Number(env.WORKING_MEMORY_MAX_ITEMS_PER_FIELD || 5),
+  workingMemoryMaxItemsPerField: Number(env.WORKING_MEMORY_MAX_ITEMS_PER_FIELD || 10),
   retrieveUseEmbeddings: toBool(env.RETRIEVE_USE_EMBEDDINGS),
   retrieveEmbeddingCandidateLimit: Number(env.RETRIEVE_EMBEDDING_CANDIDATE_LIMIT || 24),
   modelProvider,

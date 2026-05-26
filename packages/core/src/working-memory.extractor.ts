@@ -245,7 +245,7 @@ export function extractWorkingMemoryState(
   events: WorkingMemoryEventLike[],
   options?: WorkingMemoryExtractorOptions
 ): WorkingMemoryState {
-  const maxItems = Math.max(1, options?.maxItemsPerField ?? 5);
+  const maxItems = Math.max(1, options?.maxItemsPerField ?? 10);
   const ordered = selectWorkingMemoryEvents(events, events.length);
   const reversed = [...ordered].reverse();
 
@@ -300,7 +300,7 @@ export function mergeWorkingMemoryState(
   options?: WorkingMemoryExtractorOptions
 ): WorkingMemoryState {
   if (!patch) return base;
-  const maxItems = Math.max(1, options?.maxItemsPerField ?? 5);
+  const maxItems = Math.max(1, options?.maxItemsPerField ?? 10);
 
   return {
     currentGoal: patch.currentGoal?.trim() || base.currentGoal,

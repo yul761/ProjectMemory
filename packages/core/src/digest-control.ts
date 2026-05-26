@@ -205,12 +205,12 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
       decisions: [...new Set(base.stableFacts?.decisions ?? [])]
     },
     workingNotes: {
-      openQuestions: [...new Set(base.workingNotes?.openQuestions ?? [])].slice(-10),
-      risks: [...new Set(base.workingNotes?.risks ?? [])].slice(-10),
+      openQuestions: [...new Set(base.workingNotes?.openQuestions ?? [])].slice(-25),
+      risks: [...new Set(base.workingNotes?.risks ?? [])].slice(-25),
       context: base.workingNotes?.context
     },
     todos: [...new Set(base.todos ?? [])],
-    volatileContext: [...new Set(base.volatileContext ?? [])].slice(-10),
+    volatileContext: [...new Set(base.volatileContext ?? [])].slice(-25),
     evidenceRefs: [...new Map((base.evidenceRefs ?? []).map((ref) => {
       const normalized = normalizeEvidenceRef(ref);
       return [`${normalized.sourceType}:${normalized.id}:${normalized.key ?? ""}:${normalized.kind ?? ""}`, normalized];
@@ -854,15 +854,25 @@ function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEviden
     return;
   }
 
+  // Documents are authoritative; stream events require very high similarity to avoid
+  // noisy conversation turns silently replacing the project goal.
+  const isDocument = evidence.sourceType === "document";
+  const overwriteThreshold = isDocument ? 0.7 : 0.95;
   const sameGoal =
     normalizeText(previousGoal) === normalizeText(goal) ||
-    jaccardSimilarity(previousGoal, goal) >= 0.8;
+    jaccardSimilarity(previousGoal, goal) >= overwriteThreshold;
 
   if (sameGoal) {
     if (!hasEvidenceRef(next.provenance?.goal, evidence)) {
       next.provenance!.goal = setGoalProvenance(next.provenance?.goal, evidence);
       pushRecentChange(next, { field: "goal", action: "reaffirm", value: previousGoal, evidence });
     }
+    return;
+  }
+
+  // Stream events that diverge from the stable goal are logged but do not overwrite.
+  if (!isDocument) {
+    pushRecentChange(next, { field: "goal", action: "reaffirm", value: previousGoal, evidence });
     return;
   }
 
