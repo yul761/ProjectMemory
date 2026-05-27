@@ -35,7 +35,8 @@ import {
   createRuntimePolicyBundle,
   createRuntimeRecallPolicy,
   createModelProvider,
-  generateAnswer
+  generateAnswer,
+  getActiveFactRegistry
 } from "@statecore/core";
 import { digestQueue, workingMemoryQueue } from "./queue";
 import { DomainService } from "./domain.service";
@@ -749,7 +750,11 @@ export class MemoryController {
       throw new NotFoundException("Scope not found");
     }
     const limit = input.limit ?? 20;
-    const result = await this.domain.retrieveService.retrieve(input.scopeId, limit, input.query);
+    const [result, snapshot] = await Promise.all([
+      this.domain.retrieveService.retrieve(input.scopeId, limit, input.query),
+      this.domain.getLatestDigestState(input.scopeId)
+    ]);
+    const activeFactRegistry = snapshot ? getActiveFactRegistry(snapshot.state) : [];
     return parseOutput(RetrieveOutput, {
       digest: result.digest ? result.digest.summary : null,
       events: result.events.map((event) => ({
@@ -757,6 +762,7 @@ export class MemoryController {
         content: event.content,
         createdAt: event.createdAt.toISOString()
       })),
+      factRegistry: activeFactRegistry,
       retrieval: result.retrieval
     });
   }

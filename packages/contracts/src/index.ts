@@ -116,6 +116,16 @@ export const RetrieveInput = z.object({
   limit: z.number().int().min(1).max(100).optional()
 });
 
+export const FactRegistryEntrySchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  type: z.enum(["decision", "constraint"]),
+  confidence: z.number().min(0).max(1),
+  addedAt: z.string(),
+  evidenceId: z.string(),
+  evidenceType: z.enum(["event", "document"])
+});
+
 export const RetrieveOutput = z.object({
   digest: z.string().nullable(),
   events: z.array(
@@ -125,6 +135,7 @@ export const RetrieveOutput = z.object({
       createdAt: z.string()
     })
   ),
+  factRegistry: z.array(FactRegistryEntrySchema),
   retrieval: z.object({
     mode: z.enum(["heuristic", "hybrid"]),
     embeddingRequested: z.boolean(),
