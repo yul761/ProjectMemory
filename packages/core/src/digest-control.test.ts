@@ -2064,4 +2064,51 @@ describe("factRegistry", () => {
     expect(active).toHaveLength(1);
     expect(active[0].id).toBe("f2");
   });
+
+  it("promotes high-importance decisions to factRegistry", () => {
+    const result = protectedStateMerge({
+      prevState: normalizeDigestState(null),
+      deltaCandidates: [{
+        eventId: "evt-1",
+        reason: "decision",
+        features: { kind: "decision", importanceScore: 0.85, noveltyScore: 0.9 },
+        event: event({ id: "evt-1", scopeId: "sc", userId: "u", type: "stream", content: "decision: use ONNX runtime, no GPU required for V1" })
+      }],
+      documents: []
+    });
+    const active = getActiveFactRegistry(result);
+    expect(active).toHaveLength(1);
+    expect(active[0].type).toBe("decision");
+    expect(active[0].confidence).toBe(0.85);
+  });
+
+  it("does not promote low-importance decisions to factRegistry", () => {
+    const result = protectedStateMerge({
+      prevState: normalizeDigestState(null),
+      deltaCandidates: [{
+        eventId: "evt-2",
+        reason: "decision",
+        features: { kind: "decision", importanceScore: 0.4, noveltyScore: 0.9 },
+        event: event({ id: "evt-2", scopeId: "sc", userId: "u", type: "stream", content: "decision: use prettier for formatting" })
+      }],
+      documents: []
+    });
+    expect(getActiveFactRegistry(result)).toHaveLength(0);
+  });
+
+  it("promotes constraints to factRegistry when importanceScore >= 0.75", () => {
+    const result = protectedStateMerge({
+      prevState: normalizeDigestState(null),
+      deltaCandidates: [{
+        eventId: "evt-3",
+        reason: "constraint",
+        features: { kind: "constraint", importanceScore: 0.8, noveltyScore: 0.9 },
+        event: event({ id: "evt-3", scopeId: "sc", userId: "u", type: "stream", content: "constraint: no paid third-party APIs in V1" })
+      }],
+      documents: []
+    });
+    const active = getActiveFactRegistry(result);
+    expect(active).toHaveLength(1);
+    expect(active[0].type).toBe("constraint");
+  });
 });

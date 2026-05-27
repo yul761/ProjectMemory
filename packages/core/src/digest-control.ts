@@ -1135,6 +1135,9 @@ export function protectedStateMerge(input: {
           next.stableFacts.decisions.push(text);
           pushRecentChange(next, { field: "decisions", action: "add", value: text, evidence });
           next.provenance.decisions = upsertValueProvenance(next.provenance.decisions, text, evidence);
+          if (delta.features.importanceScore >= 0.7) {
+            promoteToFactRegistry(next, text, "decision", delta.features.importanceScore, evidence);
+          }
         } else if (!valueHasEvidence(next.provenance.decisions, existing, evidence)) {
           pushRecentChange(next, { field: "decisions", action: "reaffirm", value: existing, evidence });
           next.provenance.decisions = upsertValueProvenance(next.provenance.decisions, existing, evidence);
@@ -1164,6 +1167,7 @@ export function protectedStateMerge(input: {
         next.stableFacts.constraints.push(normalizedConstraint);
         pushRecentChange(next, { field: "constraints", action: "add", value: normalizedConstraint, evidence });
         next.provenance.constraints = upsertValueProvenance(next.provenance.constraints, normalizedConstraint, evidence);
+        promoteToFactRegistry(next, normalizedConstraint, "constraint", delta.features.importanceScore, evidence);
       } else if (!valueHasEvidence(next.provenance.constraints, existing, evidence)) {
         pushRecentChange(next, { field: "constraints", action: "reaffirm", value: existing, evidence });
         next.provenance.constraints = upsertValueProvenance(next.provenance.constraints, existing, evidence);
