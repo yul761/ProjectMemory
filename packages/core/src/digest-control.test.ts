@@ -2111,4 +2111,60 @@ describe("factRegistry", () => {
     expect(active).toHaveLength(1);
     expect(active[0].type).toBe("constraint");
   });
+
+  it("stream events cannot remove a factRegistry decision via revoke", () => {
+    const stateWithFact = protectedStateMerge({
+      prevState: normalizeDigestState(null),
+      deltaCandidates: [{
+        eventId: "evt-1",
+        reason: "decision",
+        features: { kind: "decision", importanceScore: 0.85, noveltyScore: 0.9 },
+        event: event({ id: "evt-1", scopeId: "sc", userId: "u", type: "stream", content: "decision: use ONNX runtime for V1" })
+      }],
+      documents: []
+    });
+    expect(getActiveFactRegistry(stateWithFact)).toHaveLength(1);
+
+    const stateAfterRevoke = protectedStateMerge({
+      prevState: stateWithFact,
+      deltaCandidates: [{
+        eventId: "evt-2",
+        reason: "decision",
+        features: { kind: "decision", importanceScore: 0.8, noveltyScore: 0.9 },
+        event: event({ id: "evt-2", scopeId: "sc", userId: "u", type: "stream", content: "revoke decision: ONNX runtime" })
+      }],
+      documents: []
+    });
+    expect(getActiveFactRegistry(stateAfterRevoke)).toHaveLength(1);
+    expect(getActiveFactRegistry(stateAfterRevoke)[0].content).toContain("ONNX");
+  });
+
+  it("stream events cannot remove a factRegistry decision via conflict", () => {
+    const stateWithFact = protectedStateMerge({
+      prevState: normalizeDigestState(null),
+      deltaCandidates: [{
+        eventId: "evt-1",
+        reason: "decision",
+        features: { kind: "decision", importanceScore: 0.85, noveltyScore: 0.9 },
+        event: event({ id: "evt-1", scopeId: "sc", userId: "u", type: "stream", content: "decision: use ONNX runtime for inference" })
+      }],
+      documents: []
+    });
+    expect(stateWithFact.stableFacts.decisions).toHaveLength(1);
+    expect(getActiveFactRegistry(stateWithFact)).toHaveLength(1);
+
+    // Conflicting decision via stream event — should NOT remove the registry-protected decision
+    const stateAfterConflict = protectedStateMerge({
+      prevState: stateWithFact,
+      deltaCandidates: [{
+        eventId: "evt-2",
+        reason: "decision",
+        features: { kind: "decision", importanceScore: 0.8, noveltyScore: 0.9 },
+        event: event({ id: "evt-2", scopeId: "sc", userId: "u", type: "stream", content: "decision: use TensorFlow instead of ONNX for inference" })
+      }],
+      documents: []
+    });
+    expect(getActiveFactRegistry(stateAfterConflict)).toHaveLength(1);
+    expect(getActiveFactRegistry(stateAfterConflict)[0].content).toContain("ONNX");
+  });
 });

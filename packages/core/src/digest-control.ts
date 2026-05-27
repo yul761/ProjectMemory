@@ -1099,6 +1099,9 @@ export function protectedStateMerge(input: {
     (a, b) => compareEventAsc(a.event, b.event)
   );
 
+  // Snapshot factRegistry IDs from prevState — only these are write-protected from stream events
+  const prevFactRegistryIds = new Set((next.factRegistry ?? []).map((e) => e.id));
+
   for (const delta of orderedDeltas) {
     const evidence = {
       id: delta.eventId,
@@ -1119,16 +1122,30 @@ export function protectedStateMerge(input: {
         const revokeTarget = stripDecisionRevocationPrefix(text);
         const matched = findBestDecisionMatch(next.stableFacts.decisions, revokeTarget, 0.45);
         if (matched) {
-          next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== matched);
-          next.provenance.decisions = removeValueProvenance(next.provenance.decisions, matched);
-          pushRecentChange(next, { field: "decisions", action: "remove", value: matched, evidence });
+          const inRegistry = isInFactRegistry(next, matched) &&
+            (next.factRegistry ?? []).some((e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && jaccardSimilarity(normalizeText(e.content), normalizeText(matched)) >= 0.6);
+          if (!inRegistry || evidence.sourceType === "document") {
+            next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== matched);
+            next.provenance.decisions = removeValueProvenance(next.provenance.decisions, matched);
+            pushRecentChange(next, { field: "decisions", action: "remove", value: matched, evidence });
+            if (inRegistry && evidence.sourceType === "document") {
+              supersedeFact(next, matched, `[revoked] ${matched}`, evidence);
+            }
+          }
         }
       } else {
         const conflicting = findConflictingDecision(next.stableFacts.decisions, text);
         if (conflicting) {
-          next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== conflicting);
-          next.provenance.decisions = removeValueProvenance(next.provenance.decisions, conflicting);
-          pushRecentChange(next, { field: "decisions", action: "remove", value: conflicting, evidence });
+          const inRegistry = isInFactRegistry(next, conflicting) &&
+            (next.factRegistry ?? []).some((e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && jaccardSimilarity(normalizeText(e.content), normalizeText(conflicting)) >= 0.6);
+          if (!inRegistry || evidence.sourceType === "document") {
+            next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== conflicting);
+            next.provenance.decisions = removeValueProvenance(next.provenance.decisions, conflicting);
+            pushRecentChange(next, { field: "decisions", action: "remove", value: conflicting, evidence });
+            if (inRegistry && evidence.sourceType === "document") {
+              supersedeFact(next, conflicting, text, evidence);
+            }
+          }
         }
         const existing = findBestDecisionMatch(next.stableFacts.decisions, text);
         if (!existing) {
