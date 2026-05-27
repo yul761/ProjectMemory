@@ -45,6 +45,18 @@ export interface DigestState {
   };
   transitionSummary?: Record<string, number>;
   recentChanges?: DigestStateChange[];
+  factRegistry?: FactRegistryEntry[];
+}
+
+export interface FactRegistryEntry {
+  id: string;
+  content: string;
+  type: "decision" | "constraint";
+  confidence: number;
+  addedAt: string;
+  evidenceId: string;
+  evidenceType: "event" | "document";
+  supersededBy?: string;
 }
 
 export interface DigestEvidenceRef {
@@ -129,7 +141,8 @@ const DEFAULT_DIGEST_STATE: DigestState = {
   confidence: {},
   provenance: {},
   transitionSummary: {},
-  recentChanges: []
+  recentChanges: [],
+  factRegistry: []
 };
 
 function deriveStateFromDigest(digest?: Digest | null): DigestState | null {
@@ -237,7 +250,8 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
       risks: normalizeValueProvenanceList(base.provenance?.risks)
     },
     transitionSummary: normalizeTransitionSummary((base as { transitionSummary?: Record<string, number> }).transitionSummary),
-    recentChanges: normalizeRecentChanges(base.recentChanges)
+    recentChanges: normalizeRecentChanges(base.recentChanges),
+    factRegistry: (base as DigestState).factRegistry ?? []
   };
 }
 

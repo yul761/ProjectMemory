@@ -8,6 +8,7 @@ import {
   runDigestControlPipeline,
   selectEventsForDigest,
   type DigestState,
+  type FactRegistryEntry,
   type SelectedEvent
 } from "./digest-control";
 import type { MemoryEvent } from "./index";
@@ -2015,5 +2016,36 @@ describe("runDigestControlPipeline", () => {
     });
     expect(result.selection.rationale).toContain("no_new_events_since_last_digest");
     expect(result.metrics.generationMs).toBe(0);
+  });
+});
+
+describe("factRegistry", () => {
+  it("normalizeDigestState preserves factRegistry entries", () => {
+    const entry: FactRegistryEntry = {
+      id: "fact-1",
+      content: "use ONNX for inference",
+      type: "decision",
+      confidence: 0.9,
+      addedAt: "2026-01-01T00:00:00.000Z",
+      evidenceId: "evt-1",
+      evidenceType: "event"
+    };
+    const state = normalizeDigestState({
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      factRegistry: [entry]
+    });
+    expect(state.factRegistry).toHaveLength(1);
+    expect(state.factRegistry![0].content).toBe("use ONNX for inference");
+  });
+
+  it("normalizeDigestState initializes empty factRegistry when absent", () => {
+    const state = normalizeDigestState({
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: []
+    });
+    expect(state.factRegistry).toEqual([]);
   });
 });
