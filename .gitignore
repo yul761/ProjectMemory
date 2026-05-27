@@ -6,9 +6,8 @@ mcp-usage-log/
 dist/
 benchmark-results/
 packages/db/generated/
-.tmp-api.log
-.tmp-worker.log
-.tmp-demo-web.log
+.tmp-*.log
+.tmp-mcp-*.txt
 .tmp-benchmark-results/
 runtime-doctor.json
 runtime-benchmark.json
