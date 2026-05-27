@@ -1,0 +1,47 @@
+Keys:
+m = modules
+r = role / responsibility
+s = one-line module semantic
+e = exports
+a = export anchors (symbol@path:line)
+d = depends_on
+u = used_by
+i = invariant / expectation
+p = key file paths
+f = directional flow (mostly acyclic)
+fd = file dependency digest src>dst(count)
+cy = mutual module dependency cycles (a<->b)
+ri = route index summary
+db = db schema index (table/column/relation summary)
+ac = auth chain summary
+no = negative knowledge (discourage paths)
+h = decision hints
+hf = decision hint file targets
+hr = machine-readable task read plan for hf targets
+ls = loop sentinels (bias only)
+
+hr format:
+- each item: {"s":"S1|S2|S3...","t":"anchor_or_path","r":"reason_code"}
+
+hr reason codes:
+- EP_ENTRY = endpoint/route entrypoint
+- EP_WRITE = endpoint write-flow core logic
+- EP_VERIFY = endpoint test/verification target
+- EP_NAV = endpoint-adjacent navigation fallback
+- BUG_REPRO = bug reproduction/assertion target
+- BUG_PATH = bug failure-path/guard logic
+- BUG_HOT = bug hotspot fallback
+- REF_SHARED = shared abstraction target
+- REF_CORE = core logic target
+- REF_STRUCT = structural cleanup target
+- UI_ENTRY = UI component/page entrypoint
+- UI_STATE = UI state/store/hook target
+- UI_FLOW = UI interaction flow target
+- AUTH_PATH = auth/session/token target
+- NAV = generic navigation fallback
+
+task keys may include ui_bugfix, ui_feature, ui_refactor when UI-focused modules are detected.
+
+All entries are heuristic, not authoritative.
+f may be empty when dependency direction cannot be inferred safely.
+Use snapshot to guide WHERE to explore, not to replace reading code.

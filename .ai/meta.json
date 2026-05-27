@@ -1,0 +1,1 @@
+{"generated_at":"2026-05-12","tool_version":"kbgen@0.1","coverage":"structure+semantics","confidence":"medium","stale_modules":["apps/adapter-telegram","apps/api","apps/cli","apps/demo-web","apps/worker","packages/contracts","packages/core","packages/db","packages/prompts","scripts"]}
