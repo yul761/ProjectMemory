@@ -859,6 +859,57 @@ function removeVolatileContextValue(input: {
   };
 }
 
+function isInFactRegistry(state: DigestState, content: string): boolean {
+  const norm = normalizeText(content);
+  return (state.factRegistry ?? []).some(
+    (entry) => !entry.supersededBy && jaccardSimilarity(normalizeText(entry.content), norm) >= 0.6
+  );
+}
+
+export function getActiveFactRegistry(state: DigestState): FactRegistryEntry[] {
+  return (state.factRegistry ?? []).filter((entry) => !entry.supersededBy);
+}
+
+function promoteToFactRegistry(
+  state: DigestState,
+  content: string,
+  type: FactRegistryEntry["type"],
+  confidence: number,
+  evidence: DigestEvidenceRef
+): void {
+  if (!state.factRegistry) state.factRegistry = [];
+  if (isInFactRegistry(state, content)) return;
+  state.factRegistry.push({
+    id: `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    content,
+    type,
+    confidence,
+    addedAt: new Date().toISOString(),
+    evidenceId: evidence.id,
+    evidenceType: evidence.sourceType
+  });
+}
+
+function supersedeFact(state: DigestState, content: string, newContent: string, evidence: DigestEvidenceRef): void {
+  if (!state.factRegistry) return;
+  const norm = normalizeText(content);
+  const toSupersede = state.factRegistry.find(
+    (entry) => !entry.supersededBy && jaccardSimilarity(normalizeText(entry.content), norm) >= 0.6
+  );
+  if (!toSupersede) return;
+  const newId = `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  toSupersede.supersededBy = newId;
+  state.factRegistry.push({
+    id: newId,
+    content: newContent,
+    type: toSupersede.type,
+    confidence: toSupersede.confidence,
+    addedAt: new Date().toISOString(),
+    evidenceId: evidence.id,
+    evidenceType: evidence.sourceType
+  });
+}
+
 function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEvidenceRef) {
   const previousGoal = next.stableFacts.goal?.trim();
   if (!previousGoal) {

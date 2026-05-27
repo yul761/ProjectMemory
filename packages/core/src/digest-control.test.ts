@@ -3,6 +3,7 @@ import {
   consistencyCheck,
   detectDeltas,
   generateDigestStage2,
+  getActiveFactRegistry,
   normalizeDigestState,
   protectedStateMerge,
   runDigestControlPipeline,
@@ -2047,5 +2048,20 @@ describe("factRegistry", () => {
       todos: []
     });
     expect(state.factRegistry).toEqual([]);
+  });
+
+  it("getActiveFactRegistry excludes superseded entries", () => {
+    const state = normalizeDigestState({
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      factRegistry: [
+        { id: "f1", content: "old decision", type: "decision", confidence: 0.8, addedAt: "2026-01-01T00:00:00.000Z", evidenceId: "e1", evidenceType: "event", supersededBy: "f2" },
+        { id: "f2", content: "new decision", type: "decision", confidence: 0.9, addedAt: "2026-01-02T00:00:00.000Z", evidenceId: "e2", evidenceType: "document" }
+      ]
+    });
+    const active = getActiveFactRegistry(state);
+    expect(active).toHaveLength(1);
+    expect(active[0].id).toBe("f2");
   });
 });
