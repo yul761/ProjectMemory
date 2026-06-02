@@ -587,7 +587,7 @@ function parseGoal(text: string) {
     .find((entry) => /^goal\s*:/i.test(entry));
   if (!line) return undefined;
   const raw = line.replace(/^goal\s*:/i, "").trim();
-  const sectionBoundary = raw.match(/^(.*?)(?:\.\s+(?:constraints?|decisions?|todos?|next steps?|risks?|changes?|status)\b.*)?$/i);
+  const sectionBoundary = raw.match(/^(.*?)(?:\.\s+(?:constraints?|decisions?|todos?|next steps?|(?:active\s+)?risks?|(?:open\s+)?questions?|changes?|status)\b.*)?$/i);
   return sectionBoundary?.[1]?.trim().replace(/\.$/, "") || undefined;
 }
 
