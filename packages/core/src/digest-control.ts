@@ -147,17 +147,22 @@ const DEFAULT_DIGEST_STATE: DigestState = {
 
 function deriveStateFromDigest(digest?: Digest | null): DigestState | null {
   if (!digest) return null;
-  const decisions = digest.changes
+  const changes = digest.changes ?? "";
+  const decisions = changes
     .split("\n")
     .map((line) => line.replace(/^-\s*/, "").trim())
-    .filter((line) => /\b(decide|decision|we will|agreed)\b/i.test(line));
-  const constraints = digest.changes
+    .filter((line) => line.length > 0 && /\b(decide|decision|we will|agreed)\b/i.test(line));
+  const constraints = changes
     .split("\n")
     .map((line) => line.replace(/^-\s*/, "").trim())
-    .filter((line) => /\b(constraint|blocked|limitation)\b/i.test(line));
+    .filter((line) => line.length > 0 && /\b(constraint|blocked|limitation)\b/i.test(line));
+  // Return null if we can derive no meaningful state — forces fresh start from DEFAULT_DIGEST_STATE
+  // rather than returning an empty shell that silently discards prior decisions.
+  const goal = parseGoal(digest.summary);
+  if (!goal && decisions.length === 0 && constraints.length === 0) return null;
   return {
     stableFacts: {
-      goal: parseGoal(digest.summary),
+      goal,
       constraints,
       decisions
     },
@@ -251,7 +256,9 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
     },
     transitionSummary: normalizeTransitionSummary((base as { transitionSummary?: Record<string, number> }).transitionSummary),
     recentChanges: normalizeRecentChanges(base.recentChanges),
-    factRegistry: (base as DigestState).factRegistry ?? []
+    factRegistry: ((base as DigestState).factRegistry ?? [])
+      .filter((entry) => !entry.supersededBy)
+      .slice(-100)
   };
 }
 
@@ -522,8 +529,9 @@ export function selectEventsForDigest(input: {
     .slice(0, input.eventBudgetTotal)
     .map(({ event, features }) => ({ event, features }));
 
+  const mergedDurableCount = merged.filter(({ event }) => durableStreamIds.has(event.id)).length;
   rationale.push(`selected_docs:${docSelected.length}`);
-  rationale.push(`selected_stream_durable:${durableStreamCandidates.length}`);
+  rationale.push(`selected_stream_durable:${mergedDurableCount}`);
   rationale.push(`selected_stream:${Math.max(0, merged.length - docSelected.length)}`);
   if (input.lastDigest) {
     rationale.push("included_last_digest");
@@ -975,7 +983,10 @@ function mergeDocumentBackedList(input: {
     const removableValues = valuesBackedOnlyByDocumentKey(input.currentProvenance, input.documentKey);
     for (const value of removableValues) {
       if (!incoming.some((candidate) => normalizeText(candidate) === normalizeText(value))) {
-        input.currentValues.splice(input.currentValues.findIndex((item) => normalizeText(item) === normalizeText(value)), 1);
+        const spliceIdx = input.currentValues.findIndex((item) => normalizeText(item) === normalizeText(value));
+        if (spliceIdx >= 0) {
+          input.currentValues.splice(spliceIdx, 1);
+        }
         input.currentProvenance = removeValueProvenance(input.currentProvenance, value);
         pushRecentChange(input.next, { field: input.field, action: "remove", value, evidence: input.evidence });
       }
