@@ -335,7 +335,7 @@ function tokenize(value: string) {
 function jaccardSimilarity(a: string, b: string) {
   const tokensA = new Set(tokenize(a));
   const tokensB = new Set(tokenize(b));
-  if (tokensA.size === 0 && tokensB.size === 0) return 1;
+  if (tokensA.size === 0 && tokensB.size === 0) return 0;
   const intersection = [...tokensA].filter((token) => tokensB.has(token)).length;
   const union = new Set([...tokensA, ...tokensB]).size;
   return union === 0 ? 0 : intersection / union;
@@ -658,36 +658,34 @@ function findBestDecisionMatch(values: string[], candidate: string, threshold = 
   return findBestSemanticMatch(comparableValues, candidate, threshold);
 }
 
-function decisionTopicTokens(value: string) {
-  const stop = new Set([
-    "we", "decide", "decided", "to", "the", "a", "an", "and", "or", "of", "for", "as",
-    "on", "in", "into", "with", "that", "this", "is", "be", "keep"
-  ]);
-  return tokenize(value).filter((token) => token.length > 3 && !stop.has(token));
-}
 
-function decisionConflictDirection(value: string) {
-  const lowered = normalizeText(value);
-  if (/\b(merge|collapse|combine|single|one prompt path|same path)\b/.test(lowered)) return "collapse";
-  if (/\b(boundary|separate|scoped|controlled digest pipeline|digest pipeline|layer|runtime diagnostics)\b/.test(lowered)) return "separate";
+function extractReplacementTarget(value: string): string | null {
+  const lowered = value.toLowerCase();
+  const patterns = [
+    /\binstead\s+of\s+(.+?)(?:\s+(?:for|with|in|on|at|by|when|to)\b|[,.]|$)/i,
+    /\breplace[sd]?\s+(.+?)(?:\s+with\b|[,.]|$)/i,
+    /\bswitch(?:ing)?\s+(?:from|away\s+from)\s+(.+?)(?:\s+to\b|[,.]|$)/i,
+    /\bmigrat(?:e|ing)\s+(?:from|away\s+from)\s+(.+?)(?:\s+to\b|[,.]|$)/i,
+    /\bno\s+longer\s+(?:use|using)\s+(.+?)(?:[,.]|$)/i
+  ];
+  for (const pattern of patterns) {
+    const m = lowered.match(pattern);
+    if (m?.[1]?.trim()) return m[1].trim();
+  }
   return null;
 }
 
 function findConflictingDecision(values: string[], candidate: string) {
-  const candidateDirection = decisionConflictDirection(candidate);
-  if (!candidateDirection) return null;
-  const candidateTokens = new Set(decisionTopicTokens(candidate));
-  const architectureTokens = new Set(["memory", "layer", "layers", "runtime", "prompt", "boundary", "digest", "working", "state"]);
-  const candidateArchitecture = [...candidateTokens].some((token) => architectureTokens.has(token));
+  const replacementTarget = extractReplacementTarget(candidate);
+  if (!replacementTarget) return null;
+
+  const targetTokens = new Set(tokenize(replacementTarget).filter((t) => t.length >= 3));
+  if (targetTokens.size === 0) return null;
+
   for (const value of values) {
-    const existingDirection = decisionConflictDirection(value);
-    if (!existingDirection || existingDirection === candidateDirection) continue;
-    const valueTokens = decisionTopicTokens(value);
-    const sharedTokens = valueTokens.filter((token) => candidateTokens.has(token));
-    const existingArchitecture = valueTokens.some((token) => architectureTokens.has(token));
-    if (sharedTokens.length >= 1 || (candidateArchitecture && existingArchitecture)) {
-      return value;
-    }
+    const valueTokens = tokenize(value).filter((t) => t.length >= 3);
+    const shared = valueTokens.filter((token) => targetTokens.has(token));
+    if (shared.length >= 1) return value;
   }
   return null;
 }
@@ -930,7 +928,7 @@ function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEviden
   // Documents are authoritative; stream events require very high similarity to avoid
   // noisy conversation turns silently replacing the project goal.
   const isDocument = evidence.sourceType === "document";
-  const overwriteThreshold = isDocument ? 0.7 : 0.95;
+  const overwriteThreshold = isDocument ? 0.85 : 0.95;
   const sameGoal =
     normalizeText(previousGoal) === normalizeText(goal) ||
     jaccardSimilarity(previousGoal, goal) >= overwriteThreshold;
