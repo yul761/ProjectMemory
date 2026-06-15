@@ -394,7 +394,8 @@ export class RetrieveService {
         }));
 
       return [...rerankedTop, ...ranked.slice(candidateLimit)];
-    } catch {
+    } catch (err) {
+      logger.warn({ err }, "Embedding rerank failed, falling back to heuristic ranking");
       return ranked;
     }
   }
