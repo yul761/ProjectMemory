@@ -409,7 +409,7 @@ function compareEventAsc(a: MemoryEvent, b: MemoryEvent) {
   return a.id.localeCompare(b.id);
 }
 
-function extractKind(content: string): MemoryEventKind {
+export function extractKind(content: string): MemoryEventKind {
   const text = content.toLowerCase();
   if (/^assistant reply\s*:/i.test(content.trim())) return "noise";
   if (/^(what|which)\b.*\b(open question|questions|risks|risk|decide|decision|remembered|state|context)\b/i.test(content.trim())) {
@@ -424,7 +424,7 @@ function extractKind(content: string): MemoryEventKind {
   return "note";
 }
 
-function importanceForKind(kind: MemoryEventKind, content: string) {
+export function importanceForKind(kind: MemoryEventKind, content: string) {
   const keywordBoost = /\b(decide|decision|constraint|blocked|todo|next)\b/i.test(content) ? 0.15 : 0;
   const base: Record<MemoryEventKind, number> = {
     decision: 0.85,
