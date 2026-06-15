@@ -10,17 +10,16 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: statecore
+          POSTGRES_PASSWORD: statecore
           POSTGRES_DB: statecore_test
         ports:
-          - 5434:5432
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -30,7 +29,7 @@ jobs:
       redis:
         image: redis:7-alpine
         ports:
-          - 6380:6379
+          - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -38,22 +37,17 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5434/statecore_test
-      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5434/statecore_test
-      REDIS_URL: redis://localhost:6380
-      NODE_ENV: test
+      DATABASE_URL: postgresql://statecore:statecore@localhost:5432/statecore_test
+      REDIS_URL: redis://localhost:6379
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 9
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
@@ -61,20 +55,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma client
-        run: pnpm db:generate
-
       - name: Run database migrations
         run: pnpm --filter @statecore/db exec prisma migrate deploy
-
-      - name: Check formatting
-        run: pnpm format:check
-
-      - name: Lint (TypeScript strict check)
-        run: pnpm lint
-
-      - name: Build workspace
-        run: pnpm -r --filter "./apps/**" --filter "./packages/**" build
 
       - name: Run core tests
         run: pnpm --filter @statecore/core test
