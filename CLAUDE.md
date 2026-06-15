@@ -8,6 +8,14 @@ StateCore is an AI memory management system. It stores memory events, runs diges
 - Auth: `x-user-id: local-dev-user` header (token set in `.env`: `LOCAL_USER_TOKEN=local-dev-user`)
 - Start: `pnpm start` or see `start.ps1`
 
+### Enable semantic retrieval (optional)
+Add to `.env`:
+```
+MODEL_EMBEDDING_NAME=text-embedding-3-small
+RETRIEVE_USE_EMBEDDINGS=true
+```
+Uses the same API key as the LLM. Restart the API container after changing. Health endpoint shows `"retrieve":{"useEmbeddings":true}` when active.
+
 ## StateCore Memory API (key endpoints)
 
 ### Ingest a document

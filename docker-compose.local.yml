@@ -54,6 +54,10 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/statecore
       REDIS_URL: redis://redis:6379
+      # Semantic retrieval (optional — enables embedding-based reranking):
+      # MODEL_EMBEDDING_NAME: text-embedding-3-small
+      # RETRIEVE_USE_EMBEDDINGS: "true"
+      # Uses MODEL_API_KEY or OPENAI_API_KEY automatically.
     ports:
       - "3002:3002"
     depends_on:
