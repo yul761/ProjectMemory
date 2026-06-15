@@ -61,10 +61,43 @@ describe("digest pipeline determinism", () => {
     expect(s1.todos).toEqual(s2.todos);
   });
 
-  it("rebuild from scratch produces same stableFacts as original run", async () => {
-    const original = await runDigestControlPipeline({ scope: FIXED_SCOPE, lastDigest: null, prevState: null, recentEvents: FIXED_EVENTS, llm: MOCK_LLM, prompts: PROMPTS, config: PIPELINE_CONFIG });
-    const rebuild = await runDigestControlPipeline({ scope: FIXED_SCOPE, lastDigest: null, prevState: null, recentEvents: FIXED_EVENTS, llm: MOCK_LLM, prompts: PROMPTS, config: PIPELINE_CONFIG });
-    expect(normalizeDigestState(rebuild.state).stableFacts).toEqual(normalizeDigestState(original.state).stableFacts);
+  it("incremental digest from prior state preserves established stableFacts", async () => {
+    // First run: establish baseline state
+    const firstRun = await runDigestControlPipeline({
+      scope: FIXED_SCOPE,
+      lastDigest: null,
+      prevState: null,
+      recentEvents: FIXED_EVENTS,
+      llm: MOCK_LLM,
+      prompts: PROMPTS,
+      config: PIPELINE_CONFIG
+    });
+
+    // Second run: build on prior state (simulates incremental digest, no new events)
+    const secondRun = await runDigestControlPipeline({
+      scope: FIXED_SCOPE,
+      lastDigest: {
+        id: "d-prev",
+        scopeId: "sc",
+        summary: firstRun.digest.summary,
+        changes: firstRun.digest.changes.map((c) => `- ${c}`).join("\n"),
+        nextSteps: firstRun.digest.nextSteps,
+        createdAt: new Date("2026-01-01T11:00:00Z")
+      },
+      prevState: firstRun.state,
+      recentEvents: FIXED_EVENTS,
+      llm: MOCK_LLM,
+      prompts: PROMPTS,
+      config: PIPELINE_CONFIG
+    });
+
+    // Decisions established in first run must survive into second run
+    const first = normalizeDigestState(firstRun.state);
+    const second = normalizeDigestState(secondRun.state);
+    expect(second.stableFacts.goal).toBe(first.stableFacts.goal);
+    for (const decision of first.stableFacts.decisions) {
+      expect(second.stableFacts.decisions).toContain(decision);
+    }
   });
 
   it("pipeline includes goal from document events", async () => {
