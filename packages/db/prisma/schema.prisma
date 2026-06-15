@@ -86,8 +86,9 @@ model MemoryEvent {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime?
 
-  user  User         @relation(fields: [userId], references: [id])
-  scope ProjectScope @relation(fields: [scopeId], references: [id])
+  user      User         @relation(fields: [userId], references: [id])
+  scope     ProjectScope @relation(fields: [scopeId], references: [id])
+  embedding MemoryEventEmbedding?
 
   @@unique([scopeId, key])
   @@index([userId, scopeId, createdAt])
@@ -165,4 +166,11 @@ model DigestJobLog {
 
   @@index([scopeId, completedAt])
   @@index([status])
+}
+
+model MemoryEventEmbedding {
+  eventId   String      @id
+  model     String
+  createdAt DateTime    @default(now())
+  event     MemoryEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
