@@ -5,10 +5,12 @@ import { HealthController } from "./health.controller";
 import { ScopesController } from "./scopes.controller";
 import { MemoryController } from "./memory.controller";
 import { RemindersController } from "./reminders.controller";
+import { MetricsController } from "./metrics.controller";
+import { MetricsService } from "./metrics.service";
 
 @Module({
-  controllers: [HealthController, ScopesController, MemoryController, RemindersController],
-  providers: [DomainService]
+  controllers: [HealthController, ScopesController, MemoryController, RemindersController, MetricsController],
+  providers: [DomainService, MetricsService]
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {

@@ -461,16 +461,29 @@ new Worker(
   async (job) => {
     if (job.name === "digest_scope") {
       const data = job.data as { userId: string; scopeId: string };
+      const t0 = Date.now();
       try {
         await withDigestLock(lockRedis, data.scopeId, () => runDigestScopeJob(data));
+        await prisma.digestJobLog.create({
+          data: { scopeId: data.scopeId, jobId: job.id ?? undefined, status: "success", durationMs: Date.now() - t0 }
+        });
+        return { ok: true };
       } catch (err) {
         if (err instanceof DigestAlreadyRunningError) {
           logger.info({ scopeId: data.scopeId }, "Digest already running for scope — skipping");
           return { ok: true, skipped: true };
         }
+        await prisma.digestJobLog.create({
+          data: {
+            scopeId: data.scopeId,
+            jobId: job.id ?? undefined,
+            status: "failed",
+            durationMs: Date.now() - t0,
+            error: err instanceof Error ? err.message : String(err)
+          }
+        });
         throw err;
       }
-      return { ok: true };
     }
 
     if (job.name === "rebuild_digest_chain") {
