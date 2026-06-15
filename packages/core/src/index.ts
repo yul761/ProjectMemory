@@ -140,6 +140,7 @@ export interface MemoryRepo {
   }) => Promise<MemoryEvent>;
   listRecent: (scopeId: string, limit: number, cursor?: string | null) => Promise<{ items: MemoryEvent[]; nextCursor: string | null }>;
   listByLookback: (scopeId: string, since: Date, limit: number) => Promise<MemoryEvent[]>;
+  findByIds: (ids: string[]) => Promise<MemoryEvent[]>;
 }
 
 export interface DigestRepo {
@@ -275,6 +276,8 @@ export class RetrieveService {
       embeddingModel?: EmbeddingModel | null;
       useEmbeddingRerank?: boolean;
       embeddingCandidateLimit?: number;
+      useVectorSearch?: boolean;
+      vectorSearchFn?: (queryVector: number[], limit: number) => Promise<string[]>;
     }
   ) {}
 
@@ -408,11 +411,37 @@ export class RetrieveService {
       return { digest, events: events.items.slice(0, limit) };
     }
 
-    const newestTs = events.items[0]?.createdAt.getTime() ?? Date.now();
-    const oldestTs = events.items[events.items.length - 1]?.createdAt.getTime() ?? newestTs;
+    let mergedItems = events.items;
+    if (
+      query?.trim() &&
+      this.options?.useVectorSearch &&
+      this.options.embeddingModel &&
+      this.options.vectorSearchFn
+    ) {
+      try {
+        const queryVectors = await this.options.embeddingModel.embed([query]);
+        const queryVector = queryVectors[0];
+        if (queryVector?.length) {
+          const vectorIds = await this.options.vectorSearchFn(queryVector, candidateSize);
+          if (vectorIds.length) {
+            const keywordIdSet = new Set(events.items.map((e) => e.id));
+            const newIds = vectorIds.filter((id) => !keywordIdSet.has(id));
+            if (newIds.length) {
+              const vectorEvents = await this.memories.findByIds(newIds);
+              mergedItems = [...events.items, ...vectorEvents];
+            }
+          }
+        }
+      } catch {
+        // Vector search failed — fall back to keyword candidates only
+      }
+    }
+
+    const newestTs = mergedItems[0]?.createdAt.getTime() ?? Date.now();
+    const oldestTs = mergedItems[mergedItems.length - 1]?.createdAt.getTime() ?? newestTs;
     const timeRange = Math.max(1, newestTs - oldestTs);
 
-    const ranked = events.items
+    const ranked = mergedItems
       .map((event) => {
         const heuristic = this.explainQueryScore(query, event.content);
         return {
