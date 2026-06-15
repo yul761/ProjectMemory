@@ -230,7 +230,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
   const streamEventQuery = {
     where: { scopeId: data.scopeId, createdAt: { gte: since }, type: "stream" as const },
     orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
-    ...(lastDigestRow ? { take: workerEnv.maxRecentEvents } : {})
+    take: lastDigestRow ? workerEnv.maxRecentEvents : workerEnv.digestFirstRunMaxEvents
   };
   const recentStreamEvents = await prisma.memoryEvent.findMany({
     ...streamEventQuery
