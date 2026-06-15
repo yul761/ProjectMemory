@@ -102,6 +102,13 @@ export class DomainService {
         const next = items.length > limit ? items.pop() : null;
         return { items, nextCursor: next ? next.id : null };
       },
+      findByIds: (ids: string[]) =>
+        ids.length
+          ? prisma.memoryEvent.findMany({
+              where: { id: { in: ids } },
+              orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+            })
+          : Promise.resolve([]),
       listByLookback: (scopeId: string, since: Date, limit: number) =>
         prisma.memoryEvent.findMany({
           where: { scopeId, createdAt: { gte: since } },
