@@ -19,6 +19,7 @@ import {
 } from "@statecore/prompts";
 import { workerEnv } from "./env";
 import { withDigestLock, DigestAlreadyRunningError, type LockRedis } from "./digest-lock";
+import { runEmbedEventJob } from "./embed-job";
 import Redis from "ioredis";
 
 const connection = {
@@ -553,6 +554,38 @@ new Worker(
   logger.info({ jobId: job.id, name: job.name }, "Reminder job completed");
 }).on("failed", (job, err) => {
   logger.error({ jobId: job?.id, name: job?.name, err }, "Reminder job failed");
+});
+
+const workerEmbeddingModel = workerEnv.featureLlm && workerEnv.embeddingModelName
+  ? createModelProvider({
+      provider: workerEnv.modelProvider,
+      apiKey: workerEnv.modelApiKey,
+      baseUrl: workerEnv.modelBaseUrl,
+      model: workerEnv.modelName,
+      embeddingApiKey: workerEnv.embeddingModelApiKey,
+      embeddingBaseUrl: workerEnv.embeddingModelBaseUrl,
+      embeddingModel: workerEnv.embeddingModelName || undefined,
+      timeoutMs: workerEnv.modelTimeoutMs
+    })?.embedding ?? null
+  : null;
+
+new Worker(
+  "embed",
+  async (job) => {
+    if (job.name !== "embed_event") return;
+    await runEmbedEventJob(
+      job.data as { eventId: string; scopeId: string },
+      workerEmbeddingModel,
+      prisma,
+      workerEnv.embeddingModelName
+    );
+    return { ok: true };
+  },
+  { connection, concurrency: 4 }
+).on("completed", (job) => {
+  logger.info({ jobId: job.id }, "Embed job completed");
+}).on("failed", (job, err) => {
+  logger.error({ jobId: job?.id, err }, "Embed job failed");
 });
 
 setInterval(() => {
