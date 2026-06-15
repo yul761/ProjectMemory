@@ -7,9 +7,10 @@ import {
   logger,
   mergeWorkingMemoryState,
   runDigestControlPipeline,
-  selectWorkingMemoryEvents
+  selectWorkingMemoryEvents,
+  computeDriftMetrics
 } from "@statecore/core";
-import type { DigestState, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
+import type { DigestState, DriftMetrics, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import {
   digestClassifySystemPrompt,
   digestClassifyUserPrompt,
@@ -205,7 +206,7 @@ function toCoreDigest(digest: { id: string; scopeId: string; summary: string; ch
   };
 }
 
-async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
+async function runDigestScopeJob(data: { userId: string; scopeId: string }): Promise<{ driftMetrics: DriftMetrics }> {
   if (!workerEnv.featureLlm || !llm) {
     throw new Error("FEATURE_LLM disabled or model provider not configured. Set FEATURE_LLM=true and configure MODEL_* or OPENAI_*.");
   }
@@ -241,10 +242,12 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
   });
   const recentEvents = [...recentStreamEvents, ...recentDocumentEvents];
 
+  const prevDigestState = (lastStateRow?.state as unknown as DigestState) ?? null;
+
   const result = await runDigestControlPipeline({
     scope,
     lastDigest: lastDigestRow ? toCoreDigest(lastDigestRow) : null,
-    prevState: (lastStateRow?.state as unknown as DigestState) ?? null,
+    prevState: prevDigestState,
     recentEvents,
     llm,
     prompts: {
@@ -263,6 +266,8 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
       debug: workerEnv.digestDebug
     }
   });
+
+  const driftMetrics = computeDriftMetrics(prevDigestState, result.state);
 
   const createdDigest = await prisma.digest.create({
     data: {
@@ -323,6 +328,8 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }) {
   if (workerEnv.digestDebug) {
     logger.info({ scopeId: data.scopeId, rationale: result.selection.rationale, deltas: result.deltas.map((d) => ({ id: d.eventId, reason: d.reason })) }, "Digest debug details");
   }
+
+  return { driftMetrics };
 }
 
 async function runWorkingMemoryUpdateJob(data: { userId: string; scopeId: string }) {
@@ -463,9 +470,9 @@ new Worker(
       const data = job.data as { userId: string; scopeId: string };
       const t0 = Date.now();
       try {
-        await withDigestLock(lockRedis, data.scopeId, () => runDigestScopeJob(data));
+        const { driftMetrics } = await withDigestLock(lockRedis, data.scopeId, () => runDigestScopeJob(data));
         await prisma.digestJobLog.create({
-          data: { scopeId: data.scopeId, jobId: job.id ?? undefined, status: "success", durationMs: Date.now() - t0 }
+          data: { scopeId: data.scopeId, jobId: job.id ?? undefined, status: "success", durationMs: Date.now() - t0, driftMetrics: driftMetrics as any }
         });
         return { ok: true };
       } catch (err) {

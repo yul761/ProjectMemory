@@ -612,4 +612,5 @@ export async function generateAnswer(input: {
 }
 
 export * from "./digest-control";
+export * from "./drift-metrics";
 export * from "./assistant-runtime";

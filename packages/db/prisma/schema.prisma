@@ -154,13 +154,14 @@ model Reminder {
 }
 
 model DigestJobLog {
-  id          String   @id @default(uuid())
-  scopeId     String
-  jobId       String?
-  status      String
-  durationMs  Int?
-  error       String?
-  completedAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  scopeId      String
+  jobId        String?
+  status       String
+  durationMs   Int?
+  error        String?
+  driftMetrics Json?
+  completedAt  DateTime @default(now())
 
   @@index([scopeId, completedAt])
   @@index([status])
