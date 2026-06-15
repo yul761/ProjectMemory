@@ -1,5 +1,13 @@
 import { randomUUID } from "crypto";
 
+const RELEASE_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+
 export class DigestAlreadyRunningError extends Error {
   constructor(scopeId: string) {
     super(`DigestAlreadyRunning:${scopeId}`);
@@ -7,8 +15,13 @@ export class DigestAlreadyRunningError extends Error {
   }
 }
 
+export interface LockRedis {
+  set(key: string, val: string, exMode: "EX", ttl: number, nxMode: "NX"): Promise<"OK" | null>;
+  eval(script: string, numkeys: number, key: string, token: string): Promise<number>;
+}
+
 export async function withDigestLock<T>(
-  redis: { set: (key: string, val: string, ex: string, ttl: number, nx: string) => Promise<string | null>; del: (key: string) => Promise<number> },
+  redis: LockRedis,
   scopeId: string,
   fn: () => Promise<T>,
   ttlSeconds = 300
@@ -22,6 +35,6 @@ export async function withDigestLock<T>(
   try {
     return await fn();
   } finally {
-    await redis.del(key);
+    await redis.eval(RELEASE_SCRIPT, 1, key, token);
   }
 }
