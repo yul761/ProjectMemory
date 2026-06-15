@@ -17,10 +17,14 @@ import {
   digestStage2UserPrompt
 } from "@statecore/prompts";
 import { workerEnv } from "./env";
+import { withDigestLock, DigestAlreadyRunningError } from "./digest-lock";
+import Redis from "ioredis";
 
 const connection = {
   url: workerEnv.redisUrl
 };
+
+const lockRedis = new Redis(workerEnv.redisUrl);
 
 const reminderQueue = new Queue("reminder", { connection });
 
@@ -456,7 +460,16 @@ new Worker(
   "digest",
   async (job) => {
     if (job.name === "digest_scope") {
-      await runDigestScopeJob(job.data as { userId: string; scopeId: string });
+      const data = job.data as { userId: string; scopeId: string };
+      try {
+        await withDigestLock(lockRedis as any, data.scopeId, () => runDigestScopeJob(data));
+      } catch (err) {
+        if (err instanceof DigestAlreadyRunningError) {
+          logger.info({ scopeId: data.scopeId }, "Digest already running for scope — skipping");
+          return { ok: true, skipped: true };
+        }
+        throw err;
+      }
       return { ok: true };
     }
 
