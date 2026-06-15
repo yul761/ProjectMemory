@@ -49,6 +49,7 @@ export class HealthController {
       },
       retrieve: {
         useEmbeddings: apiEnv.retrieveUseEmbeddings,
+        useVectorSearch: apiEnv.retrieveUseVectorSearch,
         embeddingCandidateLimit: apiEnv.retrieveEmbeddingCandidateLimit
       },
       model: {

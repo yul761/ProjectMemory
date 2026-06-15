@@ -354,6 +354,7 @@ export const HealthOutput = z.object({
   }).optional(),
   retrieve: z.object({
     useEmbeddings: z.boolean(),
+    useVectorSearch: z.boolean().optional(),
     embeddingCandidateLimit: z.number().int().min(1)
   }).optional(),
   model: z.object({

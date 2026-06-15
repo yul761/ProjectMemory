@@ -238,7 +238,20 @@ export class DomainService {
     this.retrieveService = new RetrieveService(digestRepo, memoryRepo, {
       embeddingModel: provider?.embedding ?? null,
       useEmbeddingRerank: apiEnv.retrieveUseEmbeddings,
-      embeddingCandidateLimit: apiEnv.retrieveEmbeddingCandidateLimit
+      embeddingCandidateLimit: apiEnv.retrieveEmbeddingCandidateLimit,
+      useVectorSearch: apiEnv.retrieveUseVectorSearch,
+      vectorSearchFn: apiEnv.retrieveUseVectorSearch && provider?.embedding
+        ? async (queryVector: number[], limit: number) => {
+            const vectorString = `[${queryVector.join(",")}]`;
+            const rows = await prisma.$queryRaw<{ eventId: string }[]>`
+              SELECT "eventId"
+              FROM "MemoryEventEmbedding"
+              ORDER BY embedding <-> ${vectorString}::vector
+              LIMIT ${limit}
+            `;
+            return rows.map((r) => r.eventId);
+          }
+        : undefined
     });
     this.reminderService = new ReminderService(reminderRepo);
 

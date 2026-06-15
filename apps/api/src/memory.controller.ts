@@ -38,7 +38,9 @@ import {
   generateAnswer,
   getActiveFactRegistry
 } from "@statecore/core";
-import { digestQueue, workingMemoryQueue } from "./queue";
+import { z } from "zod";
+import { prisma } from "@statecore/db";
+import { digestQueue, workingMemoryQueue, embedQueue } from "./queue";
 import { DomainService } from "./domain.service";
 import { parseOutput } from "./output";
 import type { RequestWithUser } from "./types";
@@ -498,6 +500,8 @@ export class MemoryController {
       key: input.key ?? null,
       content: input.content
     });
+    // Queue async embedding generation (best-effort, ingest must not fail if queue is unavailable)
+    embedQueue.add("embed_event", { eventId: event.id, scopeId: input.scopeId }).catch(() => {});
     return parseOutput(MemoryEventOutput, {
       id: event.id,
       userId: event.userId,
@@ -509,6 +513,29 @@ export class MemoryController {
       createdAt: event.createdAt.toISOString(),
       updatedAt: event.updatedAt ? event.updatedAt.toISOString() : null
     });
+  }
+
+  @Post("/memory/embed/backfill")
+  async backfillEmbeddings(@Req() req: RequestWithUser, @Body() body: unknown) {
+    const input = z.object({ scopeId: z.string().uuid() }).parse(body);
+    const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
+    if (!scope) throw new NotFoundException("Scope not found");
+
+    const eventsWithoutEmbedding = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT me.id
+      FROM "MemoryEvent" me
+      LEFT JOIN "MemoryEventEmbedding" mee ON me.id = mee."eventId"
+      WHERE me."scopeId" = ${input.scopeId}
+        AND mee."eventId" IS NULL
+      ORDER BY me."createdAt" DESC
+      LIMIT 1000
+    `;
+
+    for (const event of eventsWithoutEmbedding) {
+      await embedQueue.add("embed_event", { eventId: event.id, scopeId: input.scopeId });
+    }
+
+    return { queued: eventsWithoutEmbedding.length };
   }
 
   @Get("/memory/events")
