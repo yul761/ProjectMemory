@@ -415,9 +415,9 @@ export function extractKind(content: string): MemoryEventKind {
   if (/^(what|which)\b.*\b(open question|questions|risks|risk|decide|decision|remembered|state|context)\b/i.test(content.trim())) {
     return "noise";
   }
-  if (/\b(decide|decision|we will|agreed|approved)\b/.test(text)) return "decision";
-  if (/\b(constraint|limitation|cannot|must not)\b/.test(text)) return "constraint";
-  if (/\b(todo|next step|action item|follow up|follow-up)\b/.test(text)) return "todo";
+  if (/\b(decide|decision|we will|agreed|approved|we should use|should use|let'?s go with|going forward)\b/.test(text)) return "decision";
+  if (/\b(constraint|limitation|cannot|must not|must\s+(?!not\b)\w+|no\s+\w+(?:\s+\w+)*\s+allowed|need to keep)/.test(text)) return "constraint";
+  if (/\b(todo|next step|action item|follow up|follow-up|let'?s add|make sure to|need to (write|add|create|implement|test|document))\b/.test(text)) return "todo";
   if (/\b(question|\?)\b/.test(text)) return "question";
   if (/\b(progress|status|done|shipped|completed|finished)\b/.test(text)) return "status";
   if (text.length < 8 || /^(ok|thanks|noted|lol)$/.test(text.trim())) return "noise";
