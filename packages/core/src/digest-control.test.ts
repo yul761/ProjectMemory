@@ -339,19 +339,19 @@ describe("protectedStateMerge", () => {
             scopeId: "sc",
             userId: "u",
             type: "stream",
-            content: "We decide to keep the assistant runtime as a product boundary",
+            content: "We decide to keep the assistant runtime as a product boundary instead of merging layers into one prompt path",
             createdAt: new Date("2026-03-26T00:00:01Z")
           })
         }
       ]
     });
 
-    expect(merged.stableFacts.decisions).toContain("We decide to keep the assistant runtime as a product boundary");
+    expect(merged.stableFacts.decisions).toContain("We decide to keep the assistant runtime as a product boundary instead of merging layers into one prompt path");
     expect(merged.stableFacts.decisions).not.toContain("We decide to merge every memory layer into one prompt path");
     expect(merged.recentChanges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ field: "decisions", action: "remove", value: "We decide to merge every memory layer into one prompt path" }),
-        expect.objectContaining({ field: "decisions", action: "add", value: "We decide to keep the assistant runtime as a product boundary" })
+        expect.objectContaining({ field: "decisions", action: "add", value: "We decide to keep the assistant runtime as a product boundary instead of merging layers into one prompt path" })
       ])
     );
   });
@@ -2166,5 +2166,119 @@ describe("factRegistry", () => {
     });
     expect(getActiveFactRegistry(stateAfterConflict)).toHaveLength(1);
     expect(getActiveFactRegistry(stateAfterConflict)[0].content).toContain("ONNX");
+  });
+});
+
+describe("drift-fixes", () => {
+  it("normalizeDigestState caps decisions and constraints at 100 to prevent unbounded growth", () => {
+    const many = Array.from({ length: 105 }, (_, i) => `decision ${i}`);
+    const state = normalizeDigestState({
+      stableFacts: { decisions: many, constraints: many },
+      workingNotes: {},
+      todos: []
+    });
+    expect(state.stableFacts.decisions).toHaveLength(100);
+    expect(state.stableFacts.constraints).toHaveLength(100);
+    expect(state.stableFacts.decisions[0]).toBe("decision 5");
+    expect(state.stableFacts.decisions[99]).toBe("decision 104");
+  });
+
+  it("does not log goal reaffirm when stream event mentions unrelated goal", () => {
+    const merged = protectedStateMerge({
+      prevState: {
+        stableFacts: { goal: "ship beta runtime", constraints: [], decisions: [] },
+        workingNotes: {},
+        todos: [],
+        recentChanges: [],
+        evidenceRefs: []
+      },
+      documents: [],
+      deltaCandidates: [{
+        eventId: "evt-unrelated-goal",
+        reason: "novel_event",
+        features: { kind: "note", importanceScore: 0.5, noveltyScore: 0.9 },
+        event: event({
+          id: "evt-unrelated-goal",
+          scopeId: "sc",
+          userId: "u",
+          type: "stream",
+          content: "I want to fix the login authentication bug today"
+        })
+      }]
+    });
+
+    expect(merged.stableFacts.goal).toBe("ship beta runtime");
+    expect(merged.recentChanges).not.toContainEqual(
+      expect.objectContaining({ field: "goal", evidence: expect.objectContaining({ id: "evt-unrelated-goal" }) })
+    );
+  });
+
+  it("removes all decisions that conflict with replacement language, not just the first", () => {
+    const merged = protectedStateMerge({
+      prevState: {
+        stableFacts: {
+          goal: "ship inference engine",
+          constraints: [],
+          decisions: ["use ONNX for inference", "ONNX is the primary model runtime"]
+        },
+        workingNotes: {},
+        todos: [],
+        recentChanges: [],
+        evidenceRefs: []
+      },
+      documents: [],
+      deltaCandidates: [{
+        eventId: "evt-replace",
+        reason: "stable_fact_signal",
+        features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0.9 },
+        event: event({
+          id: "evt-replace",
+          scopeId: "sc",
+          userId: "u",
+          type: "stream",
+          content: "We decided to use TensorRT instead of ONNX for inference"
+        })
+      }]
+    });
+
+    expect(merged.stableFacts.decisions).not.toContain("use ONNX for inference");
+    expect(merged.stableFacts.decisions).not.toContain("ONNX is the primary model runtime");
+    expect(merged.stableFacts.decisions).toContain("We decided to use TensorRT instead of ONNX for inference");
+  });
+
+  it("normalizeDigestState caps volatileContext openQuestions and risks at 10 to match protectedStateMerge", () => {
+    const state = normalizeDigestState({
+      stableFacts: { decisions: [] },
+      workingNotes: {
+        openQuestions: Array.from({ length: 15 }, (_, i) => `question ${i}`),
+        risks: Array.from({ length: 15 }, (_, i) => `risk ${i}`)
+      },
+      todos: [],
+      volatileContext: Array.from({ length: 15 }, (_, i) => `volatile ${i}`)
+    });
+    expect(state.workingNotes.openQuestions).toHaveLength(10);
+    expect(state.workingNotes.risks).toHaveLength(10);
+    expect(state.volatileContext).toHaveLength(10);
+  });
+
+  it("normalizeDigestState removes event evidenceRefs not referenced by any provenance entry", () => {
+    const state = normalizeDigestState({
+      stableFacts: { decisions: ["use postgres"] },
+      workingNotes: {},
+      todos: [],
+      evidenceRefs: [
+        { id: "evt-active", sourceType: "event", kind: "decision" },
+        { id: "evt-orphan", sourceType: "event", kind: "decision" },
+        { id: "doc-1", sourceType: "document", key: "doc:plan" }
+      ],
+      provenance: {
+        decisions: [{ value: "use postgres", refs: [{ id: "evt-active", sourceType: "event", kind: "decision" }] }]
+      }
+    });
+
+    const ids = state.evidenceRefs?.map((r) => r.id) ?? [];
+    expect(ids).toContain("evt-active");
+    expect(ids).toContain("doc-1");
+    expect(ids).not.toContain("evt-orphan");
   });
 });

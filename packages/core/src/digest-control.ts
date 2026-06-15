@@ -193,6 +193,22 @@ function normalizeEvidenceRef(ref: string | DigestEvidenceRef): DigestEvidenceRe
   };
 }
 
+function collectAllProvenanceRefIds(provenance?: DigestState["provenance"]): Set<string> {
+  const ids = new Set<string>();
+  const listFields = ["constraints", "decisions", "todos", "volatileContext", "openQuestions", "risks"] as const;
+  for (const field of listFields) {
+    for (const entry of (provenance?.[field] as Array<{ refs?: Array<string | DigestEvidenceRef> }> ?? [])) {
+      for (const ref of entry.refs ?? []) {
+        ids.add(typeof ref === "string" ? ref : ref.id);
+      }
+    }
+  }
+  for (const ref of (provenance?.goal ?? []) as Array<string | DigestEvidenceRef>) {
+    ids.add(typeof ref === "string" ? ref : ref.id);
+  }
+  return ids;
+}
+
 export function normalizeDigestState(state?: DigestState | null): DigestState {
   const base = JSON.parse(JSON.stringify(state ?? DEFAULT_DIGEST_STATE)) as DigestState & {
     evidenceRefs?: Array<string | DigestEvidenceRef>;
@@ -219,20 +235,27 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
   return {
     stableFacts: {
       goal: base.stableFacts?.goal,
-      constraints: [...new Set(base.stableFacts?.constraints ?? [])],
-      decisions: [...new Set(base.stableFacts?.decisions ?? [])]
+      constraints: [...new Set(base.stableFacts?.constraints ?? [])].slice(-100),
+      decisions: [...new Set(base.stableFacts?.decisions ?? [])].slice(-100)
     },
     workingNotes: {
-      openQuestions: [...new Set(base.workingNotes?.openQuestions ?? [])].slice(-25),
-      risks: [...new Set(base.workingNotes?.risks ?? [])].slice(-25),
+      openQuestions: [...new Set(base.workingNotes?.openQuestions ?? [])].slice(-10),
+      risks: [...new Set(base.workingNotes?.risks ?? [])].slice(-10),
       context: base.workingNotes?.context
     },
     todos: [...new Set(base.todos ?? [])],
-    volatileContext: [...new Set(base.volatileContext ?? [])].slice(-25),
-    evidenceRefs: [...new Map((base.evidenceRefs ?? []).map((ref) => {
-      const normalized = normalizeEvidenceRef(ref);
-      return [`${normalized.sourceType}:${normalized.id}:${normalized.key ?? ""}:${normalized.kind ?? ""}`, normalized];
-    })).values()].slice(-50),
+    volatileContext: [...new Set(base.volatileContext ?? [])].slice(-10),
+    evidenceRefs: (() => {
+      const provenanceRefIds = collectAllProvenanceRefIds(base.provenance);
+      return [...new Map((base.evidenceRefs ?? []).map((ref) => {
+        const normalized = normalizeEvidenceRef(ref);
+        return [`${normalized.sourceType}:${normalized.id}:${normalized.key ?? ""}:${normalized.kind ?? ""}`, normalized];
+      })).values()]
+        // Only prune orphan event refs when provenance is present — if empty, this is a legacy
+        // pre-provenance state and we cannot distinguish orphans from un-tracked refs.
+        .filter((ref) => ref.sourceType === "document" || provenanceRefIds.size === 0 || provenanceRefIds.has(ref.id))
+        .slice(-50);
+    })(),
     confidence: {
       goal: computeGoalConfidence(base.provenance?.goal),
       constraints: buildConfidenceList(base.provenance?.constraints, base.confidence?.constraints),
@@ -675,19 +698,17 @@ function extractReplacementTarget(value: string): string | null {
   return null;
 }
 
-function findConflictingDecision(values: string[], candidate: string) {
+function findConflictingDecisions(values: string[], candidate: string): string[] {
   const replacementTarget = extractReplacementTarget(candidate);
-  if (!replacementTarget) return null;
+  if (!replacementTarget) return [];
 
   const targetTokens = new Set(tokenize(replacementTarget).filter((t) => t.length >= 3));
-  if (targetTokens.size === 0) return null;
+  if (targetTokens.size === 0) return [];
 
-  for (const value of values) {
+  return values.filter((value) => {
     const valueTokens = tokenize(value).filter((t) => t.length >= 3);
-    const shared = valueTokens.filter((token) => targetTokens.has(token));
-    if (shared.length >= 1) return value;
-  }
-  return null;
+    return valueTokens.some((token) => targetTokens.has(token));
+  });
 }
 
 function findBestTodoMatch(values: string[], candidate: string, threshold = 0.8) {
@@ -941,9 +962,13 @@ function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEviden
     return;
   }
 
-  // Stream events that diverge from the stable goal are logged but do not overwrite.
+  // Stream events that diverge from the stable goal do not overwrite.
+  // Only log reaffirm when the stream-extracted goal is semantically related to the existing goal
+  // (>= 0.3 Jaccard), so unrelated conversation turns don't pollute recentChanges.
   if (!isDocument) {
-    pushRecentChange(next, { field: "goal", action: "reaffirm", value: previousGoal, evidence });
+    if (jaccardSimilarity(previousGoal, goal) >= 0.3) {
+      pushRecentChange(next, { field: "goal", action: "reaffirm", value: previousGoal, evidence });
+    }
     return;
   }
 
@@ -1141,15 +1166,15 @@ export function protectedStateMerge(input: {
           }
         }
       } else {
-        const conflicting = findConflictingDecision(next.stableFacts.decisions, text);
-        if (conflicting) {
+        const conflicting = findConflictingDecisions(next.stableFacts.decisions, text);
+        for (const conflict of conflicting) {
           const protectedByRegistry = (next.factRegistry ?? []).some(
-            (e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && jaccardSimilarity(normalizeText(e.content), normalizeText(conflicting)) >= 0.6
+            (e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && jaccardSimilarity(normalizeText(e.content), normalizeText(conflict)) >= 0.6
           );
           if (!protectedByRegistry) {
-            next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== conflicting);
-            next.provenance.decisions = removeValueProvenance(next.provenance.decisions, conflicting);
-            pushRecentChange(next, { field: "decisions", action: "remove", value: conflicting, evidence });
+            next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== conflict);
+            next.provenance.decisions = removeValueProvenance(next.provenance.decisions, conflict);
+            pushRecentChange(next, { field: "decisions", action: "remove", value: conflict, evidence });
           }
         }
         const existing = findBestDecisionMatch(next.stableFacts.decisions, text);
