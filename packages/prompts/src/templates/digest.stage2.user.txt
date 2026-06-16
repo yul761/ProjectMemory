@@ -1,19 +1,19 @@
 Context:
 Scope: {{scopeName}}
-Goal: {{scopeGoal}}
 Stage: {{scopeStage}}
+
+Established context (do not repeat in summary or changes):
+Goal: {{scopeGoal}}
+Protected state: {{protectedState}}
 
 Previous digest:
 {{lastDigest}}
 
-Protected state:
-{{protectedState}}
-
-Delta candidates:
+New events this session:
 {{deltaCandidates}}
 
 Latest documents:
 {{documents}}
 
-Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[]}
-goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).
+Return JSON: {"summary": string, "changes": string[], "nextSteps": string[]}
+summary: 1-3 sentences about what happened this session. No goal, constraints, or decisions — those are prepended automatically.
