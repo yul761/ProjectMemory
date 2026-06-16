@@ -1416,7 +1416,7 @@ function appendSummarySentence(parts: string[], sentence: string) {
   }
 }
 
-function buildProjectedSummary(state: DigestState, fallbackSummary: string) {
+function buildProjectedSummary(state: DigestState, narrative: string) {
   const parts: string[] = [];
 
   if (state.stableFacts.goal) {
@@ -1450,15 +1450,24 @@ function buildProjectedSummary(state: DigestState, fallbackSummary: string) {
   if (risk) {
     appendSummarySentence(parts, `Active risk: ${risk}.`);
   }
-  const projected = parts.join(" ").trim();
-  if (projected) return projected;
 
-  let summary = fallbackSummary.trim().replace(/\s+/g, " ");
-  while (wordsCount(summary) > 120 && summary.includes(". ")) {
-    summary = summary.split(". ").slice(0, -1).join(". ").trim();
+  const statePrefix = parts.join(" ").trim();
+
+  // Append narrative on a separate line so parseGoal does not bleed into it.
+  // Honours 120-word cap: only include narrative if combined length fits.
+  const trimmedNarrative = narrative.trim();
+  if (trimmedNarrative && statePrefix) {
+    const combined = `${statePrefix}\n${trimmedNarrative}`;
+    if (wordsCount(combined) <= 120) {
+      return combined;
+    }
+    return statePrefix;
   }
-  const summaryWithGoal = ensureSummaryGoal(fallbackSummary, state.stableFacts.goal);
-  return summaryWithGoal.trim();
+
+  if (statePrefix) return statePrefix;
+
+  // Fallback: state is empty, return narrative alone
+  return trimmedNarrative;
 }
 
 function projectRecentChange(change: DigestStateChange) {

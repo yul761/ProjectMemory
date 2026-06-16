@@ -1541,6 +1541,65 @@ describe("consistencyCheck", () => {
 });
 
 describe("generateDigestStage2", () => {
+  it("appends LLM narrative to state-projected summary when both are present", async () => {
+    const llm = {
+      chat: async () => JSON.stringify({
+        summary: "Session focused on benchmarking the digest pipeline.",
+        changes: [],
+        nextSteps: ["review metrics"]
+      })
+    };
+
+    const result = await generateDigestStage2({
+      scope: { id: "s", userId: "u", name: "Demo", goal: "ship alpha", stage: "build", createdAt: new Date() },
+      lastDigest: null,
+      protectedState: {
+        stableFacts: { goal: "ship alpha", constraints: ["no paid APIs"], decisions: [] },
+        workingNotes: {},
+        todos: []
+      },
+      deltaCandidates: [],
+      documents: [],
+      llm,
+      systemPrompt: "system",
+      userPromptTemplate: "{{scopeName}} {{lastDigest}} {{protectedState}} {{deltaCandidates}} {{documents}}",
+      maxRetries: 0
+    });
+
+    expect(result.summary).toContain("Goal: ship alpha");
+    expect(result.summary).toContain("no paid APIs");
+    expect(result.summary).toContain("benchmarking");
+    expect(result.summary.trim().split(/\s+/).filter(Boolean).length).toBeLessThanOrEqual(120);
+  });
+
+  it("uses narrative alone when state has no goal or constraints", async () => {
+    const llm = {
+      chat: async () => JSON.stringify({
+        summary: "Initial session to set up the project scope.",
+        changes: [],
+        nextSteps: ["define goal"]
+      })
+    };
+
+    const result = await generateDigestStage2({
+      scope: { id: "s", userId: "u", name: "Demo", goal: "", stage: "idea", createdAt: new Date() },
+      lastDigest: null,
+      protectedState: {
+        stableFacts: { decisions: [] },
+        workingNotes: {},
+        todos: []
+      },
+      deltaCandidates: [],
+      documents: [],
+      llm,
+      systemPrompt: "system",
+      userPromptTemplate: "{{scopeName}} {{lastDigest}} {{protectedState}} {{deltaCandidates}} {{documents}}",
+      maxRetries: 0
+    });
+
+    expect(result.summary).toContain("Initial session");
+  });
+
   it("retries after invalid output and succeeds with mocked llm", async () => {
     const responses = [
       "{\"summary\":\"too short\",\"changes\":[\"same\"],\"nextSteps\":[\"clarify\"]}",
@@ -1864,7 +1923,8 @@ describe("generateDigestStage2", () => {
 
     expect(result.summary).toContain("Goal: ship benchmarkable memory engine v1.");
     expect(result.summary).toContain("Constraints: no hosted dependency; keep api stable.");
-    expect(result.summary).not.toContain("hosted deployment path");
+    // Narrative is now appended after the state prefix rather than discarded.
+    expect(result.summary).toContain("hosted deployment path");
     expect(result.changes).toEqual(
       expect.arrayContaining([
         "Decision: We decide to prioritize ingestion throughput batch 50",
