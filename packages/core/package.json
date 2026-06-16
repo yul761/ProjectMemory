@@ -6,7 +6,8 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval": "tsx src/eval/run-cli.ts"
   },
   "dependencies": {
     "pino": "^9.5.0",
