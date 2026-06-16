@@ -168,39 +168,32 @@ Why this split exists:
 The current repository state is beyond architecture sketches.
 The three-layer runtime is implemented, benchmarked, and inspectable.
 
-Latest three-layer quick benchmark:
+Latest synthetic benchmark (2026-06-16):
 
-- Fast path: `15.52 ms`
-- Working Memory update: `532 ms`
-- State Layer update: `4132 ms`
-- direct-state fast-path rate: `1`
-- runtime vs layer-status consistency: `1`
-- Working Memory caught-up rate: `1`
-- Stable State caught-up rate: `1`
-- Long-term Memory Reliability: `84.2`
-- Replay state match: `yes`
+- `long_running_project`: factRetention=1.0, goalStability=1.0, decisionContinuity=1.0
+- `decision_revision`: conflictResolutionAccuracy=1.0
+- `goal_stability_under_noise`: goalStabilityRate=1.0
+- `retrieval_quality`: MRR=1.0, firstRelevantRank=1
+- Overall average: `1.000` (threshold 0.75)
 
-Latest observable drift checks:
+Run via: `pnpm --filter @statecore/core eval`
+
+Latest observable drift checks (v1.0.0):
 
 - Visible comparison: StateCore `7/7`, direct baseline `4/7`
 - Goal-evolution drift run: goal / constraint / decision / todo drift `0`
 - Goal-evolution digest drift: `0`
 - Goal-evolution runs succeeded: `10/10`
 - Failure-mode mixed-signals drift run: goal / constraint / decision / todo drift `0`
-- Runtime readiness check: doctor + benchmark + drift all pass in one CI-style run
 
 What this means in practice:
 
-- Fast Layer now has a direct state fast path for canonical state questions
+- Fast Layer has a direct state fast path for canonical state questions
 - Working Memory updates independently in the background
-- State Layer remains asynchronous and authoritative
+- State Layer is asynchronous and authoritative
+- LLM only writes session narrative; goal/constraints/decisions/todos come entirely from the protected state merge pipeline
 - API responses expose layer versions, retrieval plan, and answer mode for debugging
-
-What is still being hardened:
-
-- broader benchmark fixtures beyond the current long-session and mixed-signal additions
-- more hosted-CI repetition for the visible comparison and runtime readiness paths
-- release-style runtime readiness automation on hosted CI
+- Per-digest `stabilityScore` stored in `DigestJobLog` for runtime drift monitoring
 
 Useful inspection endpoints:
 
@@ -209,6 +202,8 @@ Useful inspection endpoints:
 - `GET /memory/fast-view`
 - `GET /memory/layer-status`
 - `POST /memory/runtime/turn`
+- `GET /metrics/digest/:scopeId` — per-scope digest job history (count, failure rate, last duration, stabilityScore)
+- `POST /memory/embed/backfill` — queue embedding generation for all events in a scope that lack vectors
 
 Recommended demo-facing API boundary:
 
@@ -282,7 +277,9 @@ That helps recall, but it does not solve:
 - unstable long-term state
 - non-replayable memory evolution
 
-StateCore instead:
+StateCore includes pgvector for semantic retrieval (finding relevant events with zero keyword overlap), but treats it as one layer of evidence — not as the memory itself. The authoritative state lives in the protected merge pipeline, not in the vector index. Retrieval finds evidence; the state pipeline controls what facts are durable.
+
+StateCore also:
 
 - models memory as protected state
 - uses a controlled digest pipeline
@@ -307,7 +304,8 @@ StateCore instead:
 | Model                 | Text accumulation      | State transitions |
 | Drift control         | ❌                     | ✅                |
 | Replayable            | ❌                     | ✅                |
-| Deterministic updates | ❌                     | Partial           |
+| Deterministic updates | ❌                     | ✅ (state pipeline) |
+| Semantic retrieval    | ✅                     | ✅ (pgvector + hybrid) |
 | Trustable over time   | ❌                     | Designed for it   |
 
 ## Example
@@ -330,6 +328,8 @@ Output:
 ```bash
 docker-compose up -d
 ```
+
+> **Note:** The default Postgres image is `pgvector/pgvector:pg16` (not `postgres:16`). This is required for semantic vector search. Confirm your `docker-compose.local.yml` uses the pgvector image before running.
 
 2. Install deps
 
@@ -482,9 +482,18 @@ Useful for slower local or hosted backends:
 
 Legacy `OPENAI_*` variables are still accepted.
 
-Optional hybrid retrieval can be enabled with:
+Optional hybrid retrieval (embedding reranking on top-K keyword candidates):
 
 - `RETRIEVE_USE_EMBEDDINGS=true`
+- `MODEL_EMBEDDING_NAME` (e.g. `text-embedding-3-small`)
+
+Optional semantic vector search (pgvector ANN — finds relevant events with zero keyword overlap):
+
+- `RETRIEVE_USE_VECTOR_SEARCH=true` (requires `MODEL_EMBEDDING_NAME` and pgvector image)
+
+Worker tuning:
+
+- `DIGEST_FIRST_RUN_MAX_EVENTS` — max events fetched on first digest for a scope (default: 200)
 
 ## Architecture
 
@@ -531,11 +540,15 @@ StateCore includes built-in evaluation for:
 - long-term memory reliability
 - drift and ablation runs
 
-Run:
+Run the synthetic memory quality benchmark (4 scenarios, no LLM required):
 
 ```bash
-pnpm benchmark
+pnpm --filter @statecore/core eval
 ```
+
+This outputs JSON metrics: `factRetentionRate`, `goalStabilityRate`, `decisionContinuityRate`, `conflictResolutionAccuracy`, `retrievalMRR`. Current scores: all 4 scenarios at 1.000.
+
+Run the full latency benchmark:
 
 Three-layer runtime scenario:
 
