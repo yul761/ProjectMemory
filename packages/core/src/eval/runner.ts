@@ -11,10 +11,17 @@ function containsFact(haystack: string[], needle: string): boolean {
   const normNeedle = normalizeStr(needle);
   const tokens = normNeedle.split(" ").filter((t) => t.length > 3);
   if (tokens.length === 0) return false;
-  return haystack.some((item) => {
+  // First, try exact or near-exact match
+  for (const item of haystack) {
     const normItem = normalizeStr(item);
-    return tokens.every((t) => normItem.includes(t));
-  });
+    // Check if normalized strings are similar enough (using token overlap)
+    const itemTokens = normItem.split(" ").filter((t) => t.length > 3);
+    const commonTokens = tokens.filter((t) => itemTokens.includes(t)).length;
+    const overlap = commonTokens / Math.max(tokens.length, itemTokens.length);
+    // If 70% or more tokens match, consider it a match
+    if (overlap >= 0.7) return true;
+  }
+  return false;
 }
 
 function runMiniDigest(events: MemoryEvent[], prevState: DigestState | null): DigestState {
