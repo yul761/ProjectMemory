@@ -53,6 +53,9 @@ model ProjectScope {
   stage     ProjectStage @default(idea)
   createdAt DateTime     @default(now())
 
+  template             String  @default("project")
+  notificationWebhook  String?
+
   user         User                  @relation(fields: [userId], references: [id])
   memories     MemoryEvent[]
   digests      Digest[]
@@ -86,6 +89,10 @@ model MemoryEvent {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime?
 
+  classifiedType        String?
+  classifiedImportance  Float?
+  expiresAt             DateTime?
+
   user      User         @relation(fields: [userId], references: [id])
   scope     ProjectScope @relation(fields: [scopeId], references: [id])
   embedding MemoryEventEmbedding?
@@ -93,6 +100,7 @@ model MemoryEvent {
   @@unique([scopeId, key])
   @@index([userId, scopeId, createdAt])
   @@index([scopeId, key])
+  @@index([expiresAt])
 }
 
 model Digest {

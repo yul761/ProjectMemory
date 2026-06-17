@@ -17,7 +17,8 @@ export type ReminderStatus = z.infer<typeof ReminderStatus>;
 export const ScopeCreateInput = z.object({
   name: z.string().min(1),
   goal: z.string().min(1).optional(),
-  stage: ProjectStage.optional()
+  stage: ProjectStage.optional(),
+  template: z.enum(["project", "personal", "health", "learning"]).optional()
 });
 
 export const ScopeOutput = z.object({

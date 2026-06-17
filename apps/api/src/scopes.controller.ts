@@ -11,7 +11,7 @@ export class ScopesController {
   @Post("/scopes")
   async createScope(@Req() req: RequestWithUser, @Body() body: unknown) {
     const input = ScopeCreateInput.parse(body);
-    const scope = await this.domain.projectService.createScope(req.userId, input.name, input.goal ?? null, input.stage);
+    const scope = await this.domain.projectService.createScope(req.userId, input.name, input.goal ?? null, input.stage, input.template);
     return parseOutput(ScopeOutput, {
       id: scope.id,
       name: scope.name,

@@ -60,7 +60,7 @@ export class DomainService {
     });
 
     const projectsRepo = {
-      create: (data: { userId: string; name: string; goal?: string | null; stage?: "idea" | "build" | "test" | "launch" }) =>
+      create: (data: { userId: string; name: string; goal?: string | null; stage?: "idea" | "build" | "test" | "launch"; template?: string }) =>
         prisma.projectScope.create({ data }),
       listByUser: (userId: string) => prisma.projectScope.findMany({ where: { userId }, orderBy: { createdAt: "desc" } }),
       findById: (scopeId: string, userId: string) => prisma.projectScope.findFirst({ where: { id: scopeId, userId } })

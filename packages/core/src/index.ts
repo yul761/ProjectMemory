@@ -110,7 +110,7 @@ export interface Reminder {
 }
 
 export interface ProjectRepo {
-  create: (data: { userId: string; name: string; goal?: string | null; stage?: ProjectStage }) => Promise<ProjectScope>;
+  create: (data: { userId: string; name: string; goal?: string | null; stage?: ProjectStage; template?: string }) => Promise<ProjectScope>;
   listByUser: (userId: string) => Promise<ProjectScope[]>;
   findById: (scopeId: string, userId: string) => Promise<ProjectScope | null>;
 }
@@ -188,8 +188,8 @@ export interface RetrieveResult {
 export class ProjectService {
   constructor(private projects: ProjectRepo, private userState: UserStateRepo) {}
 
-  async createScope(userId: string, name: string, goal?: string | null, stage?: ProjectStage) {
-    const scope = await this.projects.create({ userId, name, goal, stage });
+  async createScope(userId: string, name: string, goal?: string | null, stage?: ProjectStage, template?: string) {
+    const scope = await this.projects.create({ userId, name, goal, stage, template: template ?? "project" });
     await this.userState.upsertActiveProject(userId, scope.id);
     return scope;
   }
@@ -644,3 +644,5 @@ export async function generateAnswer(input: {
 export * from "./digest-control";
 export * from "./drift-metrics";
 export * from "./assistant-runtime";
+export { getDomainConfig, KNOWN_TEMPLATES } from "./domain-configs/index";
+export type { DomainConfig, EntityTypeConfig } from "./domain-configs/types";
