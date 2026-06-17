@@ -27,6 +27,7 @@ import {
 import {
   AssistantSession,
   buildGroundingEvidence,
+  buildRelationshipContext,
   type ChatModel,
   compileFastLayerContext,
   compileStateLayerView,
@@ -537,6 +538,16 @@ export class MemoryController {
     }
 
     return { queued: eventsWithoutEmbedding.length };
+  }
+
+  @Get("/memory/relationship-context/:scopeId")
+  async getRelationshipContext(
+    @Param("scopeId") scopeId: string,
+    @Req() req: RequestWithUser
+  ) {
+    const scope = await this.domain.projectService.getScope(req.userId, scopeId);
+    if (!scope) throw new NotFoundException("Scope not found");
+    return buildRelationshipContext(scopeId, prisma);
   }
 
   @Get("/memory/events")

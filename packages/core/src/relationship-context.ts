@@ -40,7 +40,7 @@ export async function buildRelationshipContext(
     where: { scopeId, classifiedType: "personal_detail" },
     orderBy: { createdAt: "asc" }
   });
-  const personalDetails = personalDetailEvents.map((e) => e.content);
+  const personalDetails = personalDetailEvents.map((e: any) => e.content);
 
   // 3. Active goals from latest digest state
   const latestSnapshot = await (db as any).digestStateSnapshot.findFirst({
@@ -72,7 +72,7 @@ export async function buildRelationshipContext(
     orderBy: { createdAt: "asc" },
     take: 3
   });
-  const pendingFollowUps = oldEvents.map((e) => {
+  const pendingFollowUps = oldEvents.map((e: any) => {
     const daysAgo = Math.floor((Date.now() - e.createdAt.getTime()) / 86_400_000);
     const preview = e.content.length > 60 ? `${e.content.slice(0, 60)}...` : e.content;
     return `${e.classifiedType}: "${preview}" (${daysAgo} days ago)`;
