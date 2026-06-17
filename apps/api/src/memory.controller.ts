@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Inject, NotFoundException, Param, Post, Query, Req } from "@nestjs/common";
+import { checkContradiction } from "./check-contradiction";
 import { createHash, randomUUID } from "crypto";
 import {
   AGENT_SCENARIOS,
@@ -515,6 +516,23 @@ export class MemoryController {
       createdAt: event.createdAt.toISOString(),
       updatedAt: event.updatedAt ? event.updatedAt.toISOString() : null
     });
+  }
+
+  @Post("/memory/check-contradiction")
+  async checkContradictionEndpoint(@Req() req: RequestWithUser, @Body() body: unknown) {
+    const input = z.object({
+      scopeId: z.string().uuid(),
+      content: z.string().min(1).max(500)
+    }).parse(body);
+
+    const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
+    if (!scope) throw new NotFoundException("Scope not found");
+
+    if (!this.runtimeLlm) {
+      return { hasContradiction: false, message: null };
+    }
+
+    return checkContradiction(input.scopeId, input.content, this.runtimeLlm, prisma);
   }
 
   @Post("/memory/embed/backfill")
