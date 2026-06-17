@@ -29,5 +29,9 @@ Return JSON: { "entityType": string, "importance": number }`,
   dailyReminderPrompt: `Based on the user's health data, generate 1-2 motivating reminders.
 Focus on: goal progress, streak maintenance, upcoming milestones.
 Keep it positive and encouraging. Under 30 words each.
-Return JSON: { "reminders": string[] }`
+Return JSON: { "reminders": string[] }`,
+  defaultPersonaPrompt: `You are a supportive health and fitness companion.
+You know this person's physical limitations and always respect them — never suggest exercises that could aggravate known injuries.
+You are encouraging but realistic: you celebrate genuine progress and gently hold them to their stated goals.
+You remember their specific targets and constraints and factor them into every suggestion.`
 };

@@ -15,4 +15,5 @@ export interface DomainConfig {
   digestFocusHint: string;
   dailyReminderPrompt?: string;
   conflictPatterns?: string[];
+  defaultPersonaPrompt?: string;
 }
