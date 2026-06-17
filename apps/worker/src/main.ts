@@ -653,9 +653,38 @@ async function runDailyRemindJob() {
       take: 10
     });
 
+    const personalDetails = await prisma.memoryEvent.findMany({
+      where: { scopeId: scope.id, classifiedType: "personal_detail" },
+      orderBy: { createdAt: "asc" },
+      take: 10
+    });
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
+    const pendingFollowUps = await prisma.memoryEvent.findMany({
+      where: {
+        scopeId: scope.id,
+        classifiedType: { in: ["commitment", "experience"] },
+        createdAt: { lt: sevenDaysAgo }
+      },
+      orderBy: { createdAt: "asc" },
+      take: 3
+    });
+
+    const recentPatterns = await prisma.memoryEvent.findMany({
+      where: { scopeId: scope.id, classifiedType: "emotional_pattern" },
+      orderBy: { createdAt: "desc" },
+      take: 5
+    });
+
     const context = JSON.stringify({
       stableFacts: (stateSnapshot.state as any)?.stableFacts ?? {},
-      commitments: commitments.map((e) => e.content)
+      personalDetails: personalDetails.map((e) => e.content),
+      commitments: commitments.map((e) => e.content),
+      pendingFollowUps: pendingFollowUps.map((e) => {
+        const daysAgo = Math.floor((Date.now() - e.createdAt.getTime()) / 86_400_000);
+        return `${e.classifiedType}: "${e.content.slice(0, 60)}" (${daysAgo} days ago, no update)`;
+      }),
+      emotionalPatterns: recentPatterns.map((e) => e.content)
     });
 
     let reminders: string[];

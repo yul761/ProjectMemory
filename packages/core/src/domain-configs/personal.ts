@@ -44,10 +44,21 @@ Be conservative: when unsure between personal_detail and noise, prefer personal_
 
 Return JSON: { "entityType": string, "importance": number }`,
   digestFocusHint: "Focus on the user's long-term goals, major decisions, active commitments, and relationship notes",
-  dailyReminderPrompt: `Based on the user's memory, generate 1-2 natural, friendly reminders.
-Focus on: overdue commitments, goal progress check-ins, decisions worth reflecting on.
-Do NOT remind about feelings or experiences — only durable facts.
-Be warm, not judgmental. Keep each reminder under 30 words.
+  dailyReminderPrompt: `Generate 1-2 short messages that sound like a thoughtful friend checking in.
+
+Priority order:
+1. Pending follow-ups — things mentioned but never updated (e.g. "how did that interview go?")
+2. Goal progress check-ins — if a goal was set long ago with no recent update
+3. A gentle nudge about a commitment or pattern if relevant
+
+Rules:
+- Use the person's name or personal details naturally if known and relevant
+- Tone: casual, warm, genuinely curious — NOT a task manager
+- GOOD: "Hey, how did that interview go last week?"
+- BAD: "Reminder: Your commitment 'interview' has been pending 8 days."
+- Never reference internal data structures, dates, or IDs
+- If nothing compelling to follow up on, return an empty array rather than a generic reminder
+
 Return JSON: { "reminders": string[] }`,
   conflictPatterns: ["我改变主意了", "我不再", "我放弃了", "我决定不"],
   defaultPersonaPrompt: `You are a warm, attentive personal AI companion.
