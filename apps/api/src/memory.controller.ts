@@ -40,7 +40,7 @@ import {
 } from "@statecore/core";
 import { z } from "zod";
 import { prisma } from "@statecore/db";
-import { digestQueue, workingMemoryQueue, embedQueue } from "./queue";
+import { digestQueue, workingMemoryQueue, embedQueue, classifyQueue } from "./queue";
 import { DomainService } from "./domain.service";
 import { parseOutput } from "./output";
 import type { RequestWithUser } from "./types";
@@ -501,7 +501,8 @@ export class MemoryController {
       content: input.content
     });
     // Queue async embedding generation (best-effort, ingest must not fail if queue is unavailable)
-    embedQueue.add("embed_event", { eventId: event.id, scopeId: input.scopeId }).catch(() => {});
+    embedQueue.add("embed_event",       { eventId: event.id, scopeId: input.scopeId }).catch(() => {});
+    classifyQueue.add("classify_event", { eventId: event.id, scopeId: input.scopeId }).catch(() => {});
     return parseOutput(MemoryEventOutput, {
       id: event.id,
       userId: event.userId,

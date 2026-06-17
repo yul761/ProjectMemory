@@ -20,6 +20,7 @@ import {
 import { workerEnv } from "./env";
 import { withDigestLock, DigestAlreadyRunningError, type LockRedis } from "./digest-lock";
 import { runEmbedEventJob } from "./embed-job";
+import { runClassifyEventJob } from "./classify-job";
 import Redis from "ioredis";
 
 const connection = {
@@ -586,6 +587,23 @@ new Worker(
   logger.info({ jobId: job.id }, "Embed job completed");
 }).on("failed", (job, err) => {
   logger.error({ jobId: job?.id, err }, "Embed job failed");
+});
+
+new Worker(
+  "classify",
+  async (job) => {
+    if (job.name !== "classify_event") return;
+    if (!llm) return;
+    await runClassifyEventJob(
+      job.data as { eventId: string; scopeId: string },
+      llm,
+      prisma
+    );
+    return { ok: true };
+  },
+  { connection, concurrency: 4 }
+).on("failed", (job, err) => {
+  logger.warn({ jobId: job?.id, err }, "Classify job failed — event stored without classification");
 });
 
 setInterval(() => {
