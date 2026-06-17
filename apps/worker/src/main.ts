@@ -22,6 +22,7 @@ import { workerEnv } from "./env";
 import { withDigestLock, DigestAlreadyRunningError, type LockRedis } from "./digest-lock";
 import { runEmbedEventJob } from "./embed-job";
 import { runClassifyEventJob } from "./classify-job";
+import { runDetectEmotionalPatternsJob } from "./detect-patterns";
 import Redis from "ioredis";
 
 const connection = {
@@ -721,5 +722,12 @@ setInterval(() => {
     logger.error({ err }, "daily_remind job crashed");
   });
 }, 24 * 60 * 60 * 1000);
+
+setInterval(() => {
+  if (!llm) return;
+  runDetectEmotionalPatternsJob(llm, prisma).catch((err) => {
+    logger.error({ err }, "detect_emotional_patterns job crashed");
+  });
+}, 7 * 24 * 60 * 60 * 1000);
 
 logger.info("Worker started");
