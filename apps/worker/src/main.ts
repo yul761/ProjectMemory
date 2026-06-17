@@ -8,7 +8,8 @@ import {
   mergeWorkingMemoryState,
   runDigestControlPipeline,
   selectWorkingMemoryEvents,
-  computeDriftMetrics
+  computeDriftMetrics,
+  getDomainConfig
 } from "@statecore/core";
 import type { DigestState, DriftMetrics, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import {
@@ -613,5 +614,83 @@ setInterval(() => {
     { jobId: "send_reminders_tick", removeOnComplete: true, removeOnFail: true }
   );
 }, 60_000);
+
+// expire_events: purge MemoryEvent rows past their expiresAt (runs every 6 hours)
+setInterval(() => {
+  prisma.memoryEvent.deleteMany({
+    where: { expiresAt: { lt: new Date() } }
+  }).then(({ count }) => {
+    if (count > 0) logger.info({ count }, "Expired events purged");
+  }).catch((err) => {
+    logger.error({ err }, "expire_events failed");
+  });
+}, 6 * 60 * 60 * 1000);
+
+async function runDailyRemindJob() {
+  if (!llm) return;
+  const scopes = await prisma.projectScope.findMany({
+    where: { notificationWebhook: { not: null } }
+  });
+
+  for (const scope of scopes) {
+    const config = getDomainConfig((scope as any).template ?? "project");
+    if (!config.dailyReminderPrompt) continue;
+    if (!scope.notificationWebhook) continue;
+
+    const stateSnapshot = await prisma.digestStateSnapshot.findFirst({
+      where: { scopeId: scope.id },
+      orderBy: { createdAt: "desc" }
+    });
+    if (!stateSnapshot) continue;
+
+    const commitments = await prisma.memoryEvent.findMany({
+      where: {
+        scopeId: scope.id,
+        classifiedType: "commitment",
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10
+    });
+
+    const context = JSON.stringify({
+      stableFacts: (stateSnapshot.state as any)?.stableFacts ?? {},
+      commitments: commitments.map((e) => e.content)
+    });
+
+    let reminders: string[];
+    try {
+      const raw = await llm.chat([
+        { role: "system", content: config.dailyReminderPrompt },
+        { role: "user",   content: context }
+      ]);
+      const parsed = JSON.parse(raw) as { reminders?: string[] };
+      reminders = (parsed.reminders ?? []).slice(0, 2).filter((r) => typeof r === "string");
+    } catch (err) {
+      logger.warn({ scopeId: scope.id, err }, "daily_remind LLM call failed");
+      continue;
+    }
+
+    if (!reminders.length) continue;
+
+    try {
+      await fetch(scope.notificationWebhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scopeId: scope.id, reminders })
+      });
+      logger.info({ scopeId: scope.id, count: reminders.length }, "Daily reminders sent");
+    } catch (err) {
+      logger.warn({ scopeId: scope.id, err }, "daily_remind webhook delivery failed");
+    }
+  }
+}
+
+// Run daily_remind once per day (24h)
+setInterval(() => {
+  runDailyRemindJob().catch((err) => {
+    logger.error({ err }, "daily_remind job crashed");
+  });
+}, 24 * 60 * 60 * 1000);
 
 logger.info("Worker started");

@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Inject, NotFoundException, Param, Post, Req } from "@nestjs/common";
+import { Body, Controller, Get, Inject, NotFoundException, Param, Patch, Post, Req } from "@nestjs/common";
 import { ScopeActivationOutput, ScopeCreateInput, ScopeListOutput, ScopeOutput, StateOutput } from "@statecore/contracts";
+import { prisma } from "@statecore/db";
 import { DomainService } from "./domain.service";
 import { parseOutput } from "./output";
 import type { RequestWithUser } from "./types";
+import { z } from "zod";
 
 @Controller()
 export class ScopesController {
@@ -43,6 +45,27 @@ export class ScopesController {
     }
     const state = await this.domain.projectService.setActiveScope(req.userId, scopeId);
     return parseOutput(ScopeActivationOutput, { activeScopeId: state.activeProjectId ?? null });
+  }
+
+  @Patch("/scopes/:id/webhook")
+  async setWebhook(
+    @Param("id") id: string,
+    @Req() req: RequestWithUser,
+    @Body() body: unknown
+  ) {
+    const input = z.object({
+      notificationWebhook: z.string().url().nullable()
+    }).parse(body);
+
+    const scope = await this.domain.projectService.getScope(req.userId, id);
+    if (!scope) throw new NotFoundException("Scope not found");
+
+    await prisma.projectScope.update({
+      where: { id },
+      data: { notificationWebhook: input.notificationWebhook }
+    });
+
+    return { ok: true };
   }
 
   @Get("/state")
