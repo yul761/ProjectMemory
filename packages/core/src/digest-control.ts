@@ -940,7 +940,13 @@ function promoteToFactRegistry(
   state.factRegistry.push(entry);
 }
 
-function supersedeFact(state: DigestState, content: string, newContent: string, evidence: DigestEvidenceRef): void {
+function supersedeFact(
+  state: DigestState,
+  content: string,
+  newContent: string,
+  evidence: DigestEvidenceRef,
+  overrides?: { facet?: string; confidence?: number; type?: FactRegistryEntry["type"] }
+): void {
   if (!state.factRegistry) return;
   const norm = normalizeText(content);
   const toSupersede = state.factRegistry.find(
@@ -949,15 +955,17 @@ function supersedeFact(state: DigestState, content: string, newContent: string, 
   if (!toSupersede) return;
   const newId = `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   toSupersede.supersededBy = newId;
-  state.factRegistry.push({
+  const newEntry: FactRegistryEntry = {
     id: newId,
     content: newContent,
-    type: toSupersede.type,
-    confidence: toSupersede.confidence,
+    type: overrides?.type ?? toSupersede.type,
+    confidence: overrides?.confidence ?? toSupersede.confidence,
     addedAt: new Date().toISOString(),
     evidenceId: evidence.id,
     evidenceType: evidence.sourceType
-  });
+  };
+  if (overrides?.facet !== undefined) newEntry.facet = overrides.facet;
+  state.factRegistry.push(newEntry);
 }
 
 function mergeProfileFacets(
@@ -1043,9 +1051,15 @@ function applyProfileFactsFromDigest(
 
     if (existingIdx !== -1) {
       const existing = identityFacts[existingIdx];
-      // Document supersedes existing (even write-protected stream entries)
+      // Document supersedes existing (even write-protected stream entries).
+      // Pass identity overrides so the replacement entry retains facet, document-authority
+      // confidence, and correct type — without these, write-protection is silently lost.
       if (docEvidence) {
-        supersedeFact(state, existing, value, docEvidence);
+        supersedeFact(state, existing, value, docEvidence, {
+          facet: "identity",
+          confidence: 0.85,
+          type: "profile"
+        });
       }
       identityFacts[existingIdx] = value;
       continue;

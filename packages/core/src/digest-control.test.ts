@@ -2425,6 +2425,153 @@ describe("mergeProfileFacets — stream routing via protectedStateMerge", () => 
   });
 });
 
+describe("runDigestControlPipeline → state.profile.identity from document profileFacts", () => {
+  it("routes LLM-extracted profileFacts[facet=identity] into result.state.profile.identity", async () => {
+    const mockLlm = {
+      chat: async (_messages: { role: "system" | "user"; content: string }[]) => {
+        return JSON.stringify({
+          summary: "Processed resume.",
+          changes: ["Resume ingested."],
+          nextSteps: ["Review extracted identity facts."],
+          profileFacts: [{ facet: "identity", value: "工作经历: 字节跳动 后端工程师 2019-2022" }]
+        });
+      }
+    };
+
+    const resumeDoc = event({
+      id: "doc-resume",
+      scopeId: "sc",
+      userId: "u",
+      type: "document",
+      key: "resume:main",
+      content: "工作经历: 字节跳动 后端工程师 2019-2022",
+      createdAt: new Date("2026-06-20T10:00:00Z")
+    });
+
+    const result = await runDigestControlPipeline({
+      scope: { id: "sc", userId: "u", name: "personal", goal: null, stage: "build", createdAt: new Date() },
+      recentEvents: [resumeDoc],
+      llm: mockLlm,
+      prompts: {
+        digestStage2SystemPrompt: "Output JSON only.",
+        digestStage2UserPrompt: "{{scopeName}}"
+      },
+      config: {
+        eventBudgetTotal: 10,
+        eventBudgetDocs: 5,
+        eventBudgetStream: 5,
+        noveltyThreshold: 0.5,
+        maxRetries: 0,
+        useLlmClassifier: false,
+        debug: false
+      }
+    });
+
+    expect(result.state.profile?.identity).toContain("工作经历: 字节跳动 后端工程师 2019-2022");
+  });
+});
+
+describe("applyProfileFactsFromDigest — supersession preserves identity attributes (Fix 1)", () => {
+  const baseStreamState: DigestState = {
+    stableFacts: { decisions: [] },
+    workingNotes: {},
+    todos: [],
+    profile: { identity: ["工作经历: 字节跳动 后端工程师 2019-2022"] },
+    factRegistry: [{
+      id: "stream-fact-1",
+      content: "工作经历: 字节跳动 后端工程师 2019-2022",
+      type: "profile",
+      confidence: 0.7,
+      facet: "identity",
+      addedAt: "2026-01-01T00:00:00.000Z",
+      evidenceId: "stream-evt-1",
+      evidenceType: "event"
+    }]
+  };
+
+  const resumeDoc = event({
+    id: "doc-resume",
+    scopeId: "sc",
+    userId: "u",
+    type: "document",
+    key: "resume:main",
+    content: "工作经历: 字节跳动 后端工程师 2019-2022",
+    createdAt: new Date("2026-06-20T10:00:00Z")
+  });
+
+  const mockLlmWithFacts = {
+    chat: async (_messages: { role: "system" | "user"; content: string }[]) => {
+      return JSON.stringify({
+        summary: "Processed resume.",
+        changes: ["Resume ingested."],
+        nextSteps: ["Review extracted identity facts."],
+        profileFacts: [{ facet: "identity", value: "工作经历: 字节跳动 后端工程师 2019-2022" }]
+      });
+    }
+  };
+
+  const pipelineConfig = {
+    scope: { id: "sc", userId: "u", name: "personal", goal: null, stage: "build" as const, createdAt: new Date() },
+    recentEvents: [resumeDoc],
+    llm: mockLlmWithFacts,
+    prompts: {
+      digestStage2SystemPrompt: "Output JSON only.",
+      digestStage2UserPrompt: "{{scopeName}}"
+    },
+    config: {
+      eventBudgetTotal: 10,
+      eventBudgetDocs: 5,
+      eventBudgetStream: 5,
+      noveltyThreshold: 0.5,
+      maxRetries: 0,
+      useLlmClassifier: false,
+      debug: false
+    }
+  };
+
+  it("active factRegistry entry after doc supersession has facet=identity, confidence=0.85, type=profile, evidenceType=document", async () => {
+    const result = await runDigestControlPipeline({ ...pipelineConfig, prevState: baseStreamState });
+
+    const active = getActiveFactRegistry(result.state);
+    const identityEntry = active.find((e) => e.content.includes("字节跳动"));
+    expect(identityEntry).toBeDefined();
+    expect(identityEntry!.facet).toBe("identity");
+    expect(identityEntry!.confidence).toBe(0.85);
+    expect(identityEntry!.type).toBe("profile");
+    expect(identityEntry!.evidenceType).toBe("document");
+  });
+
+  it("subsequent contradicting stream event does NOT overwrite document-authority identity fact after supersession", async () => {
+    const result1 = await runDigestControlPipeline({ ...pipelineConfig, prevState: baseStreamState });
+
+    // Conflicting stream event with Jaccard >= 0.6 overlap
+    const contradictingEvt = event({
+      id: "stream-contradiction",
+      scopeId: "sc",
+      userId: "u",
+      type: "stream",
+      content: "工作经历: 字节跳动 前端工程师 2019-2022",
+      classifiedType: "personal_detail",
+      createdAt: new Date("2026-06-20T11:00:00Z")
+    });
+
+    const stateAfterConflict = protectedStateMerge({
+      prevState: result1.state,
+      deltaCandidates: [{
+        eventId: "stream-contradiction",
+        reason: "novel_event",
+        features: { kind: "note", importanceScore: 0.5, noveltyScore: 0.8 },
+        event: contradictingEvt
+      }],
+      documents: []
+    });
+
+    // Original document-authority value must survive
+    expect(stateAfterConflict.profile?.identity).toContain("工作经历: 字节跳动 后端工程师 2019-2022");
+    expect(stateAfterConflict.profile?.identity).not.toContain("工作经历: 字节跳动 前端工程师 2019-2022");
+  });
+});
+
 describe("doc→identity: applyProfileFactsFromDigest via generateDigestStage2", () => {
   it("mock LLM returning profileFacts routes facet=identity into state.profile.identity", async () => {
     const mockLlm = {
