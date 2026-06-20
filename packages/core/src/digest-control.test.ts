@@ -2941,3 +2941,213 @@ describe("CJK bigram tokenizer (engine-level)", () => {
     expect(state2.stableFacts.decisions).toContain("用 PostgreSQL 做主存储");
   });
 });
+
+describe("CJK drift-protection (chunk 1b)", () => {
+  // Helper: stream event with optional classifiedType
+  function streamEvent(id: string, content: string, classifiedType?: string): MemoryEvent {
+    return event({ id, scopeId: "sc", userId: "u", type: "stream", content, classifiedType: classifiedType ?? null });
+  }
+
+  // Helper: minimal decision delta candidate
+  function decisionDelta(id: string, content: string): import("./digest-control").DeltaCandidate {
+    return {
+      eventId: id,
+      reason: "stable_fact_signal",
+      features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0.9 },
+      event: streamEvent(id, content)
+    };
+  }
+
+  it("★ Test 1: 我决定用PostgreSQL then 我决定用MySQL — BOTH survive distinct in decisions and factRegistry", () => {
+    // Jaccard("我决定用PostgreSQL", "我决定用MySQL") ≈ 0.6 (shared CJK bigrams 我决,决定,定用)
+    // findBestDecisionMatch uses threshold 0.8 → no dedup → both in stableFacts.decisions.
+    // asciiContentDiverges: {postgresql} vs {mysql} → disjoint → sameFactCjkAware=false →
+    // isInFactRegistry correctly returns false for MySQL, so MySQL gets its own registry entry.
+    const pgDecision = "我决定用PostgreSQL";
+    const prevState: DigestState = {
+      stableFacts: { decisions: [pgDecision], constraints: [] },
+      workingNotes: {},
+      todos: [],
+      volatileContext: [],
+      evidenceRefs: [],
+      factRegistry: [{
+        id: "fact-pg-001",
+        content: pgDecision,
+        type: "decision",
+        confidence: 0.9,
+        addedAt: new Date().toISOString(),
+        evidenceId: "evt-pg",
+        evidenceType: "event"
+      }]
+    };
+
+    const state = protectedStateMerge({
+      prevState,
+      documents: [],
+      deltaCandidates: [decisionDelta("evt-mysql", "我决定用MySQL")]
+    });
+
+    expect(state.stableFacts.decisions).toContain(pgDecision);
+    expect(state.stableFacts.decisions).toContain("我决定用MySQL");
+    expect(state.stableFacts.decisions).toHaveLength(2);
+    // MySQL must get its own factRegistry entry (not blocked by PostgreSQL's entry via B guard)
+    const activeRegistry = getActiveFactRegistry(state);
+    expect(activeRegistry.some((e) => e.content.includes("MySQL"))).toBe(true);
+    expect(activeRegistry.some((e) => e.content.includes("PostgreSQL"))).toBe(true);
+  });
+
+  it("Test 2: near-identical CJK+ASCII decisions sharing the same ASCII token → DEDUP", () => {
+    // "我们决定用PostgreSQL数据" vs "我们决定用PostgreSQL数据库"
+    // Tokens A = {postgresql, 我们,们决,决定,定用,数据} (6)
+    // Tokens B = {postgresql, 我们,们决,决定,定用,数据,据库} (7)
+    // Intersection = A → 6; Union = B → 7; Jaccard = 6/7 ≈ 0.857 ≥ 0.8 → dedup.
+    // asciiContentTokens: both have {postgresql} → NOT disjoint → asciiContentDiverges=false
+    // → sameFactCjkAware allows the dedup to proceed.
+    const state = protectedStateMerge({
+      prevState: {
+        stableFacts: { decisions: ["我们决定用PostgreSQL数据"], constraints: [] },
+        workingNotes: {},
+        todos: [],
+        volatileContext: [],
+        evidenceRefs: []
+      },
+      documents: [],
+      deltaCandidates: [decisionDelta("evt-2b", "我们决定用PostgreSQL数据库")]
+    });
+
+    // Second event matches the first at Jaccard ≈ 0.857 → reaffirm, not add → still 1 decision
+    expect(state.stableFacts.decisions).toHaveLength(1);
+  });
+
+  it("Test 3: 我对花生过敏 vs 我对海鲜过敏 → distinct (low bigram Jaccard, no ASCII tokens)", () => {
+    // Bigrams: {我对,对花,花生,生过,过敏} vs {我对,对海,海鲜,鲜过,过敏}
+    // Intersection={我对,过敏}=2; Union=8; Jaccard=0.25 ≪ 0.8 → both survive.
+    // Pure CJK → asciiContentDiverges=false (no-op); guard doesn't interfere.
+    const state = protectedStateMerge({
+      prevState: {
+        stableFacts: { decisions: ["我对花生过敏"], constraints: [] },
+        workingNotes: {},
+        todos: [],
+        volatileContext: [],
+        evidenceRefs: []
+      },
+      documents: [],
+      deltaCandidates: [decisionDelta("evt-seafood", "我对海鲜过敏")]
+    });
+
+    expect(state.stableFacts.decisions).toHaveLength(2);
+    expect(state.stableFacts.decisions).toContain("我对花生过敏");
+    expect(state.stableFacts.decisions).toContain("我对海鲜过敏");
+  });
+
+  it("★ Test 4: CJK identity write-protection — pure-Chinese identity fact in registry survives contradicting stream event", () => {
+    // "我在北京字节跳动工作" vs "我在北京字节跳动上班":
+    // Bigrams share: 我在,在北,北京,京字,字节,节跳,跳动 (7); Union=11; Jaccard≈0.636 ≥ 0.6
+    // → identityFacts.findIndex fires; isIdentityProtected must return true to block override.
+    // Before A-fix: isIdentityProtected used normalizeText (strips CJK) → Jaccard("","")=0 → unprotected (BUG)
+    // After A-fix: sameFactCjkAware uses raw strings → Jaccard=1 for self-comparison → protected ✓
+    const originalFact = "我在北京字节跳动工作";
+    const conflictingFact = "我在北京字节跳动上班";
+
+    // Phase 1: stream personal_detail event creates the fact and registers it
+    const state1 = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [{
+        eventId: "pd-1",
+        reason: "novel_event",
+        features: { kind: "note", importanceScore: 0.7, noveltyScore: 0.9 },
+        event: streamEvent("pd-1", originalFact, "personal_detail")
+      }]
+    });
+
+    expect(state1.profile?.identity).toContain(originalFact);
+    const registry1 = getActiveFactRegistry(state1);
+    expect(registry1.some((e) => e.facet === "identity" && e.content === originalFact)).toBe(true);
+
+    // Phase 2: contradicting stream event — must NOT override the write-protected original
+    const state2 = protectedStateMerge({
+      prevState: state1,
+      documents: [],
+      deltaCandidates: [{
+        eventId: "pd-2",
+        reason: "novel_event",
+        features: { kind: "note", importanceScore: 0.7, noveltyScore: 0.9 },
+        event: streamEvent("pd-2", conflictingFact, "personal_detail")
+      }]
+    });
+
+    expect(state2.profile?.identity).toContain(originalFact);
+    expect(state2.profile?.identity).not.toContain(conflictingFact);
+  });
+
+  it("Test 5: English registry / dedup behavior is unchanged (idempotence)", () => {
+    // Distinct English payloads stay distinct (low ASCII Jaccard)
+    const state1 = protectedStateMerge({
+      prevState: {
+        stableFacts: { decisions: ["we decided to use Redis for caching"], constraints: [] },
+        workingNotes: {},
+        todos: [],
+        volatileContext: [],
+        evidenceRefs: []
+      },
+      documents: [],
+      deltaCandidates: [decisionDelta("eng-1", "we decided to use PostgreSQL as the main database")]
+    });
+    expect(state1.stableFacts.decisions).toHaveLength(2);
+
+    // Near-identical English payload → dedup (Jaccard ≥ 0.8)
+    const state2 = protectedStateMerge({
+      prevState: {
+        stableFacts: { decisions: ["we decided to use Redis for caching"], constraints: [] },
+        workingNotes: {},
+        todos: [],
+        volatileContext: [],
+        evidenceRefs: []
+      },
+      documents: [],
+      deltaCandidates: [decisionDelta("eng-2", "we decided to use Redis for session caching")]
+    });
+    // Tokens: {decided,use,redis,for,caching} vs {decided,use,redis,for,session,caching}
+    // Intersection=5, Union=6, Jaccard=5/6≈0.83 ≥ 0.8 → dedup → 1 decision
+    expect(state2.stableFacts.decisions).toHaveLength(1);
+  });
+
+  it("Test 6: two different pure-CJK goals do NOT falsely collapse via \"\" === \"\" shortcut", () => {
+    // Before fix: normalizeText strips CJK → both goals → "" → "" === "" → sameGoal=true
+    //             → document goal "我们的目标是提高销售额" would NOT replace old goal (bug)
+    // After fix: normPrev.length === 0 → guard skips === → falls through to jaccardSimilarity
+    //            Jaccard("我们的目标是提升用户体验","我们的目标是提高销售额") ≈ 0.4 < 0.85 (doc threshold)
+    //            → sameGoal=false → document IS authoritative → goal updated ✓
+    const oldGoal = "我们的目标是提升用户体验";
+    const newGoal = "我们的目标是提高销售额";
+
+    const prevState: DigestState = {
+      stableFacts: { decisions: [], constraints: [], goal: oldGoal },
+      workingNotes: {},
+      todos: [],
+      volatileContext: [],
+      evidenceRefs: []
+    };
+
+    // Document containing the new goal (document authority → overwriteThreshold=0.85)
+    const docEvent = event({
+      id: "doc-goal-1",
+      scopeId: "sc",
+      userId: "u",
+      type: "document",
+      key: "goal:updated",
+      content: `goal: ${newGoal}`
+    });
+
+    const state = protectedStateMerge({
+      prevState,
+      documents: [docEvent],
+      deltaCandidates: []
+    });
+
+    // The new CJK goal must have replaced the old one (not silently swallowed by "" === "")
+    expect(state.stableFacts.goal).toBe(newGoal);
+    expect(state.stableFacts.goal).not.toBe(oldGoal);
+  });
+});

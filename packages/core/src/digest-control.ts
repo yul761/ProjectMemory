@@ -402,6 +402,39 @@ function jaccardSimilarity(a: string, b: string) {
   return union === 0 ? 0 : intersection / union;
 }
 
+/** ASCII-only content tokens: alphanumeric, length ≥ 3, derived from the normalised form. */
+function asciiContentTokens(s: string): Set<string> {
+  const normalized = normalizeText(s);
+  return new Set(
+    normalized.split(/\s+/).filter((token) => token.length >= 3 && /^[a-z0-9]+$/.test(token))
+  );
+}
+
+/**
+ * Returns true iff BOTH strings have ≥ 1 ASCII content token AND their ASCII token sets
+ * are completely disjoint. Pure-CJK facts (no ASCII tokens in either string) return false
+ * so the guard is a no-op for fully Chinese content — bigrams remain the only signal.
+ * Errs toward "distinct": a definite ASCII difference overrides bigram similarity.
+ */
+function asciiContentDiverges(a: string, b: string): boolean {
+  const tokA = asciiContentTokens(a);
+  const tokB = asciiContentTokens(b);
+  if (tokA.size === 0 || tokB.size === 0) return false;
+  return [...tokA].every((t) => !tokB.has(t));
+}
+
+/**
+ * CJK-aware "same fact" predicate used at precision-critical sites (factRegistry, identity
+ * protection). Passes RAW strings to jaccardSimilarity so CJK bigrams are used, then guards
+ * against the over-merge case where shared bigrams mask divergent ASCII content
+ * (e.g. 我决定用PostgreSQL vs 我决定用MySQL → bigram Jaccard ≈ 0.6 but ASCII sets disjoint).
+ * For English-only facts this is a no-op: tokenize() normalises ASCII internally, and
+ * asciiContentDiverges returns false when both sets share at least one token.
+ */
+function sameFactCjkAware(a: string, b: string, threshold: number): boolean {
+  return jaccardSimilarity(a, b) >= threshold && !asciiContentDiverges(a, b);
+}
+
 function evidenceWeight(ref: DigestEvidenceRef) {
   return ref.sourceType === "document" ? 1 : 0.7;
 }
@@ -940,9 +973,8 @@ function removeVolatileContextValue(input: {
 }
 
 function isInFactRegistry(state: DigestState, content: string): boolean {
-  const norm = normalizeText(content);
   return (state.factRegistry ?? []).some(
-    (entry) => !entry.supersededBy && jaccardSimilarity(normalizeText(entry.content), norm) >= 0.6
+    (entry) => !entry.supersededBy && sameFactCjkAware(entry.content, content, 0.6)
   );
 }
 
@@ -981,9 +1013,8 @@ function supersedeFact(
   overrides?: { facet?: string; confidence?: number; type?: FactRegistryEntry["type"] }
 ): void {
   if (!state.factRegistry) return;
-  const norm = normalizeText(content);
   const toSupersede = state.factRegistry.find(
-    (entry) => !entry.supersededBy && jaccardSimilarity(normalizeText(entry.content), norm) >= 0.6
+    (entry) => !entry.supersededBy && sameFactCjkAware(entry.content, content, 0.6)
   );
   if (!toSupersede) return;
   const newId = `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1018,7 +1049,7 @@ function mergeProfileFacets(
         prevFactRegistryIds.has(e.id) &&
         !e.supersededBy &&
         e.facet === "identity" &&
-        jaccardSimilarity(normalizeText(e.content), normalizeText(fact)) >= 0.6
+        sameFactCjkAware(e.content, fact, 0.6)
     );
   }
 
@@ -1123,8 +1154,13 @@ function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEviden
   // noisy conversation turns silently replacing the project goal.
   const isDocument = evidence.sourceType === "document";
   const overwriteThreshold = isDocument ? 0.85 : 0.95;
+  // Guard against the pure-CJK "" === "" pitfall: normalizeText strips CJK to spaces,
+  // so two completely different Chinese goals both normalise to "". Only treat the
+  // normalised-text shortcut as a match when the normalised form is non-empty.
+  const normPrev = normalizeText(previousGoal);
+  const normGoal = normalizeText(goal);
   const sameGoal =
-    normalizeText(previousGoal) === normalizeText(goal) ||
+    (normPrev.length > 0 && normPrev === normGoal) ||
     jaccardSimilarity(previousGoal, goal) >= overwriteThreshold;
 
   if (sameGoal) {
@@ -1330,7 +1366,7 @@ export function protectedStateMerge(input: {
         const matched = findBestDecisionMatch(next.stableFacts.decisions, revokeTarget, 0.45);
         if (matched) {
           const protectedByRegistry = (next.factRegistry ?? []).some(
-            (e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && jaccardSimilarity(normalizeText(e.content), normalizeText(matched)) >= 0.6
+            (e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && sameFactCjkAware(e.content, matched, 0.6)
           );
           if (!protectedByRegistry) {
             next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== matched);
@@ -1342,7 +1378,7 @@ export function protectedStateMerge(input: {
         const conflicting = findConflictingDecisions(next.stableFacts.decisions, text);
         for (const conflict of conflicting) {
           const protectedByRegistry = (next.factRegistry ?? []).some(
-            (e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && jaccardSimilarity(normalizeText(e.content), normalizeText(conflict)) >= 0.6
+            (e) => prevFactRegistryIds.has(e.id) && !e.supersededBy && sameFactCjkAware(e.content, conflict, 0.6)
           );
           if (!protectedByRegistry) {
             next.stableFacts.decisions = next.stableFacts.decisions.filter((item) => item !== conflict);
