@@ -289,11 +289,24 @@ export class RetrieveService {
   };
 
   private tokenize(text: string) {
-    return text
-      .toLowerCase()
+    const lower = text.toLowerCase();
+    const asciiTokens = lower
       .replace(/[^a-z0-9\s]/g, " ")
       .split(/\s+/)
       .filter((token) => token.length > 2);
+    const cjkTokens: string[] = [];
+    // Contiguous runs of CJK ideographs / Japanese kana / Korean syllables.
+    const runs = lower.match(/[一-鿿぀-ヿ가-힯]+/g) ?? [];
+    for (const run of runs) {
+      if (run.length === 1) {
+        cjkTokens.push(run); // single-char run: keep as unigram
+        continue;
+      }
+      for (let i = 0; i < run.length - 1; i += 1) {
+        cjkTokens.push(run.slice(i, i + 2)); // adjacent bigram
+      }
+    }
+    return [...asciiTokens, ...cjkTokens];
   }
 
   private scoreByQuery(query: string, content: string) {
