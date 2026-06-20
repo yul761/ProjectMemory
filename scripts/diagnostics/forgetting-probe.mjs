@@ -122,10 +122,43 @@ async function main() {
     console.log(`\n[/memory/answer 失败] ${e.message}`);
   }
 
+  // ===== 探针 B2: 把简历挤出 recency 窗口后，本体论压缩的真后果 =====
+  head("探针 B2 — 简历不再是最新事件后  (加干扰事件 → 排除 §12.6 recency 混淆)");
+  console.log("目的: B1 里简历是最新事件、进了 retrieval 块、LLM 答对 = recency 混淆。");
+  console.log("加干扰事件把简历挤出 recency 窗，再看运行时上下文(State+2×180)还能否带出公司名。\n");
+  const distractors = [
+    "明天要去超市买菜", "周三晚上和老王打羽毛球", "最近在追一部新剧",
+    "昨天下午开了个长会", "想报名一个摄影课", "周末打算去爬香山",
+    "家里的空调需要清洗了", "下个月要交房租", "今天午饭吃了牛肉面",
+    "在看一本关于历史的书", "想换一台新手机", "周五要去看牙医"
+  ];
+  for (const c of distractors) await ingest(scopeId, "stream", c);
+  await sleep(2000); // 让事件落库 (分类是异步的，retrieve 不依赖它)
+
+  const fv2 = await api("GET", `/memory/fast-view?scopeId=${scopeId}&message=${encodeURIComponent("我在哪家公司工作过")}`);
+  const stableBlock2 = fv2?.fastLayerContext?.stableStateBlock || "(none)";
+  const retrievalBlock2 = fv2?.fastLayerContext?.retrievalBlock || "(none)";
+  const inStable2 = stableBlock2.includes(COMPANY);
+  const inRetrieval2 = retrievalBlock2.includes(COMPANY);
+  console.log(`\n[编译上下文 · State 块]\n${stableBlock2}\n`);
+  console.log(`[编译上下文 · Retrieval 块]\n${retrievalBlock2}\n`);
+  console.log(`公司名「${COMPANY}」在 State 块: ${inStable2 ? "是" : "否 ★本体论压缩(同 B1)"}`);
+  console.log(`在运行时 Retrieval 块(2×180): ${inRetrieval2 ? "是 ←bigram/embedding 召回了" : "否 ←被挤出窗口=运行时长期遗忘坐实"}`);
+
+  try {
+    const ans2 = await api("POST", "/memory/answer", { scopeId, question: "我在哪家公司工作过？请说出具体公司名。" });
+    console.log(`\n[LLM 旁证 · /memory/answer (大召回 limit≈25)]\n答: ${ans2.answer}`);
+    const named2 = (ans2.answer || "").includes(COMPANY);
+    console.log(`答复含「${COMPANY}」: ${named2 ? "是 ←/answer 大召回兜住(非运行时路径)" : "否 ★连大召回都丢"}`);
+  } catch (e) {
+    console.log(`\n[/memory/answer 失败] ${e.message}`);
+  }
+
   head("裁决");
   console.log(`scope: ${scopeId}`);
   console.log("探针 A: 看 A1 ZH 是否「丢失」而 A1 EN「命中」→ 中文分词病");
   console.log("探针 B: 看公司名是否「不在 State 块」→ 本体论压缩病");
+  console.log("探针 B2: 简历挤出 recency 后，看运行时 Retrieval 块还有没有公司名 → 本体论压缩的真后果(排除 recency 混淆)");
 }
 
 main().catch((e) => { console.error("\nFATAL:", e.message); process.exit(1); });
