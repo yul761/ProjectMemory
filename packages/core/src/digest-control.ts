@@ -1041,7 +1041,9 @@ const PROFILE_FACET_ROUTING: Record<string, { facet: keyof NonNullable<DigestSta
   personal_detail: { facet: "identity", cap: 15, writeProtected: true },
   goal: { facet: "goals", cap: 8, writeProtected: true },
   life_decision: { facet: "goals", cap: 8, writeProtected: true },
-  experience: { facet: "ongoing", cap: 8, writeProtected: false }
+  experience: { facet: "ongoing", cap: 8, writeProtected: false },
+  person_note: { facet: "relationships", cap: 10, writeProtected: false },
+  commitment: { facet: "followUps", cap: 10, writeProtected: false }
 };
 
 function mergeProfileFacets(
@@ -1131,9 +1133,11 @@ function applyProfileFactsFromDigest(
     if (!state.profile.identity) state.profile.identity = [];
     const identityFacts: string[] = state.profile.identity;
 
-    // Dedup: Jaccard >= 0.6 → document supersedes existing (document > stream authority)
+    // Dedup: CJK-aware Jaccard >= 0.6 → document supersedes existing (document > stream authority).
+    // sameFactCjkAware guards against the over-merge case where shared CJK bigrams mask
+    // divergent ASCII content (e.g. 我决定用PostgreSQL vs 我决定用MySQL).
     const existingIdx = identityFacts.findIndex(
-      (fact) => jaccardSimilarity(fact, value) >= 0.6
+      (fact) => sameFactCjkAware(fact, value, 0.6)
     );
 
     if (existingIdx !== -1) {

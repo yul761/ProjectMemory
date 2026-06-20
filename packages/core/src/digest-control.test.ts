@@ -3201,8 +3201,10 @@ describe("Stage 2 — profile facet routing", () => {
 
   // Test 3: experience → profile.ongoing, NOT in factRegistry, evictable at cap 8
   it("classifiedType:experience routes to profile.ongoing, not fact-registry, evictable at cap 8", () => {
-    const experiences = Array.from({ length: 9 }, (_, i) =>
-      delta(`exp-${i}`, `正在经历事件${i}`, "experience")
+    // Use distinct city names so each entry has a unique ASCII token and Jaccard < 0.6 pairwise
+    const cities = ["Beijing", "Shanghai", "Guangzhou", "Chengdu", "Shenzhen", "Hangzhou", "Wuhan", "Xian", "Nanjing"];
+    const experiences = cities.map((city, i) =>
+      delta(`exp-${i}`, `living experience in ${city}`, "experience")
     );
     const state = protectedStateMerge({
       prevState: null,
@@ -3212,8 +3214,8 @@ describe("Stage 2 — profile facet routing", () => {
     // profile.ongoing must be populated
     expect(state.profile?.ongoing).toBeDefined();
     expect((state.profile?.ongoing ?? []).length).toBeGreaterThan(0);
-    // Capped at 8 — one evicted
-    expect((state.profile?.ongoing ?? []).length).toBeLessThanOrEqual(8);
+    // Capped at 8 — exactly one evicted
+    expect((state.profile?.ongoing ?? []).length).toBe(8);
     // None of the ongoing entries should be in the factRegistry
     const ongoingInRegistry = (state.factRegistry ?? []).some((e) => e.facet === "ongoing");
     expect(ongoingInRegistry).toBe(false);
@@ -3345,5 +3347,181 @@ describe("Stage 2 — profile facet routing", () => {
     // Original must survive; near-duplicate must NOT replace it
     expect(state2.profile?.identity).toContain(originalFact);
     expect(state2.profile?.identity).not.toContain(nearDuplicate);
+  });
+});
+
+// Stage 3 — person_note / commitment routing + CJK identity dedup fix
+// ---------------------------------------------------------------------------
+describe("Stage 3 — person_note / commitment routing", () => {
+  function streamEvent(id: string, content: string, classifiedType?: string): MemoryEvent {
+    return event({ id, scopeId: "sc", userId: "u", type: "stream", content, classifiedType: classifiedType ?? null });
+  }
+
+  function delta(id: string, content: string, classifiedType?: string): import("./digest-control").DeltaCandidate {
+    return {
+      eventId: id,
+      reason: "novel_event",
+      features: { kind: "note", importanceScore: 0.6, noveltyScore: 0.9 },
+      event: streamEvent(id, content, classifiedType)
+    };
+  }
+
+  // Test 1: person_note → profile.relationships, NOT in factRegistry, evictable at cap 10
+  it("classifiedType:person_note routes to profile.relationships, not fact-registry, evictable at cap 10", () => {
+    // Use distinct city names so each entry has a unique ASCII token → Jaccard < 0.6 between any pair
+    const cities = ["Beijing", "Shanghai", "Guangzhou", "Chengdu", "Shenzhen", "Hangzhou", "Wuhan", "Xian", "Nanjing", "Chongqing", "Tianjin"];
+    const notes = cities.map((city, i) =>
+      delta(`pn-${i}`, `friend lives in ${city}`, "person_note")
+    );
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: notes
+    });
+    expect(state.profile?.relationships).toBeDefined();
+    expect((state.profile?.relationships ?? []).length).toBe(10);
+    const inRegistry = (state.factRegistry ?? []).some((e) => e.facet === "relationships");
+    expect(inRegistry).toBe(false);
+  });
+
+  // Test 2: commitment → profile.followUps, NOT in factRegistry, evictable at cap 10
+  it("classifiedType:commitment routes to profile.followUps, not fact-registry, evictable at cap 10", () => {
+    // Use distinct compound names so each entry has a unique ASCII token → Jaccard < 0.6 between any pair
+    const names = ["AliceBrown", "BobDavis", "CarolEvans", "DavidFisher", "EveGarcia", "FrankHoward", "GraceIverson", "HarryJordan", "IrisKing", "JackLopez", "KateMason"];
+    const commitments = names.map((name, i) =>
+      delta(`cm-${i}`, `follow with ${name}`, "commitment")
+    );
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: commitments
+    });
+    expect(state.profile?.followUps).toBeDefined();
+    expect((state.profile?.followUps ?? []).length).toBe(10);
+    const inRegistry = (state.factRegistry ?? []).some((e) => e.facet === "followUps");
+    expect(inRegistry).toBe(false);
+  });
+
+  // Test 3: distinct relationships / CJK with diverging ASCII / near-identical dedup
+  it("distinct relationships stay distinct; CJK+diverging ASCII stay distinct; near-identical dedup", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("r1", "老王在Google上班", "person_note"),
+        delta("r2", "老王在Meta上班", "person_note"),   // diverging ASCII → must stay distinct
+        delta("r3", "老王在Google工作", "person_note")  // near-identical to r1 → dedup
+      ]
+    });
+    const rels = state.profile?.relationships ?? [];
+    // r2 (Meta) is distinct from r1 (Google) — ASCII divergence prevents dedup
+    expect(rels).toContain("老王在Meta上班");
+    // r3 deduped with r1, replacing it (VOLATILE: most-recent wins); exactly one Google entry remains
+    expect(rels.find((r) => r.includes("Google"))).toBeDefined();
+    expect(rels.length).toBe(2);
+  });
+
+  // Test 4: feeling/emotional_pattern NOT routed (regression guard)
+  it("feeling and emotional_pattern events do NOT appear in any profile facet (regression guard)", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("f1", "今天很开心", "feeling"),
+        delta("ep1", "最近常常焦虑", "emotional_pattern")
+      ]
+    });
+    expect(state.profile).toBeUndefined();
+  });
+
+  // Test 5: project scope with no profile-eligible events → profile stays undefined (lazy-init)
+  it("events with non-profile classifiedTypes → profile stays undefined (lazy-init correct)", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("n1", "We decide to use Postgres", undefined),
+        delta("n2", "status update: queue is stable", undefined)
+      ]
+    });
+    expect(state.profile).toBeUndefined();
+  });
+
+  // Test 6: Stage 1/2 behavior UNCHANGED (non-regression)
+  it("identity/goals/ongoing (Stage 1/2) routing unchanged with new Stage 3 entries", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("pd1", "工作经历: 字节跳动 后端工程师 2019-2022", "personal_detail"),
+        delta("g1", "减肥到70公斤", "goal"),
+        delta("exp1", "正在参加马拉松训练", "experience")
+      ]
+    });
+    expect(state.profile?.identity).toContain("工作经历: 字节跳动 后端工程师 2019-2022");
+    expect(state.profile?.goals).toContain("减肥到70公斤");
+    expect(state.profile?.ongoing).toContain("正在参加马拉松训练");
+  });
+
+  // Test 7: Folded fix A — applyProfileFactsFromDigest keeps CJK identity facts with
+  // diverging ASCII payloads distinct (sameFactCjkAware guard now applied).
+  it("applyProfileFactsFromDigest keeps CJK identity facts with diverging ASCII payload distinct", async () => {
+    const fact1 = "我决定用PostgreSQL";
+    const fact2 = "我决定用MySQL";
+
+    // Simulate state where fact1 is already in identity (via a prior document digest)
+    const prevState = normalizeDigestState({
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      profile: { identity: [fact1] },
+      factRegistry: [{
+        id: "fact-id-1",
+        content: fact1,
+        type: "profile",
+        facet: "identity",
+        confidence: 0.85,
+        addedAt: "2026-06-20T00:00:00.000Z",
+        evidenceId: "doc-1",
+        evidenceType: "document"
+      }]
+    });
+
+    // Mock LLM returns profileFacts with fact2 extracted from a new document
+    const llm = {
+      chat: async () => JSON.stringify({
+        summary: "Processed database decision document.",
+        changes: ["Noted MySQL decision"],
+        nextSteps: ["review db choice"],
+        profileFacts: [{ facet: "identity", value: fact2 }]
+      })
+    };
+
+    const docEvt = event({ id: "doc-2", scopeId: "sc", userId: "u", type: "document", key: "doc:db2", content: "我决定用MySQL" });
+
+    const result = await runDigestControlPipeline({
+      scope: { id: "sc", userId: "u", name: "Test", goal: "", stage: "build", createdAt: new Date() },
+      lastDigest: null,
+      prevState,
+      recentEvents: [docEvt],
+      llm,
+      prompts: {
+        digestStage2SystemPrompt: "system",
+        digestStage2UserPrompt: "{{scopeName}} {{lastDigest}} {{protectedState}} {{deltaCandidates}} {{documents}}"
+      },
+      config: {
+        eventBudgetTotal: 10,
+        eventBudgetDocs: 5,
+        eventBudgetStream: 5,
+        noveltyThreshold: 0.5,
+        maxRetries: 0,
+        useLlmClassifier: false,
+        debug: false
+      }
+    });
+
+    // Both facts must be present — ASCII divergence (PostgreSQL vs MySQL) prevents dedup
+    expect(result.state.profile?.identity).toContain(fact1);
+    expect(result.state.profile?.identity).toContain(fact2);
   });
 });
