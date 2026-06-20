@@ -277,7 +277,12 @@ export const StateLayerView = z.object({
   decisions: z.array(z.string()),
   todos: z.array(z.string()),
   openQuestions: z.array(z.string()),
-  risks: z.array(z.string())
+  risks: z.array(z.string()),
+  identity: z.array(z.string()).optional(),
+  relationships: z.array(z.string()).optional(),
+  ongoing: z.array(z.string()).optional(),
+  goals: z.array(z.string()).optional(),
+  followUps: z.array(z.string()).optional()
 });
 export type StateLayerView = z.infer<typeof StateLayerView>;
 
@@ -486,7 +491,14 @@ export const DigestState = z.object({
       key: z.string().optional(),
       kind: MemoryEventKind.optional()
     })
-  })).optional()
+  })).optional(),
+  profile: z.object({
+    identity: z.array(z.string()).optional(),
+    relationships: z.array(z.string()).optional(),
+    ongoing: z.array(z.string()).optional(),
+    goals: z.array(z.string()).optional(),
+    followUps: z.array(z.string()).optional()
+  }).optional()
 });
 export type DigestState = z.infer<typeof DigestState>;
 

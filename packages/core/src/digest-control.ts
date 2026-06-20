@@ -46,17 +46,25 @@ export interface DigestState {
   transitionSummary?: Record<string, number>;
   recentChanges?: DigestStateChange[];
   factRegistry?: FactRegistryEntry[];
+  profile?: {
+    identity?: string[];
+    relationships?: string[];
+    ongoing?: string[];
+    goals?: string[];
+    followUps?: string[];
+  };
 }
 
 export interface FactRegistryEntry {
   id: string;
   content: string;
-  type: "decision" | "constraint";
+  type: "decision" | "constraint" | "profile";
   confidence: number;
   addedAt: string;
   evidenceId: string;
   evidenceType: "event" | "document";
   supersededBy?: string;
+  facet?: string;
 }
 
 export interface DigestEvidenceRef {
@@ -279,7 +287,16 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
     recentChanges: normalizeRecentChanges(base.recentChanges),
     factRegistry: ((base as DigestState).factRegistry ?? [])
       .filter((entry) => !entry.supersededBy)
-      .slice(-100)
+      .slice(-100),
+    profile: (base as DigestState).profile
+      ? {
+          identity: ((base as DigestState).profile!.identity ?? []).slice(0, 15),
+          relationships: ((base as DigestState).profile!.relationships ?? []).slice(0, 10),
+          ongoing: ((base as DigestState).profile!.ongoing ?? []).slice(0, 8),
+          goals: ((base as DigestState).profile!.goals ?? []).slice(0, 8),
+          followUps: ((base as DigestState).profile!.followUps ?? []).slice(0, 10)
+        }
+      : undefined
   };
 }
 

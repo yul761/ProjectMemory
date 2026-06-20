@@ -10,6 +10,7 @@
     "eval": "tsx src/eval/run-cli.ts"
   },
   "dependencies": {
+    "@statecore/contracts": "workspace:*",
     "@statecore/db": "workspace:*",
     "pino": "^9.5.0",
     "zod": "^3.24.1"
