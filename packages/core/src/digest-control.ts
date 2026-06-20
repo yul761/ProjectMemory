@@ -740,7 +740,7 @@ function findBestSemanticMatch(values: string[], candidate: string, threshold = 
       best = { value, score };
     }
   }
-  return best && best.score >= threshold ? best.value : null;
+  return best && sameFactCjkAware(best.value, candidate, threshold) ? best.value : null;
 }
 
 function extractNumberTokens(value: string) {
@@ -849,7 +849,7 @@ function stripWorkingNoteResolutionPrefix(text: string) {
 
 function findBestWorkingNoteMatch(values: string[] | undefined, candidate: string, threshold = 0.45) {
   const normalizedCandidate = stripWorkingNoteResolutionPrefix(candidate);
-  let best: { value: string; score: number } | null = null;
+  let best: { value: string; normalizedValue: string; score: number } | null = null;
   for (const value of values ?? []) {
     const normalizedValue = stripWorkingNoteResolutionPrefix(value);
     const normA = normalizeText(normalizedValue);
@@ -860,10 +860,10 @@ function findBestWorkingNoteMatch(values: string[] | undefined, candidate: strin
         ? 1
         : jaccardSimilarity(normalizedValue, normalizedCandidate);
     if (!best || score > best.score) {
-      best = { value, score };
+      best = { value, normalizedValue, score };
     }
   }
-  return best && best.score >= threshold ? best.value : null;
+  return best && sameFactCjkAware(best.normalizedValue, normalizedCandidate, threshold) ? best.value : null;
 }
 
 function upsertValueProvenance(

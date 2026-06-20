@@ -3525,3 +3525,215 @@ describe("Stage 3 — person_note / commitment routing", () => {
     expect(result.state.profile?.identity).toContain(fact2);
   });
 });
+
+describe("P1 hardening — sameFactCjkAware guard on findBestSemanticMatch / findBestWorkingNoteMatch", () => {
+  // Helper to build a minimal prevState with openQuestions
+  function prevStateWithQuestions(questions: string[]): DigestState {
+    return {
+      stableFacts: { goal: "ship alpha", constraints: [], decisions: [] },
+      workingNotes: {
+        openQuestions: questions
+      },
+      todos: [],
+      volatileContext: [],
+      provenance: {
+        openQuestions: questions.map((q, i) => ({
+          value: q,
+          refs: [{ id: `evt-q-${i}`, sourceType: "event" as const, kind: "question" }]
+        }))
+      },
+      recentChanges: [],
+      evidenceRefs: []
+    };
+  }
+
+  // Helper to build a minimal prevState with risks
+  function prevStateWithRisks(risks: string[]): DigestState {
+    return {
+      stableFacts: { goal: "ship alpha", constraints: [], decisions: [] },
+      workingNotes: {
+        risks
+      },
+      todos: [],
+      volatileContext: [],
+      provenance: {
+        risks: risks.map((r, i) => ({
+          value: r,
+          refs: [{ id: `evt-r-${i}`, sourceType: "event" as const, kind: "note" }]
+        }))
+      },
+      recentChanges: [],
+      evidenceRefs: []
+    };
+  }
+
+  // Test 1: CJK working-notes over-merge prevented (★ required to FAIL before, PASS after)
+  it("Test 1: CJK openQuestions with diverging ASCII (PostgreSQL vs MySQL) stay distinct, not merged", () => {
+    const q1 = "关于PostgreSQL的配置是否正确";
+    const q2 = "关于MySQL的配置是否正确";
+
+    const merged = protectedStateMerge({
+      prevState: prevStateWithQuestions([q1]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "evt-q2",
+          reason: "novel_event",
+          features: { kind: "question", importanceScore: 0.7, noveltyScore: 0.9 },
+          event: event({ id: "evt-q2", scopeId: "sc", userId: "u", type: "stream", content: q2 })
+        }
+      ]
+    });
+
+    // Both questions must be present — ASCII divergence (PostgreSQL vs MySQL) prevents over-merge
+    expect(merged.workingNotes.openQuestions).toHaveLength(2);
+    expect(merged.workingNotes.openQuestions).toContain(q1);
+    expect(merged.workingNotes.openQuestions).toContain(q2);
+  });
+
+  // Test 2: Near-identical CJK working notes still DEDUP (must pass before AND after)
+  it("Test 2: Near-identical CJK openQuestions (same ASCII, minor CJK diff) dedup to 1 entry", () => {
+    const q1 = "关于PostgreSQL的配置是否正确";
+    const q2 = "关于PostgreSQL配置是否正确"; // missing 的 — high jaccard, same ASCII
+
+    const merged = protectedStateMerge({
+      prevState: prevStateWithQuestions([q1]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "evt-q2",
+          reason: "novel_event",
+          features: { kind: "question", importanceScore: 0.7, noveltyScore: 0.9 },
+          event: event({ id: "evt-q2", scopeId: "sc", userId: "u", type: "stream", content: q2 })
+        }
+      ]
+    });
+
+    // Same ASCII token (postgresql) → not diverging → dedup → only 1 entry
+    expect(merged.workingNotes.openQuestions).toHaveLength(1);
+  });
+
+  // Test 3: English regression guard (must pass before AND after)
+  it("Test 3A: Distinct English risks (low jaccard) remain as 2 separate risk entries", () => {
+    const r1 = "risk: the frontend might have rendering delays with large lists";
+    const r2 = "risk: blocked on database schema migration";
+
+    const merged = protectedStateMerge({
+      prevState: prevStateWithRisks([r1]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "evt-r2",
+          reason: "novel_event",
+          features: { kind: "note", importanceScore: 0.6, noveltyScore: 0.9 },
+          event: event({ id: "evt-r2", scopeId: "sc", userId: "u", type: "stream", content: r2 })
+        }
+      ]
+    });
+
+    // Low jaccard between distinct risks → both stay
+    expect(merged.workingNotes.risks).toHaveLength(2);
+    expect(merged.workingNotes.risks).toContain(r1);
+    expect(merged.workingNotes.risks).toContain(r2);
+  });
+
+  it("Test 3B: Near-identical English risks (high jaccard, shared ASCII tokens) dedup to 1 entry", () => {
+    const r1 = "risk: the API might hit rate limits under heavy load";
+    const r2 = "risk: the API might hit rate limits";
+
+    const merged = protectedStateMerge({
+      prevState: prevStateWithRisks([r1]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "evt-r2",
+          reason: "novel_event",
+          features: { kind: "note", importanceScore: 0.6, noveltyScore: 0.9 },
+          event: event({ id: "evt-r2", scopeId: "sc", userId: "u", type: "stream", content: r2 })
+        }
+      ]
+    });
+
+    // High jaccard + shared ASCII tokens → sameFactCjkAware = true → dedup → 1 entry
+    expect(merged.workingNotes.risks).toHaveLength(1);
+  });
+
+  // Test 4: supersedeFact CJK (must pass before AND after — supersedeFact already uses sameFactCjkAware)
+  it("Test 4: Near-identical CJK identity fact superseded by document-authority entry (confidence 0.85, type profile)", async () => {
+    const oldFact = "我是字节跳动的后端工程师";
+    const newFact = "我是字节跳动的资深后端工程师";
+    const oldFactId = "fact-old-identity";
+
+    const prevState = normalizeDigestState({
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      profile: { identity: [oldFact] },
+      factRegistry: [{
+        id: oldFactId,
+        content: oldFact,
+        type: "profile",
+        facet: "identity",
+        confidence: 0.7,
+        addedAt: "2026-01-01T00:00:00.000Z",
+        evidenceId: "stream-evt-old",
+        evidenceType: "event"
+      }]
+    });
+
+    const mockLlm = {
+      chat: async () => JSON.stringify({
+        summary: "Processed updated profile document.",
+        changes: ["Updated identity fact."],
+        nextSteps: ["Review updated identity."],
+        profileFacts: [{ facet: "identity", value: newFact }]
+      })
+    };
+
+    const docEvt = event({
+      id: "doc-identity-update",
+      scopeId: "sc",
+      userId: "u",
+      type: "document",
+      key: "doc:identity",
+      content: newFact,
+      createdAt: new Date("2026-06-20T12:00:00Z")
+    });
+
+    const result = await runDigestControlPipeline({
+      scope: { id: "sc", userId: "u", name: "personal", goal: null, stage: "build", createdAt: new Date() },
+      lastDigest: null,
+      prevState,
+      recentEvents: [docEvt],
+      llm: mockLlm,
+      prompts: {
+        digestStage2SystemPrompt: "Output JSON only.",
+        digestStage2UserPrompt: "{{scopeName}} {{lastDigest}} {{protectedState}} {{deltaCandidates}} {{documents}}"
+      },
+      config: {
+        eventBudgetTotal: 10,
+        eventBudgetDocs: 5,
+        eventBudgetStream: 5,
+        noveltyThreshold: 0.5,
+        maxRetries: 0,
+        useLlmClassifier: false,
+        debug: false
+      }
+    });
+
+    // Old fact must be superseded
+    const allRegistry = result.state.factRegistry ?? [];
+    const oldEntry = allRegistry.find((e) => e.id === oldFactId);
+    expect(oldEntry).toBeDefined();
+    expect(oldEntry!.supersededBy).toBeDefined();
+
+    // New active entry must have document-authority attributes
+    const activeRegistry = getActiveFactRegistry(result.state);
+    const newEntry = activeRegistry.find((e) => e.content === newFact);
+    expect(newEntry).toBeDefined();
+    expect(newEntry!.facet).toBe("identity");
+    expect(newEntry!.confidence).toBe(0.85);
+    expect(newEntry!.type).toBe("profile");
+    expect(newEntry!.evidenceType).toBe("document");
+  });
+});
