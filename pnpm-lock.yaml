@@ -226,6 +226,9 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@statecore/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       tsx:
         specifier: ^4.19.2
         version: 4.21.0

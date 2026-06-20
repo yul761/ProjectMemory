@@ -10,12 +10,12 @@
     "eval": "tsx src/eval/run-cli.ts"
   },
   "dependencies": {
-    "@statecore/contracts": "workspace:*",
     "@statecore/db": "workspace:*",
     "pino": "^9.5.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@statecore/contracts": "workspace:*",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
