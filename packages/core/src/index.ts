@@ -68,6 +68,7 @@ export interface ProjectScope {
   name: string;
   goal?: string | null;
   stage: ProjectStage;
+  template?: string | null;
   createdAt: Date;
 }
 

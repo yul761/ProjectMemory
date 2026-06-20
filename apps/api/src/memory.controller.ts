@@ -29,6 +29,7 @@ import {
   AssistantSession,
   buildGroundingEvidence,
   buildRelationshipContext,
+  buildRuntimeSystemPrompt,
   type ChatModel,
   compileFastLayerContext,
   compileStateLayerView,
@@ -38,7 +39,8 @@ import {
   createRuntimeRecallPolicy,
   createModelProvider,
   generateAnswer,
-  getActiveFactRegistry
+  getActiveFactRegistry,
+  getDomainConfig
 } from "@statecore/core";
 import { z } from "zod";
 import { prisma } from "@statecore/db";
@@ -302,7 +304,8 @@ export class MemoryController {
       recallLimit?: number;
       promoteLongFormToDocumented?: boolean;
       digestOnCandidate?: boolean;
-      }
+    },
+    personaPrompt?: string | null
   ) {
     if (!this.runtimeLlm) {
       throw new BadRequestException("FEATURE_LLM disabled");
@@ -334,7 +337,7 @@ export class MemoryController {
       }),
       llm: this.runtimeLlm,
       prompts: {
-        system: runtimeSystemPrompt,
+        system: buildRuntimeSystemPrompt(personaPrompt ?? null, runtimeSystemPrompt),
         user: runtimeUserPrompt
       },
       runtimeResponseOptions: {
@@ -412,7 +415,15 @@ export class MemoryController {
     }
   ) {
     const policyProfile = input.policyProfile ?? "default";
-    const session = this.createRuntimeSession(userId, input.scopeId, policyProfile, input.policyOverrides);
+    const scope = await this.domain.projectService.getScope(userId, input.scopeId);
+    const personaPrompt = getDomainConfig(scope?.template).defaultPersonaPrompt ?? null;
+    const session = this.createRuntimeSession(
+      userId,
+      input.scopeId,
+      policyProfile,
+      input.policyOverrides,
+      personaPrompt
+    );
     return session.handleTurn({
       message: input.message,
       source: input.source ?? "api",
