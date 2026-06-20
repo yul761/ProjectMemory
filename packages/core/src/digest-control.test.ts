@@ -13,6 +13,7 @@ import {
   type SelectedEvent
 } from "./digest-control";
 import type { MemoryEvent } from "./index";
+import { compileStateLayerView, formatStateLayerView } from "./working-memory.compiler";
 
 function event(partial: Partial<MemoryEvent> & Pick<MemoryEvent, "id" | "scopeId" | "userId" | "content" | "type">): MemoryEvent {
   return {
@@ -2676,5 +2677,156 @@ describe("doc→identity: applyProfileFactsFromDigest via generateDigestStage2",
     // profileFacts must survive alignment
     expect(digest.profileFacts).toBeDefined();
     expect(digest.profileFacts?.some((pf) => pf.value.includes("字节跳动"))).toBe(true);
+  });
+});
+
+describe("E2E Probe B2 — resume document → profile.identity → State block", () => {
+  const mockPersonalLlm = {
+    chat: async (_messages: { role: "system" | "user"; content: string }[]) => {
+      return JSON.stringify({
+        summary: "Processed personal resume document.",
+        changes: ["Work history at 字节跳动 ingested from resume."],
+        nextSteps: ["Review extracted identity facts for accuracy."],
+        profileFacts: [
+          { facet: "identity", value: "工作经历: 字节跳动 后端工程师 2019-2022" },
+          { facet: "identity", value: "教育: 北京大学 计算机科学 2015-2019" },
+          { facet: "identity", value: "技能: Go, Python, 分布式系统" }
+        ]
+      });
+    }
+  };
+
+  const mockProjectLlm = {
+    chat: async (_messages: { role: "system" | "user"; content: string }[]) => {
+      return JSON.stringify({
+        summary: "Architecture review session completed.",
+        changes: ["Decision to use Postgres finalized."],
+        nextSteps: ["Document the database schema design."]
+        // no profileFacts
+      });
+    }
+  };
+
+  const baseConfig = {
+    eventBudgetTotal: 10,
+    eventBudgetDocs: 5,
+    eventBudgetStream: 5,
+    noveltyThreshold: 0.4,
+    maxRetries: 0,
+    useLlmClassifier: false,
+    debug: false
+  };
+
+  const basePrompts = {
+    digestStage2SystemPrompt: "Output JSON only.",
+    digestStage2UserPrompt: "{{protectedState}} {{documents}}"
+  };
+
+  it("字节跳动 appears in the rendered State block under 你是谁/档案: after resume digest", async () => {
+    const resumeDoc = event({
+      id: "doc-resume-b2",
+      scopeId: "sc-personal-b2",
+      userId: "u1",
+      type: "document",
+      key: "resume:main",
+      content: "工作经历: 字节跳动 后端工程师 2019-2022\n教育: 北京大学 计算机科学 2015-2019",
+      createdAt: new Date("2026-06-20T10:00:00Z")
+    });
+
+    const result = await runDigestControlPipeline({
+      scope: {
+        id: "sc-personal-b2",
+        userId: "u1",
+        name: "personal",
+        goal: null,
+        stage: "active",
+        createdAt: new Date()
+      },
+      recentEvents: [resumeDoc],
+      llm: mockPersonalLlm,
+      prompts: basePrompts,
+      config: baseConfig
+    });
+
+    // Probe B2 north-star: 字节跳动 must appear in the rendered State block under 你是谁/档案:
+    const rendered = formatStateLayerView(compileStateLayerView(result.state));
+    expect(rendered).toContain("你是谁/档案:");
+    expect(rendered).toContain("字节跳动");
+  });
+
+  it("project-template non-regression: no profile sections, stable goal retained", async () => {
+    const projectEvent = event({
+      id: "e-decision-b2",
+      scopeId: "sc-project-b2",
+      userId: "u1",
+      type: "stream",
+      content: "We decide to use Postgres for the main database",
+      createdAt: new Date("2026-06-20T10:00:00Z")
+    });
+
+    const result = await runDigestControlPipeline({
+      scope: {
+        id: "sc-project-b2",
+        userId: "u1",
+        name: "DEMS",
+        goal: "ship stable API",
+        stage: "build",
+        createdAt: new Date()
+      },
+      recentEvents: [projectEvent],
+      llm: mockProjectLlm,
+      prompts: basePrompts,
+      config: baseConfig
+    });
+
+    // Pipeline always initializes profile.identity=[] even for project scopes;
+    // the spec requirement is that no profile CONTENT is present.
+    const profileContent = [
+      ...(result.state.profile?.identity ?? []),
+      ...(result.state.profile?.relationships ?? []),
+      ...(result.state.profile?.ongoing ?? []),
+      ...(result.state.profile?.goals ?? []),
+      ...(result.state.profile?.followUps ?? [])
+    ];
+    expect(profileContent).toHaveLength(0);
+
+    const rendered = formatStateLayerView(compileStateLayerView(result.state));
+    expect(rendered).not.toContain("你是谁");
+    expect(rendered).not.toContain("人际");
+    expect(rendered).not.toContain("正在经历");
+    expect(rendered).toContain("Stable goal: ship stable API");
+  });
+
+  it("identity facts are write-protected: factRegistry has facet=identity entries at 0.85 confidence after resume digest", async () => {
+    const resumeDoc = event({
+      id: "doc-resume-b2-wp",
+      scopeId: "sc-personal-b2-wp",
+      userId: "u1",
+      type: "document",
+      key: "resume:secondary",
+      content: "工作经历: 字节跳动 后端工程师 2019-2022",
+      createdAt: new Date("2026-06-20T11:00:00Z")
+    });
+
+    const result = await runDigestControlPipeline({
+      scope: {
+        id: "sc-personal-b2-wp",
+        userId: "u1",
+        name: "personal",
+        goal: null,
+        stage: "active",
+        createdAt: new Date()
+      },
+      recentEvents: [resumeDoc],
+      llm: mockPersonalLlm,
+      prompts: basePrompts,
+      config: baseConfig
+    });
+
+    const identityEntries = (result.state.factRegistry ?? []).filter(
+      (e) => !e.supersededBy && e.facet === "identity"
+    );
+    expect(identityEntries.length).toBeGreaterThan(0);
+    expect(identityEntries.some((e) => e.confidence >= 0.85)).toBe(true);
   });
 });
