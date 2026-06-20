@@ -120,11 +120,13 @@ export const RetrieveInput = z.object({
 export const FactRegistryEntrySchema = z.object({
   id: z.string(),
   content: z.string(),
-  type: z.enum(["decision", "constraint"]),
+  type: z.enum(["decision", "constraint", "profile"]),
   confidence: z.number().min(0).max(1),
   addedAt: z.string(),
   evidenceId: z.string(),
-  evidenceType: z.enum(["event", "document"])
+  evidenceType: z.enum(["event", "document"]),
+  supersededBy: z.string().optional(),
+  facet: z.string().optional()
 });
 
 export const RetrieveOutput = z.object({
