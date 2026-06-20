@@ -2749,6 +2749,7 @@ describe("E2E Probe B2 — resume document → profile.identity → State block"
     });
 
     // Probe B2 north-star: 字节跳动 must appear in the rendered State block under 你是谁/档案:
+    expect(result.state.profile?.identity).toBeDefined();
     const rendered = formatStateLayerView(compileStateLayerView(result.state));
     expect(rendered).toContain("你是谁/档案:");
     expect(rendered).toContain("字节跳动");
@@ -2779,16 +2780,7 @@ describe("E2E Probe B2 — resume document → profile.identity → State block"
       config: baseConfig
     });
 
-    // Pipeline always initializes profile.identity=[] even for project scopes;
-    // the spec requirement is that no profile CONTENT is present.
-    const profileContent = [
-      ...(result.state.profile?.identity ?? []),
-      ...(result.state.profile?.relationships ?? []),
-      ...(result.state.profile?.ongoing ?? []),
-      ...(result.state.profile?.goals ?? []),
-      ...(result.state.profile?.followUps ?? [])
-    ];
-    expect(profileContent).toHaveLength(0);
+    expect(result.state.profile).toBeUndefined();
 
     const rendered = formatStateLayerView(compileStateLayerView(result.state));
     expect(rendered).not.toContain("你是谁");

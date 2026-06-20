@@ -973,6 +973,7 @@ function mergeProfileFacets(
   events: MemoryEvent[],
   prevFactRegistryIds: Set<string>
 ): void {
+  if (!events.some((e) => e.classifiedType === "personal_detail")) return;
   if (!state.profile) state.profile = {};
   if (!state.profile.identity) state.profile.identity = [];
 
@@ -1027,6 +1028,7 @@ function applyProfileFactsFromDigest(
   profileFacts: { facet: string; value: string }[],
   documents: MemoryEvent[]
 ): void {
+  if (!profileFacts.some((pf) => pf.facet === "identity")) return;
   if (!state.profile) state.profile = {};
   const IDENTITY_CAP = 15;
 
