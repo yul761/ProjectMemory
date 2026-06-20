@@ -124,6 +124,7 @@ export interface DigestOutput {
   summary: string;
   changes: string[];
   nextSteps: string[];
+  profileFacts?: { facet: string; value: string }[];
 }
 
 export interface DigestConsistencyResult {
@@ -135,7 +136,11 @@ export interface DigestConsistencyResult {
 export const DigestOutputSchema = z.object({
   summary: z.string(),
   changes: z.array(z.string()),
-  nextSteps: z.array(z.string())
+  nextSteps: z.array(z.string()),
+  profileFacts: z.array(z.object({
+    facet: z.string(),
+    value: z.string()
+  })).optional()
 });
 
 const DEFAULT_DIGEST_STATE: DigestState = {
@@ -1009,6 +1014,53 @@ function mergeProfileFacets(
   }
 }
 
+function applyProfileFactsFromDigest(
+  state: DigestState,
+  profileFacts: { facet: string; value: string }[],
+  documents: MemoryEvent[]
+): void {
+  if (!state.profile) state.profile = {};
+  const IDENTITY_CAP = 15;
+
+  // Use the last document as evidence (document authority 0.85)
+  const latestDoc = documents.length > 0 ? documents[documents.length - 1] : null;
+  const docEvidence: DigestEvidenceRef | null = latestDoc
+    ? { id: latestDoc.id, sourceType: "document", key: latestDoc.key ?? undefined }
+    : null;
+
+  for (const pf of profileFacts) {
+    if (pf.facet !== "identity") continue; // Stage 1: only identity
+    const value = pf.value.trim();
+    if (!value) continue;
+
+    if (!state.profile.identity) state.profile.identity = [];
+    const identityFacts = state.profile.identity;
+
+    // Dedup: Jaccard >= 0.6 → document supersedes existing (document > stream authority)
+    const existingIdx = identityFacts.findIndex(
+      (fact) => jaccardSimilarity(fact, value) >= 0.6
+    );
+
+    if (existingIdx !== -1) {
+      const existing = identityFacts[existingIdx];
+      // Document supersedes existing (even write-protected stream entries)
+      if (docEvidence) {
+        supersedeFact(state, existing, value, docEvidence);
+      }
+      identityFacts[existingIdx] = value;
+      continue;
+    }
+
+    // Cap: document facts are high-value; if at cap, don't add (avoid evicting protected entries)
+    if (identityFacts.length >= IDENTITY_CAP) continue;
+
+    identityFacts.push(value);
+    if (docEvidence) {
+      promoteToFactRegistry(state, value, "profile", 0.85, docEvidence, "identity");
+    }
+  }
+}
+
 function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEvidenceRef) {
   const previousGoal = next.stableFacts.goal?.trim();
   if (!previousGoal) {
@@ -1641,7 +1693,8 @@ function alignDigestWithState(output: DigestOutput, state: DigestState): DigestO
   return {
     summary: buildProjectedSummary(state, output.summary),
     changes: selectAlignedChanges(output, state),
-    nextSteps: selectAlignedNextSteps(output, state)
+    nextSteps: selectAlignedNextSteps(output, state),
+    profileFacts: output.profileFacts
   };
 }
 
@@ -1833,7 +1886,10 @@ export async function generateDigestStage2(input: {
     const normalized: DigestOutput = {
       summary: validated.data.summary.trim(),
       changes: validated.data.changes.map((c) => c.trim()).filter(Boolean).slice(0, 3),
-      nextSteps: validated.data.nextSteps.map((n) => n.trim()).filter(Boolean).slice(0, 3)
+      nextSteps: validated.data.nextSteps.map((n) => n.trim()).filter(Boolean).slice(0, 3),
+      profileFacts: (validated.data.profileFacts ?? [])
+        .map((pf) => ({ facet: pf.facet.trim(), value: pf.value.trim() }))
+        .filter((pf) => Boolean(pf.facet) && Boolean(pf.value))
     };
 
     const aligned = alignDigestWithState(normalized, input.protectedState);
@@ -1977,6 +2033,11 @@ export async function runDigestControlPipeline(input: {
     maxRetries: input.config.maxRetries
   });
   metrics.generationMs = Date.now() - tGenerate;
+
+  // Apply profile facts extracted by LLM from documents into stable state
+  if (digest.profileFacts && digest.profileFacts.length > 0) {
+    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents);
+  }
 
   const resolvedGoal = input.scope.goal?.trim() || undefined;
   if (resolvedGoal && !state.stableFacts.goal) {

@@ -2424,3 +2424,62 @@ describe("mergeProfileFacets — stream routing via protectedStateMerge", () => 
     expect(state.profile?.identity ?? []).toHaveLength(0);
   });
 });
+
+describe("doc→identity: applyProfileFactsFromDigest via generateDigestStage2", () => {
+  it("mock LLM returning profileFacts routes facet=identity into state.profile.identity", async () => {
+    const mockLlm = {
+      chat: async (_messages: { role: "system" | "user"; content: string }[]) => {
+        return JSON.stringify({
+          summary: "Processed resume with work history.",
+          changes: ["Resume ingested for 字节跳动."],
+          nextSteps: ["Review extracted identity facts."],
+          profileFacts: [
+            { facet: "identity", value: "工作经历: 字节跳动 后端工程师 2019-2022" },
+            { facet: "identity", value: "教育: 北京大学 计算机科学 2015-2019" }
+          ]
+        });
+      }
+    };
+
+    const resumeDoc = event({
+      id: "doc-resume",
+      scopeId: "sc",
+      userId: "u",
+      type: "document",
+      key: "resume:main",
+      content: "工作经历: 字节跳动 后端工程师 2019-2022\n教育: 北京大学 计算机科学 2015-2019",
+      createdAt: new Date("2026-06-20T10:00:00Z")
+    });
+
+    const baseState: DigestState = {
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      factRegistry: []
+    };
+
+    const scope = {
+      id: "sc",
+      userId: "u",
+      name: "personal",
+      goal: null,
+      stage: "active" as const,
+      createdAt: new Date()
+    };
+
+    const digest = await generateDigestStage2({
+      scope,
+      protectedState: baseState,
+      deltaCandidates: [],
+      documents: [resumeDoc],
+      llm: mockLlm,
+      systemPrompt: "Output JSON only.",
+      userPromptTemplate: "{{protectedState}} {{documents}}",
+      maxRetries: 0
+    });
+
+    // profileFacts must survive alignment
+    expect(digest.profileFacts).toBeDefined();
+    expect(digest.profileFacts?.some((pf) => pf.value.includes("字节跳动"))).toBe(true);
+  });
+});

@@ -5,6 +5,7 @@ Rules:
 - summary must be <= 120 words.
 - changes must be <= 3 bullets.
 - nextSteps must be 1-3 concrete actionable tasks.
+- profileFacts: array of {facet, value} pairs. Extract ONLY from document bodies (resumes, profiles, bios). Use facet "identity" for durable personal facts: 工作经历, 教育, 技能, 联系方式 lines. Each value must be a self-contained fact line (e.g. "工作经历: 字节跳动 后端工程师 2019-2022"). Omit profileFacts entirely if no documents contain personal profile data. Do not invent.
 - Do not invent facts not present in the provided evidence.`;
 
 export const digestStage2UserPrompt = `Context:
@@ -24,8 +25,9 @@ Delta candidates:
 Latest documents:
 {{documents}}
 
-Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[]}
-goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).`;
+Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[], "profileFacts": [{"facet": string, "value": string}]}
+goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).
+profileFacts: only include when Latest documents contain personal identity data (resume, bio). Use facet "identity".`;
 
 export const digestClassifySystemPrompt = `Classify memory events for digest selection.
 Return strict JSON array where each item has:
