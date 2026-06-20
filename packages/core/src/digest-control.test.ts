@@ -1540,6 +1540,54 @@ describe("consistencyCheck", () => {
   });
 });
 
+describe("consistencyCheck — profile_identity_contradiction", () => {
+  const protectedState: DigestState = {
+    stableFacts: { decisions: [] },
+    workingNotes: {},
+    todos: [],
+    factRegistry: [
+      {
+        id: "fact-identity-1",
+        content: "工作经历: 字节跳动 后端工程师 2019-2022",
+        type: "profile",
+        facet: "identity",
+        confidence: 0.85,
+        addedAt: "2026-06-20T00:00:00.000Z",
+        evidenceId: "doc-resume",
+        evidenceType: "document"
+      }
+    ],
+    profile: {
+      identity: ["工作经历: 字节跳动 后端工程师 2019-2022"]
+    }
+  };
+
+  it("emits profile_identity_contradiction when summary negates a protected identity fact", () => {
+    const result = consistencyCheck({
+      output: {
+        summary: "The user no longer worked at 字节跳动 from 2019-2022.",
+        changes: ["工作经历 at 字节跳动 was incorrect."],
+        nextSteps: ["Update the resume."]
+      },
+      protectedState
+    });
+    expect(result.errors).toContain("profile_identity_contradiction");
+  });
+
+  it("does NOT emit profile_identity_contradiction when identity fact is mentioned without negation", () => {
+    const result = consistencyCheck({
+      output: {
+        summary: "Processed resume showing 字节跳动 backend role 2019-2022.",
+        changes: ["Ingested work history entry for 字节跳动."],
+        nextSteps: ["Review extracted profile for accuracy."]
+      },
+      protectedState
+    });
+    expect(result.errors).not.toContain("profile_identity_contradiction");
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe("generateDigestStage2", () => {
   it("appends LLM narrative to state-projected summary when both are present", async () => {
     const llm = {

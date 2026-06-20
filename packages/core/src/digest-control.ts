@@ -1816,6 +1816,18 @@ export function consistencyCheck(input: {
     }
   }
 
+  // Profile identity: check write-protected identity facts in factRegistry
+  const identityNegation = /\b(not|no longer|incorrect|wrong|remove|delete|revoke|cancel|never)\b/;
+  const protectedIdentityFacts = (input.protectedState.factRegistry ?? [])
+    .filter((e) => !e.supersededBy && e.facet === "identity")
+    .map((e) => e.content);
+  for (const fact of protectedIdentityFacts) {
+    if (mentionsFactWithNegation(combinedText, fact, identityNegation)) {
+      errors.push("profile_identity_contradiction");
+      break;
+    }
+  }
+
   if (input.previousDigest) {
     const prevChanges = new Set(input.previousDigest.changes.split("\n").map(normalizeBullet).filter(Boolean));
     const nextChanges = new Set(input.output.changes.map(normalizeBullet).filter(Boolean));
