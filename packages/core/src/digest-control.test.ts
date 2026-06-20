@@ -3151,3 +3151,199 @@ describe("CJK drift-protection (chunk 1b)", () => {
     expect(state.stableFacts.goal).not.toBe(oldGoal);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Stage 2 — profile facet routing (goal / life_decision / experience)
+// ---------------------------------------------------------------------------
+describe("Stage 2 — profile facet routing", () => {
+  function streamEvent(id: string, content: string, classifiedType?: string): MemoryEvent {
+    return event({ id, scopeId: "sc", userId: "u", type: "stream", content, classifiedType: classifiedType ?? null });
+  }
+
+  function delta(id: string, content: string, classifiedType?: string): import("./digest-control").DeltaCandidate {
+    return {
+      eventId: id,
+      reason: "novel_event",
+      features: { kind: "note", importanceScore: 0.6, noveltyScore: 0.9 },
+      event: streamEvent(id, content, classifiedType)
+    };
+  }
+
+  // Test 1: goal → profile.goals, write-protected
+  it("classifiedType:goal routes to profile.goals and is write-protected", () => {
+    const state1 = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [delta("g1", "减肥到70公斤", "goal")]
+    });
+    expect(state1.profile?.goals).toContain("减肥到70公斤");
+
+    // Write-protect: contradicting stream event must NOT override
+    const state2 = protectedStateMerge({
+      prevState: state1,
+      documents: [],
+      deltaCandidates: [delta("g2", "减肥到80公斤", "goal")]
+    });
+    // Original fact is write-protected — the near-duplicate stream cannot replace it
+    expect(state2.profile?.goals).toContain("减肥到70公斤");
+    expect(state2.profile?.goals).not.toContain("减肥到80公斤");
+  });
+
+  // Test 2: life_decision → profile.goals
+  it("classifiedType:life_decision routes to profile.goals", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [delta("ld1", "决定明年移居加拿大", "life_decision")]
+    });
+    expect(state.profile?.goals).toContain("决定明年移居加拿大");
+  });
+
+  // Test 3: experience → profile.ongoing, NOT in factRegistry, evictable at cap 8
+  it("classifiedType:experience routes to profile.ongoing, not fact-registry, evictable at cap 8", () => {
+    const experiences = Array.from({ length: 9 }, (_, i) =>
+      delta(`exp-${i}`, `正在经历事件${i}`, "experience")
+    );
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: experiences
+    });
+    // profile.ongoing must be populated
+    expect(state.profile?.ongoing).toBeDefined();
+    expect((state.profile?.ongoing ?? []).length).toBeGreaterThan(0);
+    // Capped at 8 — one evicted
+    expect((state.profile?.ongoing ?? []).length).toBeLessThanOrEqual(8);
+    // None of the ongoing entries should be in the factRegistry
+    const ongoingInRegistry = (state.factRegistry ?? []).some((e) => e.facet === "ongoing");
+    expect(ongoingInRegistry).toBe(false);
+  });
+
+  // Test 4a: distinct CJK goals stay distinct
+  it("distinct CJK goals 减肥 vs 找工作 stay as separate profile.goals entries", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("g-diet", "减肥", "goal"),
+        delta("g-job", "找工作", "goal")
+      ]
+    });
+    expect(state.profile?.goals).toContain("减肥");
+    expect(state.profile?.goals).toContain("找工作");
+    expect(state.profile?.goals?.length).toBe(2);
+  });
+
+  // Test 4b: CJK goals with diverging ASCII payload stay distinct
+  it("CJK goals with diverging ASCII: 学习Python vs 学习Java stay distinct", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("g-py", "学习Python", "goal"),
+        delta("g-java", "学习Java", "goal")
+      ]
+    });
+    expect(state.profile?.goals).toContain("学习Python");
+    expect(state.profile?.goals).toContain("学习Java");
+    expect(state.profile?.goals?.length).toBe(2);
+  });
+
+  // Test 4c: near-identical goals dedup
+  it("near-identical goals dedup within profile.goals", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("g-a", "减肥到70公斤", "goal"),
+        delta("g-b", "减肥70公斤", "goal")
+      ]
+    });
+    // Should dedup to 1 entry
+    expect((state.profile?.goals ?? []).length).toBe(1);
+  });
+
+  // Test 5: feeling / emotional_pattern NOT in profile
+  it("feeling and emotional_pattern events do NOT appear in any profile facet", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("f1", "今天很开心", "feeling"),
+        delta("ep1", "最近常常焦虑", "emotional_pattern")
+      ]
+    });
+    expect(state.profile).toBeUndefined();
+  });
+
+  // Test 6: project scope with no profile-eligible events → profile stays undefined
+  it("events with non-profile classifiedTypes → profile stays undefined", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("n1", "We decide to use Postgres", undefined),
+        delta("n2", "status update: queue is stable", undefined)
+      ]
+    });
+    expect(state.profile).toBeUndefined();
+  });
+
+  // Test 7: consistency check — negating a write-protected goals fact → profile_goals_contradiction
+  it("consistencyCheck emits profile_goals_contradiction when summary negates a registry-protected goals fact", () => {
+    const protectedState: DigestState = {
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      factRegistry: [
+        {
+          id: "fact-goals-1",
+          content: "减肥到70公斤",
+          type: "profile",
+          facet: "goals",
+          confidence: 0.7,
+          addedAt: "2026-06-20T00:00:00.000Z",
+          evidenceId: "evt-g1",
+          evidenceType: "event"
+        }
+      ],
+      profile: { goals: ["减肥到70公斤"] }
+    };
+    const result = consistencyCheck({
+      output: {
+        summary: "用户不再想减肥到70公斤，已放弃该目标。",
+        changes: ["已移除减肥目标"],
+        nextSteps: ["更新个人目标清单"]
+      },
+      protectedState
+    });
+    expect(result.errors).toContain("profile_goals_contradiction");
+  });
+
+  // Test 8: existing identity behavior unchanged — personal_detail → identity, write-protected
+  it("personal_detail still routes to profile.identity and is write-protected", () => {
+    const originalFact = "工作经历: 字节跳动 后端工程师 2019-2022";
+    const state1 = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [delta("pd1", originalFact, "personal_detail")]
+    });
+    expect(state1.profile?.identity).toContain(originalFact);
+
+    // Should be in factRegistry with facet=identity
+    const registry = getActiveFactRegistry(state1);
+    expect(registry.some((e) => e.facet === "identity")).toBe(true);
+
+    // Write-protected: a near-identical stream event (same CJK bigrams, same ASCII tokens)
+    // cannot replace the protected original fact
+    const nearDuplicate = "工作经历: 字节跳动 后端工程师 2019-2022 (updated)";
+    const state2 = protectedStateMerge({
+      prevState: state1,
+      documents: [],
+      deltaCandidates: [delta("pd2", nearDuplicate, "personal_detail")]
+    });
+    // Original must survive; near-duplicate must NOT replace it
+    expect(state2.profile?.identity).toContain(originalFact);
+    expect(state2.profile?.identity).not.toContain(nearDuplicate);
+  });
+});

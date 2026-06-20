@@ -1032,58 +1032,79 @@ function supersedeFact(
   state.factRegistry.push(newEntry);
 }
 
+// Facet routing table for Stage 2 (extends Stage 1).
+// writeProtected=true: entry is promoted to factRegistry with `facet` tag;
+//   stream events cannot override protected entries; cap eviction skips protected.
+// writeProtected=false (VOLATILE): append/dedup via CJK-aware Jaccard; evictable at cap;
+//   no factRegistry entry.
+const PROFILE_FACET_ROUTING: Record<string, { facet: keyof NonNullable<DigestState["profile"]>; cap: number; writeProtected: boolean }> = {
+  personal_detail: { facet: "identity", cap: 15, writeProtected: true },
+  goal: { facet: "goals", cap: 8, writeProtected: true },
+  life_decision: { facet: "goals", cap: 8, writeProtected: true },
+  experience: { facet: "ongoing", cap: 8, writeProtected: false }
+};
+
 function mergeProfileFacets(
   state: DigestState,
   events: MemoryEvent[],
   prevFactRegistryIds: Set<string>
 ): void {
-  if (!events.some((e) => e.classifiedType === "personal_detail")) return;
+  // Lazy-init guard: only initialise profile if at least one event is routable
+  if (!events.some((e) => e.classifiedType != null && e.classifiedType in PROFILE_FACET_ROUTING)) return;
   if (!state.profile) state.profile = {};
-  if (!state.profile.identity) state.profile.identity = [];
 
-  const IDENTITY_CAP = 15;
-
-  function isIdentityProtected(fact: string): boolean {
+  function isProtectedInFacet(facetName: string, fact: string): boolean {
     return (state.factRegistry ?? []).some(
       (e) =>
         prevFactRegistryIds.has(e.id) &&
         !e.supersededBy &&
-        e.facet === "identity" &&
+        e.facet === facetName &&
         sameFactCjkAware(e.content, fact, 0.6)
     );
   }
 
   for (const evt of events) {
-    if (evt.classifiedType !== "personal_detail") continue;
+    const route = evt.classifiedType != null ? PROFILE_FACET_ROUTING[evt.classifiedType] : undefined;
+    if (!route) continue;
     const incomingValue = evt.content.trim();
     if (!incomingValue) continue;
 
-    const identityFacts: string[] = state.profile.identity!;
+    const { facet, cap, writeProtected } = route;
+    if (!state.profile[facet]) (state.profile as Record<string, string[]>)[facet] = [];
+    const facetFacts: string[] = (state.profile as Record<string, string[]>)[facet]!;
 
-    // Dedup: Jaccard >= 0.6 within facet
-    const existingIdx = identityFacts.findIndex(
-      (fact) => jaccardSimilarity(fact, incomingValue) >= 0.6
+    // Dedup: CJK-aware Jaccard >= 0.6 within facet
+    const existingIdx = facetFacts.findIndex(
+      (fact) => sameFactCjkAware(fact, incomingValue, 0.6)
     );
 
     if (existingIdx !== -1) {
-      const existing = identityFacts[existingIdx];
-      if (isIdentityProtected(existing)) continue; // write-protected — stream cannot override
-      identityFacts[existingIdx] = incomingValue; // replace unprotected near-duplicate
+      const existing = facetFacts[existingIdx];
+      if (writeProtected && isProtectedInFacet(facet, existing)) continue; // write-protected — stream cannot override
+      facetFacts[existingIdx] = incomingValue; // replace unprotected near-duplicate
       continue;
     }
 
-    // Cap enforcement: if at limit, evict the first unprotected entry
-    if (identityFacts.length >= IDENTITY_CAP) {
-      const unprotectedIdx = identityFacts.findIndex((fact) => !isIdentityProtected(fact));
-      if (unprotectedIdx === -1) continue; // all protected, cannot evict — discard incoming
-      identityFacts.splice(unprotectedIdx, 1);
+    // Cap enforcement
+    if (facetFacts.length >= cap) {
+      if (writeProtected) {
+        // Evict first unprotected entry; if all protected, discard incoming
+        const unprotectedIdx = facetFacts.findIndex((fact) => !isProtectedInFacet(facet, fact));
+        if (unprotectedIdx === -1) continue;
+        facetFacts.splice(unprotectedIdx, 1);
+      } else {
+        // Volatile: evict first (index 0 = weakest/oldest)
+        facetFacts.splice(0, 1);
+      }
     }
 
-    identityFacts.push(incomingValue);
+    facetFacts.push(incomingValue);
 
-    // Write-protect this new identity fact via factRegistry
-    const evidence: DigestEvidenceRef = { id: evt.id, sourceType: "event" };
-    promoteToFactRegistry(state, incomingValue, "profile", 0.7, evidence, "identity");
+    // Write-protect via factRegistry (write-protected facets only)
+    if (writeProtected) {
+      const evidence: DigestEvidenceRef = { id: evt.id, sourceType: "event" };
+      promoteToFactRegistry(state, incomingValue, "profile", 0.7, evidence, facet);
+    }
   }
 }
 
@@ -1887,15 +1908,26 @@ export function consistencyCheck(input: {
     }
   }
 
-  // Profile identity: check write-protected identity facts in factRegistry
-  const identityNegation = /\b(not|no longer|incorrect|wrong|remove|delete|revoke|cancel|never)\b/;
-  const protectedIdentityFacts = (input.protectedState.factRegistry ?? [])
-    .filter((e) => !e.supersededBy && e.facet === "identity")
-    .map((e) => e.content);
-  for (const fact of protectedIdentityFacts) {
-    if (mentionsFactWithNegation(combinedText, fact, identityNegation)) {
-      errors.push("profile_identity_contradiction");
-      break;
+  // Profile write-protected facets: check identity and goals facts in factRegistry.
+  // Generalised to iterate all write-protected facets so adding new ones (Stage 3+) requires
+  // only a PROFILE_FACET_ROUTING entry — no additional consistency-check wiring.
+  // CJK chars have no ASCII word boundaries, so list them without \b anchors.
+  const profileNegation = /\b(not|no longer|incorrect|wrong|remove|delete|revoke|cancel|never)\b|放弃|移除|错误|不再/;
+  const writeProtectedFacets = Object.values(PROFILE_FACET_ROUTING)
+    .filter((r) => r.writeProtected)
+    .map((r) => r.facet);
+  const checkedFacets = new Set<string>();
+  for (const facetName of writeProtectedFacets) {
+    if (checkedFacets.has(facetName)) continue;
+    checkedFacets.add(facetName);
+    const protectedFacts = (input.protectedState.factRegistry ?? [])
+      .filter((e) => !e.supersededBy && e.facet === facetName)
+      .map((e) => e.content);
+    for (const fact of protectedFacts) {
+      if (mentionsFactWithNegation(combinedText, fact, profileNegation)) {
+        errors.push(`profile_${facetName}_contradiction`);
+        break;
+      }
     }
   }
 
