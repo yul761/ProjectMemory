@@ -11,6 +11,13 @@ type PartialDigestState = {
     openQuestions?: string[];
     risks?: string[];
   };
+  profile?: {
+    identity?: string[];
+    relationships?: string[];
+    ongoing?: string[];
+    goals?: string[];
+    followUps?: string[];
+  };
 } | null;
 
 export interface WorkingMemoryView {
@@ -29,6 +36,11 @@ export interface StateLayerView {
   todos: string[];
   openQuestions: string[];
   risks: string[];
+  identity?: string[];
+  relationships?: string[];
+  ongoing?: string[];
+  goals?: string[];
+  followUps?: string[];
 }
 
 export function compileWorkingMemoryView(state?: WorkingMemoryState | null, scopeGoal?: string | null): WorkingMemoryView {
@@ -49,7 +61,12 @@ export function compileStateLayerView(state?: PartialDigestState): StateLayerVie
     decisions: state?.stableFacts?.decisions ?? [],
     todos: state?.todos ?? [],
     openQuestions: state?.workingNotes?.openQuestions ?? [],
-    risks: state?.workingNotes?.risks ?? []
+    risks: state?.workingNotes?.risks ?? [],
+    identity: state?.profile?.identity,
+    relationships: state?.profile?.relationships,
+    ongoing: state?.profile?.ongoing,
+    goals: state?.profile?.goals,
+    followUps: state?.profile?.followUps
   };
 }
 
@@ -83,5 +100,10 @@ export function formatStateLayerView(view?: StateLayerView | null) {
   pushSection(lines, "Durable todos", view.todos);
   pushSection(lines, "Open questions", view.openQuestions);
   pushSection(lines, "Risks", view.risks);
+  pushSection(lines, "你是谁/档案", view.identity);
+  pushSection(lines, "人际", view.relationships);
+  pushSection(lines, "正在经历", view.ongoing);
+  pushSection(lines, "目标", view.goals);
+  pushSection(lines, "待跟进", view.followUps);
   return lines.length ? lines.join("\n") : "(none)";
 }
