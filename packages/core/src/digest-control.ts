@@ -402,11 +402,27 @@ function jaccardSimilarity(a: string, b: string) {
   return union === 0 ? 0 : intersection / union;
 }
 
-/** ASCII-only content tokens: alphanumeric, length ≥ 3, derived from the normalised form. */
+/**
+ * ASCII-only content tokens derived using the SAME path as tokenize()'s ASCII branch:
+ * normalizeText → split → strip trailing colons → filter length > 2 → apply synonyms.
+ * This guarantees the ascii-content set is a strict subset of jaccardSimilarity's token set,
+ * so if jaccard(a, b) >= threshold for English, the shared tokens are also in both ascii sets
+ * → sets intersect → asciiContentDiverges returns false → guard is a true no-op for English.
+ * CJK chars are stripped to spaces by normalizeText and never enter the ascii set — the
+ * PostgreSQL-vs-MySQL divergence guard for CJK is fully preserved.
+ */
 function asciiContentTokens(s: string): Set<string> {
   const normalized = normalizeText(s);
   return new Set(
-    normalized.split(/\s+/).filter((token) => token.length >= 3 && /^[a-z0-9]+$/.test(token))
+    normalized
+      .split(/\s+/)
+      .map((token) => token.replace(/:+$/g, ""))
+      .filter((token) => token.length > 2)
+      .map((token) => {
+        if (token === "docs" || token === "doc") return "documentation";
+        if (token === "blocker") return "blocked";
+        return token;
+      })
   );
 }
 

@@ -1374,6 +1374,118 @@ describe("protectedStateMerge", () => {
     expect(normalized.transitionSummary).toEqual({});
   });
 
+  // ★ Test 1 (colon-compound counterexample): RED before fix, GREEN after.
+  // "api:v1", "type:json", "cache:redis" are the ONLY tokens shared between the question
+  // and the decision's stripped form. Old asciiContentTokens rejects them (has colon),
+  // leaving {"broken?"} vs {"use","approach","now"} — disjoint → guard fires → NOT resolved.
+  // New asciiContentTokens includes them → sets intersect → guard is no-op → resolved.
+  it("resolves openQuestion whose only shared tokens are colon-compound (ascii-colon-token fix)", () => {
+    const prevState: DigestState = {
+      stableFacts: { decisions: [] },
+      workingNotes: { openQuestions: ["api:v1 type:json cache:redis broken?"] },
+      todos: []
+    };
+
+    const merged = protectedStateMerge({
+      prevState,
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "e-colon-decision",
+          reason: "stable_fact_signal",
+          features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0 },
+          event: event({
+            id: "e-colon-decision",
+            scopeId: "sc",
+            userId: "u",
+            type: "stream",
+            // "we will" stripped by stripWorkingNoteResolutionPrefix → "use api:v1 type:json cache:redis approach now"
+            // jaccard with question (stripped) ≈ 0.43 ≥ 0.35 threshold
+            content: "we will use api:v1 type:json cache:redis approach now"
+          })
+        }
+      ]
+    });
+
+    // With the fix: colon tokens included in asciiContentTokens → sets intersect →
+    // asciiContentDiverges = false → sameFactCjkAware = true → question is removed.
+    expect(merged.workingNotes.openQuestions).toHaveLength(0);
+    expect(merged.workingNotes.openQuestions).not.toContain("api:v1 type:json cache:redis broken?");
+    expect(merged.recentChanges).toContainEqual(
+      expect.objectContaining({ field: "openQuestions", action: "remove", value: "api:v1 type:json cache:redis broken?" })
+    );
+  });
+
+  // Test 2: English regression — ordinary plain-text matching unchanged.
+  it("resolves plain-English openQuestion without colons (ordinary English regression unchanged)", () => {
+    const prevState: DigestState = {
+      stableFacts: { decisions: [] },
+      workingNotes: { openQuestions: ["should we deploy to staging first"] },
+      todos: []
+    };
+
+    const merged = protectedStateMerge({
+      prevState,
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "e-eng-decision",
+          reason: "stable_fact_signal",
+          features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0 },
+          event: event({
+            id: "e-eng-decision",
+            scopeId: "sc",
+            userId: "u",
+            type: "stream",
+            // jaccard ≈ 0.75 ≥ 0.35; plain tokens (deploy, staging, first) shared
+            content: "we will deploy to staging first"
+          })
+        }
+      ]
+    });
+
+    // No change in behavior: plain English tokens behave identically in old and new code.
+    expect(merged.workingNotes.openQuestions).toHaveLength(0);
+  });
+
+  // Test 3: CJK guard regression — PostgreSQL vs MySQL still treated as distinct.
+  it("keeps CJK decisions differing only in ASCII tech name distinct (CJK guard still fires)", () => {
+    // jaccard("我们已经决定用postgresql来存储所有数据", "我们已经决定用mysql来存储所有数据") ≈ 0.86
+    // which is above findBestDecisionMatch default threshold (0.8).
+    // Without the guard they would merge; guard fires because
+    // asciiContentTokens → {"postgresql"} vs {"mysql"} → disjoint.
+    // The fix does NOT change this: normalizeText strips CJK to spaces,
+    // so CJK chars never enter the ascii set in either old or new code.
+    const prevState: DigestState = {
+      stableFacts: { decisions: ["我们已经决定用postgresql来存储所有数据"] },
+      workingNotes: {},
+      todos: []
+    };
+
+    const merged = protectedStateMerge({
+      prevState,
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "e-cjk-decision",
+          reason: "stable_fact_signal",
+          features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0 },
+          event: event({
+            id: "e-cjk-decision",
+            scopeId: "sc",
+            userId: "u",
+            type: "stream",
+            content: "我们已经决定用mysql来存储所有数据"
+          })
+        }
+      ]
+    });
+
+    // Both decisions must be present: guard fires → not merged.
+    expect(merged.stableFacts.decisions).toContain("我们已经决定用postgresql来存储所有数据");
+    expect(merged.stableFacts.decisions).toContain("我们已经决定用mysql来存储所有数据");
+  });
+
   it("treats recent changes and transition summary as snapshot-local", () => {
     const merged = protectedStateMerge({
       prevState: {
