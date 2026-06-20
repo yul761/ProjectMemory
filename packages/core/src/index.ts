@@ -662,3 +662,4 @@ export { getDomainConfig, KNOWN_TEMPLATES } from "./domain-configs/index";
 export type { DomainConfig, EntityTypeConfig } from "./domain-configs/types";
 export type { RelationshipContext } from "./relationship-context";
 export { buildRelationshipContext } from "./relationship-context";
+export { buildRuntimeSystemPrompt } from "./runtime-system-prompt";
