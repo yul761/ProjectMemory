@@ -107,7 +107,9 @@ export class LlmClient {
               ? { reasoning_effort: options.reasoningEffort }
               : {})
           }),
-          signal: controller.signal
+          // Cast: duplicate @types/node in the tree (vitest pulls v25, workspace pins v22)
+          // produces two incompatible global AbortSignal defs, triggering a spurious TS2769.
+          signal: controller.signal as any
         });
 
         if (!response.ok) {
@@ -164,7 +166,9 @@ export class EmbeddingClient {
             model: this.model,
             input
           }),
-          signal: controller.signal
+          // Cast: duplicate @types/node in the tree (vitest pulls v25, workspace pins v22)
+          // produces two incompatible global AbortSignal defs, triggering a spurious TS2769.
+          signal: controller.signal as any
         });
 
         if (!response.ok) {

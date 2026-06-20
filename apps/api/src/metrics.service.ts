@@ -1,9 +1,9 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { prisma as defaultPrisma } from "@statecore/db";
 
 @Injectable()
 export class MetricsService {
-  constructor(private readonly db: typeof defaultPrisma = defaultPrisma) {}
+  constructor(@Optional() private readonly db: typeof defaultPrisma = defaultPrisma) {}
 
   async getDigestMetrics(scopeId: string) {
     const [total, failed, last] = await Promise.all([

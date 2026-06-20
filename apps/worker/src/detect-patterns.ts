@@ -25,7 +25,7 @@ export function groupSimilarFeelings<T extends { id: string; content: string }>(
 }
 
 export async function runDetectEmotionalPatternsJob(
-  llm: { chat: (messages: { role: string; content: string }[]) => Promise<string> },
+  llm: { chat: (messages: { role: "system" | "user"; content: string }[]) => Promise<string> },
   db: typeof defaultPrisma = defaultPrisma
 ): Promise<void> {
   const scopes = await (db as any).projectScope.findMany({

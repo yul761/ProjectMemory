@@ -8,7 +8,7 @@ export interface ContradictionResult {
 export async function checkContradiction(
   scopeId: string,
   content: string,
-  llm: { chat: (messages: { role: string; content: string }[]) => Promise<string> },
+  llm: { chat: (messages: { role: "system" | "user"; content: string }[]) => Promise<string> },
   db: typeof defaultPrisma = defaultPrisma
 ): Promise<ContradictionResult> {
   const snapshot = await (db as any).digestStateSnapshot.findFirst({
