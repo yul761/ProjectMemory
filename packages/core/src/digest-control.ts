@@ -1964,11 +1964,14 @@ export function consistencyCheck(input: {
   const vague = /^(clarify|improve|consider|optimize|iterate)\b/i;
   for (const step of input.output.nextSteps) {
     const normalized = step.trim();
-    if (vague.test(normalized) && tokenize(normalized).length < 4) {
+    // English-only heuristics cannot evaluate CJK text — skip both checks for steps
+    // containing CJK characters to avoid false positives on legitimate Chinese next-steps.
+    const hasCjk = /[一-鿿぀-ヿ가-힯]/.test(normalized);
+    if (!hasCjk && vague.test(normalized) && tokenize(normalized).length < 4) {
       errors.push("vague_next_step");
       continue;
     }
-    if (!actionable.test(normalized) && tokenize(normalized).length < 4) {
+    if (!hasCjk && !actionable.test(normalized) && tokenize(normalized).length < 4) {
       warnings.push("weak_next_step");
     }
   }

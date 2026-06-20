@@ -1651,6 +1651,59 @@ describe("consistencyCheck", () => {
 
     expect(result.warnings).not.toContain("todo_omission");
   });
+
+  // ★ CJK guard: English actionability heuristics can't judge non-English text.
+  // RED before fix (Chinese step hits weak_next_step), GREEN after (hasCjk guard skips it).
+  it("★ CJK guard: short Chinese next step does not flag weak_next_step", () => {
+    const result = consistencyCheck({
+      output: {
+        summary: "完成了基础功能开发，系统运行稳定，各模块协调正常。",
+        changes: ["增加了追踪模块"],
+        nextSteps: ["增加追踪"]
+      },
+      protectedState: {
+        stableFacts: { decisions: [] },
+        workingNotes: {},
+        todos: []
+      }
+    });
+    expect(result.warnings).not.toContain("weak_next_step");
+    expect(result.ok).toBe(true);
+  });
+
+  // English regression: short non-actionable step must still be flagged (behavior unchanged).
+  it("English regression: short non-actionable English step still flags weak_next_step", () => {
+    const result = consistencyCheck({
+      output: {
+        summary: "Worked on benchmark polish and queue cleanup.",
+        changes: ["Updated benchmark markdown output"],
+        nextSteps: ["stuff"]
+      },
+      protectedState: {
+        stableFacts: { decisions: [] },
+        workingNotes: {},
+        todos: []
+      }
+    });
+    expect(result.warnings).toContain("weak_next_step");
+  });
+
+  // Sanity: English actionable step must NOT flag weak_next_step.
+  it("English sanity: actionable English step does not flag weak_next_step", () => {
+    const result = consistencyCheck({
+      output: {
+        summary: "Worked on benchmark polish and queue cleanup.",
+        changes: ["Updated benchmark markdown output"],
+        nextSteps: ["add consistency tracking metric"]
+      },
+      protectedState: {
+        stableFacts: { decisions: [] },
+        workingNotes: {},
+        todos: []
+      }
+    });
+    expect(result.warnings).not.toContain("weak_next_step");
+  });
 });
 
 describe("consistencyCheck — profile_identity_contradiction", () => {
