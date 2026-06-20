@@ -2822,3 +2822,122 @@ describe("E2E Probe B2 — resume document → profile.identity → State block"
     expect(identityEntries.some((e) => e.confidence >= 0.85)).toBe(true);
   });
 });
+
+describe("CJK bigram tokenizer (engine-level)", () => {
+  // Helper: minimal DigestState with decisions pre-seeded
+  function stateWithDecisions(decisions: string[]): import("./digest-control").DigestState {
+    return {
+      stableFacts: { decisions, constraints: [], goal: undefined },
+      workingNotes: {},
+      todos: [],
+      volatileContext: [],
+      evidenceRefs: []
+    };
+  }
+
+  it("deduplicates near-identical Chinese decisions (high Jaccard via CJK bigrams)", () => {
+    // "我们决定用PostgreSQL管理数据" vs "我们决定用PostgreSQL管理数据库"
+    // Bigrams of "我们决定用": 我们,们决,决定,定用; "管理数据": 管理,理数,数据
+    // Bigrams of "我们决定用": same 4; "管理数据库": 管理,理数,数据,据库
+    // ASCII: ["postgresql"] in both
+    // Intersection = {postgresql,我们,们决,决定,定用,管理,理数,数据} = 8; Union = 9 → Jaccard ≈ 0.89 ≥ 0.8 → dedup
+    const state2 = protectedStateMerge({
+      prevState: stateWithDecisions(["我们决定用PostgreSQL管理数据"]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "cjk-e1",
+          reason: "novel_event",
+          features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0.3 },
+          event: event({
+            id: "cjk-e1",
+            scopeId: "sc",
+            userId: "u",
+            type: "stream",
+            content: "我们决定用PostgreSQL管理数据库"
+          })
+        }
+      ]
+    });
+    expect(state2.stableFacts.decisions).toHaveLength(1);
+  });
+
+  it("★ OVER-MERGE GUARD: genuinely different Chinese facts are NOT deduped", () => {
+    // "我对花生过敏" vs "我喜欢打篮球"
+    // Bigrams: {我对,对花,花生,生过,过敏} vs {我喜,喜欢,欢打,打篮,篮球} — zero overlap → Jaccard = 0 ≪ 0.8
+    const state2 = protectedStateMerge({
+      prevState: stateWithDecisions(["我对花生过敏"]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "cjk-e2",
+          reason: "novel_event",
+          features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0.9 },
+          event: event({
+            id: "cjk-e2",
+            scopeId: "sc",
+            userId: "u",
+            type: "stream",
+            content: "我喜欢打篮球"
+          })
+        }
+      ]
+    });
+    expect(state2.stableFacts.decisions).toHaveLength(2);
+    expect(state2.stableFacts.decisions).toContain("我对花生过敏");
+    expect(state2.stableFacts.decisions).toContain("我喜欢打篮球");
+  });
+
+  it("English/ASCII dedup behavior is unchanged by CJK path", () => {
+    // "use Redis for caching" vs "use Redis for session caching"
+    // Tokens: {use,redis,for,caching} vs {use,redis,for,session,caching}
+    // Intersection = 4, Union = 5 → Jaccard = 0.8 ≥ 0.8 → dedup
+    const state2 = protectedStateMerge({
+      prevState: stateWithDecisions(["use Redis for caching"]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "cjk-e3",
+          reason: "novel_event",
+          features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0.3 },
+          event: event({
+            id: "cjk-e3",
+            scopeId: "sc",
+            userId: "u",
+            type: "stream",
+            content: "use Redis for session caching"
+          })
+        }
+      ]
+    });
+    expect(state2.stableFacts.decisions).toHaveLength(1);
+  });
+
+  it("mixed script (CJK + ASCII) produces distinct decisions when content differs", () => {
+    // "用 Redis 做缓存" vs "用 PostgreSQL 做主存储"
+    // CJK tokens in first: 用(unigram), 做缓,缓存; ASCII: redis
+    // CJK tokens in second: 用(unigram), 做主,主存,存储; ASCII: postgresql
+    // Intersection = {用} = 1; Union = 8 → Jaccard = 0.125 ≪ 0.8 → both facts survive
+    const state2 = protectedStateMerge({
+      prevState: stateWithDecisions(["用 Redis 做缓存"]),
+      documents: [],
+      deltaCandidates: [
+        {
+          eventId: "cjk-e4",
+          reason: "novel_event",
+          features: { kind: "decision", importanceScore: 0.9, noveltyScore: 0.9 },
+          event: event({
+            id: "cjk-e4",
+            scopeId: "sc",
+            userId: "u",
+            type: "stream",
+            content: "用 PostgreSQL 做主存储"
+          })
+        }
+      ]
+    });
+    expect(state2.stableFacts.decisions).toHaveLength(2);
+    expect(state2.stableFacts.decisions).toContain("用 Redis 做缓存");
+    expect(state2.stableFacts.decisions).toContain("用 PostgreSQL 做主存储");
+  });
+});

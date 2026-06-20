@@ -363,8 +363,23 @@ function normalizeText(value: string) {
 }
 
 function tokenize(value: string) {
+  // CJK path: extract bigrams/unigrams from lowercased text BEFORE normalizeText strips CJK chars.
+  // Mirrors RetrieveService.tokenize in packages/core/src/index.ts.
+  const lower = value.toLowerCase();
+  const cjkTokens: string[] = [];
+  const runs = lower.match(/[一-鿿぀-ヿ가-힯]+/g) ?? [];
+  for (const run of runs) {
+    if (run.length === 1) {
+      cjkTokens.push(run); // single-char run: keep as unigram
+      continue;
+    }
+    for (let i = 0; i < run.length - 1; i += 1) {
+      cjkTokens.push(run.slice(i, i + 2)); // overlapping step-1 bigram
+    }
+  }
+  // ASCII path: normalizeText strips CJK to spaces, then we tokenize as before.
   const normalized = normalizeText(value);
-  return normalized
+  const asciiTokens = normalized
     .split(" ")
     .map((token) => token.replace(/:+$/g, ""))
     .filter((token) => token.length > 2)
@@ -373,6 +388,9 @@ function tokenize(value: string) {
       if (token === "blocker") return "blocked";
       return token;
     });
+  // CJK tokens are appended after ASCII tokens and bypass the length > 2 filter
+  // (2-char bigrams would otherwise be dropped).
+  return [...asciiTokens, ...cjkTokens];
 }
 
 function jaccardSimilarity(a: string, b: string) {
@@ -675,7 +693,16 @@ function extractNaturalGoal(text: string) {
 function findBestSemanticMatch(values: string[], candidate: string, threshold = 0.8) {
   let best: { value: string; score: number } | null = null;
   for (const value of values) {
-    const score = normalizeText(value) === normalizeText(candidate) ? 1 : jaccardSimilarity(value, candidate);
+    // Only use the exact-match shortcut when the normalized form is non-empty.
+    // Pure-CJK strings both normalize to "" via normalizeText (CJK is stripped to spaces),
+    // so we must fall through to jaccardSimilarity — which uses CJK bigrams — rather than
+    // treating any two pure-CJK strings as identical.
+    const normalizedValue = normalizeText(value);
+    const normalizedCandidate = normalizeText(candidate);
+    const score =
+      normalizedValue.length > 0 && normalizedValue === normalizedCandidate
+        ? 1
+        : jaccardSimilarity(value, candidate);
     if (!best || score > best.score) {
       best = { value, score };
     }
@@ -722,11 +749,13 @@ function findConflictingDecisions(values: string[], candidate: string): string[]
   const replacementTarget = extractReplacementTarget(candidate);
   if (!replacementTarget) return [];
 
-  const targetTokens = new Set(tokenize(replacementTarget).filter((t) => t.length >= 3));
+  // Use >= 2 so CJK bigrams (length 2) survive. ASCII tokens from tokenize() are already
+  // length >= 3 (the ASCII path filters > 2), so this does not widen English false-positive risk.
+  const targetTokens = new Set(tokenize(replacementTarget).filter((t) => t.length >= 2));
   if (targetTokens.size === 0) return [];
 
   return values.filter((value) => {
-    const valueTokens = tokenize(value).filter((t) => t.length >= 3);
+    const valueTokens = tokenize(value).filter((t) => t.length >= 2);
     return valueTokens.some((token) => targetTokens.has(token));
   });
 }
@@ -790,9 +819,13 @@ function findBestWorkingNoteMatch(values: string[] | undefined, candidate: strin
   let best: { value: string; score: number } | null = null;
   for (const value of values ?? []) {
     const normalizedValue = stripWorkingNoteResolutionPrefix(value);
-    const score = normalizeText(normalizedValue) === normalizeText(normalizedCandidate)
-      ? 1
-      : jaccardSimilarity(normalizedValue, normalizedCandidate);
+    const normA = normalizeText(normalizedValue);
+    const normB = normalizeText(normalizedCandidate);
+    // Guard against the pure-CJK empty-normalisation pitfall (see findBestSemanticMatch).
+    const score =
+      normA.length > 0 && normA === normB
+        ? 1
+        : jaccardSimilarity(normalizedValue, normalizedCandidate);
     if (!best || score > best.score) {
       best = { value, score };
     }
