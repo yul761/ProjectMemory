@@ -1,0 +1,34 @@
+{
+  "gold": {
+    "goal": [
+      "打造一个研究级的记忆引擎"
+    ],
+    "constraints": [
+      "保持 API 稳定",
+      "避免依赖托管服务"
+    ],
+    "decisions": [
+      "我们决定专注于摘要一致性"
+    ],
+    "todos": [
+      "增加一致性通过率追踪"
+    ]
+  },
+  "events": [
+    { "type": "document", "key": "doc:goal", "content": "goal: 打造一个研究级的记忆引擎" },
+    { "type": "document", "key": "doc:constraints", "content": "constraint: 保持 API 稳定\nconstraint: 避免依赖托管服务" },
+    { "type": "stream", "content": "我们决定专注于摘要一致性" },
+    { "type": "stream", "content": "提醒功能被队列可见性超时阻塞了" },
+    { "type": "stream", "content": "TODO: 增加一致性通过率追踪" },
+    { "type": "stream", "content": "状态更新：摄入吞吐保持稳定" },
+    { "type": "stream", "content": "噪声 ping 1" },
+    { "type": "stream", "content": "噪声 ping 2" },
+    { "type": "stream", "content": "噪声 ping 3" }
+  ],
+  "retrieveCases": [
+    { "query": "我们决定了什么", "expected": "摘要一致性", "aliases": ["决定", "专注"] },
+    { "query": "有哪些约束", "expected": "API 稳定", "aliases": ["约束", "稳定", "避免"] },
+    { "query": "有什么阻塞", "expected": "阻塞", "aliases": ["超时", "队列", "风险"] },
+    { "query": "有哪些待办事项", "expected": "一致性通过率", "aliases": ["待办", "追踪", "TODO"] }
+  ]
+}

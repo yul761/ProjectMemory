@@ -507,7 +507,11 @@ function computeOverallScore(parts, featureLlm) {
 }
 
 function isActionable(step) {
-  return /^(add|analyze|build|create|define|deliver|document|fix|implement|investigate|measure|monitor|plan|prioritize|refactor|review|ship|test|update|validate|write)\b/i.test(step.trim());
+  const s = step.trim();
+  // The English leading-verb heuristic cannot evaluate CJK (or other non-Latin) text,
+  // so don't penalize steps containing CJK characters — judging them would always fail.
+  if (/[一-鿿぀-ヿ가-힯]/.test(s)) return true;
+  return /^(add|analyze|build|create|define|deliver|document|fix|implement|investigate|measure|monitor|plan|prioritize|refactor|review|ship|test|update|validate|write)\b/i.test(s);
 }
 
 function normalizeText(text) {
