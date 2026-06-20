@@ -917,11 +917,12 @@ function promoteToFactRegistry(
   content: string,
   type: FactRegistryEntry["type"],
   confidence: number,
-  evidence: DigestEvidenceRef
+  evidence: DigestEvidenceRef,
+  facet?: string
 ): void {
   if (!state.factRegistry) state.factRegistry = [];
   if (isInFactRegistry(state, content)) return;
-  state.factRegistry.push({
+  const entry: FactRegistryEntry = {
     id: `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     content,
     type,
@@ -929,7 +930,9 @@ function promoteToFactRegistry(
     addedAt: new Date().toISOString(),
     evidenceId: evidence.id,
     evidenceType: evidence.sourceType
-  });
+  };
+  if (facet !== undefined) entry.facet = facet;
+  state.factRegistry.push(entry);
 }
 
 function supersedeFact(state: DigestState, content: string, newContent: string, evidence: DigestEvidenceRef): void {
@@ -950,6 +953,60 @@ function supersedeFact(state: DigestState, content: string, newContent: string, 
     evidenceId: evidence.id,
     evidenceType: evidence.sourceType
   });
+}
+
+function mergeProfileFacets(
+  state: DigestState,
+  events: MemoryEvent[],
+  prevFactRegistryIds: Set<string>
+): void {
+  if (!state.profile) state.profile = {};
+  if (!state.profile.identity) state.profile.identity = [];
+
+  const IDENTITY_CAP = 15;
+
+  function isIdentityProtected(fact: string): boolean {
+    return (state.factRegistry ?? []).some(
+      (e) =>
+        prevFactRegistryIds.has(e.id) &&
+        !e.supersededBy &&
+        e.facet === "identity" &&
+        jaccardSimilarity(normalizeText(e.content), normalizeText(fact)) >= 0.6
+    );
+  }
+
+  for (const evt of events) {
+    if (evt.classifiedType !== "personal_detail") continue;
+    const incomingValue = evt.content.trim();
+    if (!incomingValue) continue;
+
+    const identityFacts = state.profile.identity!;
+
+    // Dedup: Jaccard >= 0.6 within facet
+    const existingIdx = identityFacts.findIndex(
+      (fact) => jaccardSimilarity(fact, incomingValue) >= 0.6
+    );
+
+    if (existingIdx !== -1) {
+      const existing = identityFacts[existingIdx];
+      if (isIdentityProtected(existing)) continue; // write-protected — stream cannot override
+      identityFacts[existingIdx] = incomingValue; // replace unprotected near-duplicate
+      continue;
+    }
+
+    // Cap enforcement: if at limit, evict the first unprotected entry
+    if (identityFacts.length >= IDENTITY_CAP) {
+      const unprotectedIdx = identityFacts.findIndex((fact) => !isIdentityProtected(fact));
+      if (unprotectedIdx === -1) continue; // all protected, cannot evict — discard incoming
+      identityFacts.splice(unprotectedIdx, 1);
+    }
+
+    identityFacts.push(incomingValue);
+
+    // Write-protect this new identity fact via factRegistry
+    const evidence: DigestEvidenceRef = { id: evt.id, sourceType: "event" };
+    promoteToFactRegistry(state, incomingValue, "profile", 0.7, evidence, "identity");
+  }
 }
 
 function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEvidenceRef) {
@@ -1335,6 +1392,10 @@ export function protectedStateMerge(input: {
       }
     }
   }
+
+  // Profile facet routing: personal_detail stream events → profile.identity (Stage 1)
+  const streamEventsForProfile = input.deltaCandidates.map((d) => d.event);
+  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds);
 
   next.stableFacts.decisions = [...new Set(next.stableFacts.decisions)];
   next.stableFacts.constraints = [...new Set(next.stableFacts.constraints ?? [])];

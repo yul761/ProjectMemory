@@ -2342,3 +2342,85 @@ describe("drift-fixes", () => {
     expect(ids).not.toContain("evt-orphan");
   });
 });
+
+describe("mergeProfileFacets — stream routing via protectedStateMerge", () => {
+  function makeStreamEvent(
+    id: string,
+    content: string,
+    classifiedType: string | null = null
+  ): MemoryEvent {
+    return event({ id, scopeId: "sc", userId: "u", type: "stream", content, classifiedType });
+  }
+
+  it("personal_detail event routes to profile.identity", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [
+        {
+          eventId: "e1",
+          reason: "novel_event",
+          features: { kind: "note", importanceScore: 0.5, noveltyScore: 0.8 },
+          event: makeStreamEvent("e1", "工作经历: 字节跳动 后端工程师 2019-2022", "personal_detail")
+        }
+      ],
+      documents: []
+    });
+    expect(state.profile?.identity).toContain("工作经历: 字节跳动 后端工程师 2019-2022");
+  });
+
+  it("write-protected identity fact survives a contradicting stream event with Jaccard >= 0.6", () => {
+    // First merge: add a personal_detail fact (it becomes write-protected)
+    const state1 = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [
+        {
+          eventId: "e1",
+          reason: "novel_event",
+          features: { kind: "note", importanceScore: 0.5, noveltyScore: 0.8 },
+          event: makeStreamEvent("e1", "工作经历: 字节跳动 后端工程师 2019-2022", "personal_detail")
+        }
+      ],
+      documents: []
+    });
+    expect(state1.profile?.identity).toContain("工作经历: 字节跳动 后端工程师 2019-2022");
+    expect((state1.factRegistry ?? []).some((e) => e.facet === "identity")).toBe(true);
+
+    // Second merge: contradicting stream event with high Jaccard overlap
+    const state2 = protectedStateMerge({
+      prevState: state1,
+      deltaCandidates: [
+        {
+          eventId: "e2",
+          reason: "novel_event",
+          features: { kind: "note", importanceScore: 0.5, noveltyScore: 0.8 },
+          event: makeStreamEvent("e2", "工作经历: 字节跳动 前端工程师 2019-2022", "personal_detail")
+        }
+      ],
+      documents: []
+    });
+    // The write-protected original must survive; the contradiction must not overwrite
+    expect(state2.profile?.identity).toContain("工作经历: 字节跳动 后端工程师 2019-2022");
+  });
+
+  it("feeling and emotional_pattern events do NOT route to any profile facet", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [
+        {
+          eventId: "e1",
+          reason: "novel_event",
+          features: { kind: "note", importanceScore: 0.4, noveltyScore: 0.8 },
+          event: makeStreamEvent("e1", "今天很累", "feeling")
+        },
+        {
+          eventId: "e2",
+          reason: "novel_event",
+          features: { kind: "note", importanceScore: 0.4, noveltyScore: 0.8 },
+          event: makeStreamEvent("e2", "每周都觉得焦虑", "emotional_pattern")
+        }
+      ],
+      documents: []
+    });
+    expect(state.profile?.identity ?? []).toHaveLength(0);
+  });
+});

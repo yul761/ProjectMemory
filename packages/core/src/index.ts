@@ -87,6 +87,7 @@ export interface MemoryEvent {
   contentHash?: string | null;
   createdAt: Date;
   updatedAt?: Date | null;
+  classifiedType?: string | null;
 }
 
 export interface Digest {
