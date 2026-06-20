@@ -994,7 +994,7 @@ function mergeProfileFacets(
     const incomingValue = evt.content.trim();
     if (!incomingValue) continue;
 
-    const identityFacts = state.profile.identity!;
+    const identityFacts: string[] = state.profile.identity!;
 
     // Dedup: Jaccard >= 0.6 within facet
     const existingIdx = identityFacts.findIndex(
@@ -1044,7 +1044,7 @@ function applyProfileFactsFromDigest(
     if (!value) continue;
 
     if (!state.profile.identity) state.profile.identity = [];
-    const identityFacts = state.profile.identity;
+    const identityFacts: string[] = state.profile.identity;
 
     // Dedup: Jaccard >= 0.6 → document supersedes existing (document > stream authority)
     const existingIdx = identityFacts.findIndex(
