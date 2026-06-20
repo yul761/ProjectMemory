@@ -21,7 +21,12 @@ export const personalConfig: DomainConfig = {
       driftProtected: false,
       conflictDetectable: false,
       autoExpireAfterDays: 90 },
-    { name: "noise",         description: "Casual chatter with no lasting value",                                               retention: "discard",   driftProtected: false, conflictDetectable: false }
+    { name: "noise",         description: "Casual chatter with no lasting value",                                               retention: "discard",   driftProtected: false, conflictDetectable: false },
+    { name: "style_preference",
+      description: "An explicit user statement about how they want the assistant to communicate — length, emoji, language, formality, or tone. Must be a direct instruction, not incidental one-off behavior.",
+      retention: "long-term",
+      driftProtected: false,
+      conflictDetectable: false }
   ],
   classificationSystemPrompt: `You are a personal life memory classifier. Decide what in this input is worth remembering long-term.
 
@@ -38,9 +43,16 @@ Categories:
 - emotional_pattern: recurring pattern across many interactions ("I always feel stressed on Sundays")
 - noise: casual chatter, nothing worth keeping ("ok", "sure", weather comments)
 
+- style_preference: user's EXPLICIT instruction about how the assistant should communicate (length/emoji/language/formality/tone).
+  Examples: "回短点" / "别用emoji" / "用中文回我" / "说话别太正式" / "keep it brief" / "no emojis please" / "don't be so formal"
+  ONLY direct communication-style instructions count. NOT: "今天比较忙" (one-off context → noise), "ok thanks" (noise).
+  Behavioral noise (replied short because busy) is NOT a style preference. Only explicit standing instructions.
+
 In Chinese: "我叫..." → personal_detail. "我有..." (pet/possession) → personal_detail. "我是..." (job/identity) → personal_detail.
 "我决定..."/"我要..." → life_decision or goal. "答应了..." → commitment.
+"回短点"/"别用表情符号"/"用中文回我"/"说话别太正式" → style_preference.
 Be conservative: when unsure between personal_detail and noise, prefer personal_detail for genuine self-descriptions.
+When unsure between style_preference and noise, prefer noise unless the user is EXPLICITLY instructing communication style.
 
 Return JSON: { "entityType": string, "importance": number }`,
   digestFocusHint: "Focus on the user's long-term goals, major decisions, active commitments, and relationship notes",

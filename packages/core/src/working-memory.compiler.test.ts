@@ -49,3 +49,21 @@ describe("formatStateLayerView — profile sections", () => {
     expect(text).not.toContain("你是谁");
   });
 });
+
+describe("compileStateLayerView — style exclusion (P2b)", () => {
+  it("output never has a style field — style is system-prompt voice, not State block", () => {
+    // Even with all other profile facets populated, style must not appear in the view
+    const view = compileStateLayerView({
+      profile: {
+        identity: ["test user"],
+        relationships: ["Sarah is a friend"],
+        ongoing: ["job hunting"],
+        goals: ["learn Spanish"],
+        followUps: ["call mom Friday"]
+      }
+    });
+    expect("style" in view).toBe(false);
+    const viewKeys = Object.keys(view);
+    expect(viewKeys).not.toContain("style");
+  });
+});

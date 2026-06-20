@@ -52,6 +52,7 @@ export interface DigestState {
     ongoing?: string[];
     goals?: string[];
     followUps?: string[];
+    style?: string[];
   };
 }
 
@@ -299,7 +300,8 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
           relationships: ((base as DigestState).profile!.relationships ?? []).slice(0, 10),
           ongoing: ((base as DigestState).profile!.ongoing ?? []).slice(0, 8),
           goals: ((base as DigestState).profile!.goals ?? []).slice(0, 8),
-          followUps: ((base as DigestState).profile!.followUps ?? []).slice(0, 10)
+          followUps: ((base as DigestState).profile!.followUps ?? []).slice(0, 10),
+          style: ((base as DigestState).profile!.style ?? []).slice(0, 6)
         }
       : undefined
   };
@@ -1059,7 +1061,8 @@ const PROFILE_FACET_ROUTING: Record<string, { facet: keyof NonNullable<DigestSta
   life_decision: { facet: "goals", cap: 8, writeProtected: true },
   experience: { facet: "ongoing", cap: 8, writeProtected: false },
   person_note: { facet: "relationships", cap: 10, writeProtected: false },
-  commitment: { facet: "followUps", cap: 10, writeProtected: false }
+  commitment: { facet: "followUps", cap: 10, writeProtected: false },
+  style_preference: { facet: "style", cap: 6, writeProtected: false }
 };
 
 function mergeProfileFacets(

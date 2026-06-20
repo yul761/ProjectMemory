@@ -3902,3 +3902,67 @@ describe("P1 hardening — sameFactCjkAware guard on findBestSemanticMatch / fin
     expect(newEntry!.evidenceType).toBe("document");
   });
 });
+
+// Stage 4 — style_preference facet routing (P2b-v1)
+// ---------------------------------------------------------------------------
+describe("Stage 4 — style_preference facet routing", () => {
+  function streamEvent(id: string, content: string, classifiedType?: string): MemoryEvent {
+    return event({ id, scopeId: "sc", userId: "u", type: "stream", content, classifiedType: classifiedType ?? null });
+  }
+
+  function delta(id: string, content: string, classifiedType?: string): import("./digest-control").DeltaCandidate {
+    return {
+      eventId: id,
+      reason: "novel_event",
+      features: { kind: "note", importanceScore: 0.6, noveltyScore: 0.9 },
+      event: streamEvent(id, content, classifiedType)
+    };
+  }
+
+  // Test 1: style_preference → profile.style, NOT in factRegistry, evictable at cap 6
+  it("classifiedType:style_preference routes to profile.style, not fact-registry, evictable at cap 6", () => {
+    const prefs = ["回短点", "别用emoji", "用中文回我", "别太正式", "简洁优先", "不要废话", "保持简短"];
+    const candidates = prefs.map((p, i) => delta(`sp-${i}`, p, "style_preference"));
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: candidates
+    });
+    // Must be in profile.style
+    expect(state.profile?.style).toBeDefined();
+    // Capped at 6 — first entry ("回短点") evicted
+    expect((state.profile?.style ?? []).length).toBe(6);
+    expect(state.profile?.style).not.toContain("回短点"); // oldest evicted
+    expect(state.profile?.style).toContain("保持简短");   // newest kept
+    // Must NOT appear in factRegistry (volatile path — no write-protection)
+    const inRegistry = (state.factRegistry ?? []).some((e) => e.facet === "style");
+    expect(inRegistry).toBe(false);
+  });
+
+  // Test 2: dedup — near-identical style prefs collapse to 1 entry
+  it("near-identical style_preference entries dedup to 1 entry via CJK-aware Jaccard", () => {
+    // "回复简短一点" and "回复简短" share bigrams 回复,复简,简短 → Jaccard 3/5 = 0.6 >= threshold
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("sp-a", "回复简短一点", "style_preference"),
+        delta("sp-b", "回复简短", "style_preference")
+      ]
+    });
+    expect((state.profile?.style ?? []).length).toBe(1);
+  });
+
+  // Test 3: feeling / noise do NOT pollute profile.style
+  it("feeling and noise events do NOT appear in profile.style", () => {
+    const state = protectedStateMerge({
+      prevState: null,
+      documents: [],
+      deltaCandidates: [
+        delta("f1", "今天很开心", "feeling"),
+        delta("n1", "好的", "noise")
+      ]
+    });
+    expect(state.profile?.style).toBeUndefined();
+  });
+});

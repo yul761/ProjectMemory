@@ -499,7 +499,8 @@ export const DigestState = z.object({
     relationships: z.array(z.string()).optional(),
     ongoing: z.array(z.string()).optional(),
     goals: z.array(z.string()).optional(),
-    followUps: z.array(z.string()).optional()
+    followUps: z.array(z.string()).optional(),
+    style: z.array(z.string()).optional()
   }).optional()
 });
 export type DigestState = z.infer<typeof DigestState>;
