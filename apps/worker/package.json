@@ -15,6 +15,7 @@
     "@statecore/db": "workspace:*",
     "@statecore/prompts": "workspace:*",
     "bullmq": "^5.22.2",
+    "ioredis": "5.9.2",
     "pino": "^9.5.0",
     "zod": "^3.24.1"
   },

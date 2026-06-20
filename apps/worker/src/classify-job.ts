@@ -3,7 +3,7 @@ import { getDomainConfig } from "@statecore/core";
 
 export async function runClassifyEventJob(
   data: { eventId: string; scopeId: string },
-  llm: { chat: (messages: { role: string; content: string }[]) => Promise<string> },
+  llm: { chat: (messages: { role: "system" | "user"; content: string }[]) => Promise<string> },
   db: typeof defaultPrisma = defaultPrisma
 ): Promise<void> {
   const [event, scope] = await Promise.all([
