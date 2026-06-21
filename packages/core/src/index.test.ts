@@ -233,11 +233,14 @@ describe("RetrieveService", () => {
         useEmbeddingRerank: true,
         embeddingCandidateLimit: 8,
         embeddingModel: {
-          embed: vi.fn(async () => [
-            [1, 0],
-            [0.1, 0.9],
-            [0.9, 0.1]
-          ])
+          // Input-aware mock: rerankWithEmbeddings embeds [query, ...candidateContents]
+          // in heuristic-ranked order (not listRecent order), so vectors must be derived
+          // from the text. The relevant content (evt-2) aligns with the query vector [1,0];
+          // noise (evt-1) is orthogonal [0,1] — so embedding rerank promotes evt-2 regardless
+          // of candidate ordering.
+          embed: vi.fn(async (texts: string[]) =>
+            texts.map((t) => (/replay|stability/i.test(t) ? [1, 0] : [0, 1]))
+          )
         }
       }
     );
