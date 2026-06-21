@@ -305,7 +305,8 @@ export class MemoryController {
       promoteLongFormToDocumented?: boolean;
       digestOnCandidate?: boolean;
     },
-    personaPrompt?: string | null
+    personaPrompt?: string | null,
+    styleLines?: string[] | null
   ) {
     if (!this.runtimeLlm) {
       throw new BadRequestException("FEATURE_LLM disabled");
@@ -337,7 +338,7 @@ export class MemoryController {
       }),
       llm: this.runtimeLlm,
       prompts: {
-        system: buildRuntimeSystemPrompt(personaPrompt ?? null, runtimeSystemPrompt),
+        system: buildRuntimeSystemPrompt(personaPrompt ?? null, styleLines ?? null, runtimeSystemPrompt),
         user: runtimeUserPrompt
       },
       runtimeResponseOptions: {
@@ -415,14 +416,19 @@ export class MemoryController {
     }
   ) {
     const policyProfile = input.policyProfile ?? "default";
-    const scope = await this.domain.projectService.getScope(userId, input.scopeId);
+    const [scope, digestSnapshot] = await Promise.all([
+      this.domain.projectService.getScope(userId, input.scopeId),
+      this.domain.getLatestDigestState(input.scopeId)
+    ]);
     const personaPrompt = getDomainConfig(scope?.template).defaultPersonaPrompt ?? null;
+    const styleLines = digestSnapshot?.state?.profile?.style ?? null;
     const session = this.createRuntimeSession(
       userId,
       input.scopeId,
       policyProfile,
       input.policyOverrides,
-      personaPrompt
+      personaPrompt,
+      styleLines
     );
     return session.handleTurn({
       message: input.message,
