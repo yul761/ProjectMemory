@@ -279,7 +279,7 @@ export class RetrieveService {
       useEmbeddingRerank?: boolean;
       embeddingCandidateLimit?: number;
       useVectorSearch?: boolean;
-      vectorSearchFn?: (queryVector: number[], limit: number) => Promise<string[]>;
+      vectorSearchFn?: (queryVector: number[], limit: number, scopeId: string) => Promise<string[]>;
     }
   ) {}
 
@@ -437,12 +437,14 @@ export class RetrieveService {
         const queryVectors = await this.options.embeddingModel.embed([query]);
         const queryVector = queryVectors[0];
         if (queryVector?.length) {
-          const vectorIds = await this.options.vectorSearchFn(queryVector, candidateSize);
+          const vectorIds = await this.options.vectorSearchFn(queryVector, candidateSize, scopeId);
           if (vectorIds.length) {
             const keywordIdSet = new Set(events.items.map((e) => e.id));
             const newIds = vectorIds.filter((id) => !keywordIdSet.has(id));
             if (newIds.length) {
-              const vectorEvents = await this.memories.findByIds(newIds);
+              const vectorEvents = (await this.memories.findByIds(newIds)).filter(
+                (e) => e.scopeId === scopeId
+              );
               mergedItems = [...events.items, ...vectorEvents];
             }
           }

@@ -45,8 +45,33 @@ describe("RetrieveService — vector search path", () => {
     const ids = result.events.map(e => e.id);
     expect(ids).toContain("vec");
     expect(ids).toContain("kw");
-    expect(vectorSearchFn).toHaveBeenCalledWith(expect.any(Array), expect.any(Number));
+    expect(vectorSearchFn).toHaveBeenCalledWith(expect.any(Array), expect.any(Number), "sc");
     expect(memoryRepo.findByIds).toHaveBeenCalled();
+  });
+
+  it("excludes vector hits that belong to a different scope (tenant isolation)", async () => {
+    const kwEvent = event({ id: "kw", scopeId: "sc", content: "database postgres storage" });
+    const foreignEvent = event({ id: "foreign", scopeId: "OTHER", content: "We decided to use Postgres" });
+    const { digestRepo, memoryRepo } = mockRepos([kwEvent], [foreignEvent]);
+
+    // Simulate a leaky data layer: vector search returns an id from another scope.
+    const vectorSearchFn = vi.fn().mockResolvedValue(["foreign", "kw"]);
+    const embeddingModel = { embed: vi.fn().mockResolvedValue([[1, 0, 0]]) };
+
+    const service = new RetrieveService(digestRepo, memoryRepo, {
+      useVectorSearch: true,
+      vectorSearchFn,
+      embeddingModel,
+      useEmbeddingRerank: true,
+      embeddingCandidateLimit: 10
+    });
+
+    const result = await service.retrieve("sc", 5, "persistence layer");
+    const ids = result.events.map((e) => e.id);
+
+    expect(ids).toContain("kw");
+    expect(ids).not.toContain("foreign");
+    expect(vectorSearchFn).toHaveBeenCalledWith(expect.any(Array), expect.any(Number), "sc");
   });
 
   it("deduplicates events appearing in both vector and keyword results", async () => {
