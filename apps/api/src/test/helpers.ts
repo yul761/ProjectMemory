@@ -1,6 +1,7 @@
 import { prisma } from "@statecore/db";
 
 export async function clearDatabase() {
+  await prisma.memoryEventEmbedding.deleteMany();
   await prisma.reminder.deleteMany();
   await prisma.workingMemorySnapshot.deleteMany();
   await prisma.digestStateSnapshot.deleteMany();
