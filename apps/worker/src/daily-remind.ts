@@ -57,6 +57,18 @@ export async function runDailyRemindJob(
 
     const state = stateSnapshot.state as any;
 
+    // Suppression: fetch reminder texts sent in the last 14 days for this scope
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 86_400_000);
+    const recentSentRows = await db.reminder.findMany({
+      where: {
+        scopeId: scope.id,
+        status: "sent",
+        createdAt: { gt: fourteenDaysAgo }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const recentlySurfaced = recentSentRows.map((r) => r.text);
+
     const context = JSON.stringify({
       stableFacts: state?.stableFacts ?? {},
       personalDetails: personalDetails.map((e) => e.content),
@@ -71,7 +83,8 @@ export async function runDailyRemindJob(
         ongoing: state?.profile?.ongoing ?? [],
         followUps: state?.profile?.followUps ?? [],
         relationships: state?.profile?.relationships ?? []
-      }
+      },
+      recentlySurfaced
     });
 
     let reminders: string[];
@@ -96,6 +109,19 @@ export async function runDailyRemindJob(
         body: JSON.stringify({ scopeId: scope.id, reminders })
       });
       logger.info({ scopeId: scope.id, count: reminders.length }, "Daily reminders sent");
+
+      // Persist each generated reminder as a sent row to suppress future repetition
+      for (const text of reminders) {
+        await db.reminder.create({
+          data: {
+            userId: (scope as any).userId,
+            scopeId: scope.id,
+            text,
+            status: "sent",
+            dueAt: new Date()
+          } as any
+        });
+      }
     } catch (err) {
       logger.warn({ scopeId: scope.id, err }, "daily_remind webhook delivery failed");
     }

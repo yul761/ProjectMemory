@@ -121,3 +121,75 @@ describe("runDailyRemindJob — Task 1: enrichment + testability", () => {
     expect(mockLlm.chat).not.toHaveBeenCalled();
   });
 });
+
+describe("runDailyRemindJob — Task 2: repeat-suppression", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+  });
+
+  it("T2-1: recent sent reminder text appears in context recentlySurfaced list", async () => {
+    const recentSentReminders = [
+      { id: "r-1", text: "How's the guitar practice going?", status: "sent", createdAt: new Date() }
+    ];
+    const mockPrisma = makePrisma({ recentSentReminders });
+    const mockLlm = makeLlm();
+    const { runDailyRemindJob } = await import("./daily-remind");
+
+    await runDailyRemindJob(mockLlm as any, mockPrisma);
+
+    const userMessage: string = mockLlm.chat.mock.calls[0][0].find(
+      (m: { role: string }) => m.role === "user"
+    ).content;
+    const parsed = JSON.parse(userMessage);
+    expect(parsed.recentlySurfaced).toContain("How's the guitar practice going?");
+  });
+
+  it("T2-2: generated reminders are persisted as sent Reminder rows with correct scopeId", async () => {
+    const mockPrisma = makePrisma();
+    const twoReminders = JSON.stringify({
+      reminders: ["How's the guitar practice going?", "Any news on the job hunt?"]
+    });
+    const mockLlm = makeLlm(twoReminders);
+    const { runDailyRemindJob } = await import("./daily-remind");
+
+    await runDailyRemindJob(mockLlm as any, mockPrisma);
+
+    expect(mockPrisma.reminder.create).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.reminder.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "u-1",
+          scopeId: "sc-1",
+          text: "How's the guitar practice going?",
+          status: "sent"
+        })
+      })
+    );
+    expect(mockPrisma.reminder.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          scopeId: "sc-1",
+          text: "Any news on the job hunt?",
+          status: "sent"
+        })
+      })
+    );
+  });
+
+  it("T2-3: suppression query filters by scopeId (scope isolation)", async () => {
+    const mockPrisma = makePrisma();
+    const mockLlm = makeLlm();
+    const { runDailyRemindJob } = await import("./daily-remind");
+
+    await runDailyRemindJob(mockLlm as any, mockPrisma);
+
+    expect(mockPrisma.reminder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          scopeId: "sc-1",
+          status: "sent"
+        })
+      })
+    );
+  });
+});

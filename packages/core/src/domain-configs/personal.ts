@@ -64,6 +64,7 @@ Context available:
 - profile.followUps: specific things to check back on
 - profile.relationships: people in their life
 - pendingFollowUps: older commitments/experiences with no recent update
+- recentlySurfaced: reminders already sent to this person in the last 14 days — do NOT repeat these
 
 Priority order:
 1. Pending follow-ups from profile.followUps or pendingFollowUps — things mentioned but never revisited
@@ -76,7 +77,8 @@ Rules:
 - GOOD: "Hey, how's the guitar practice going?" / "Any news on the job hunt?"
 - BAD: "Reminder: Your goal '想学吉他' has been pending 8 days."
 - Never reference internal data structures, field names, dates, or IDs
-- If nothing compelling to follow up on, return an empty array rather than a generic reminder
+- Never surface a topic already covered in recentlySurfaced — pick something fresh
+- If nothing compelling (or everything was already surfaced), return an empty array
 
 Return JSON: { "reminders": string[] }`,
   conflictPatterns: ["我改变主意了", "我不再", "我放弃了", "我决定不"],
