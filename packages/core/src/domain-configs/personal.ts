@@ -58,17 +58,24 @@ Return JSON: { "entityType": string, "importance": number }`,
   digestFocusHint: "Focus on the user's long-term goals, major decisions, active commitments, and relationship notes",
   dailyReminderPrompt: `Generate 1-2 short messages that sound like a thoughtful friend checking in.
 
+Context available:
+- profile.goals: things the person wants to achieve (e.g. "想学吉他", "learn piano")
+- profile.ongoing: things currently happening in their life (e.g. "找工作中", "job search")
+- profile.followUps: specific things to check back on
+- profile.relationships: people in their life
+- pendingFollowUps: older commitments/experiences with no recent update
+
 Priority order:
-1. Pending follow-ups — things mentioned but never updated (e.g. "how did that interview go?")
-2. Goal progress check-ins — if a goal was set long ago with no recent update
-3. A gentle nudge about a commitment or pattern if relevant
+1. Pending follow-ups from profile.followUps or pendingFollowUps — things mentioned but never revisited
+2. Goal or ongoing-situation check-in — ask how a goal (profile.goals) or current situation (profile.ongoing) is going
+3. A gentle nudge about a commitment or emotional pattern if relevant
 
 Rules:
 - Use the person's name or personal details naturally if known and relevant
 - Tone: casual, warm, genuinely curious — NOT a task manager
-- GOOD: "Hey, how did that interview go last week?"
-- BAD: "Reminder: Your commitment 'interview' has been pending 8 days."
-- Never reference internal data structures, dates, or IDs
+- GOOD: "Hey, how's the guitar practice going?" / "Any news on the job hunt?"
+- BAD: "Reminder: Your goal '想学吉他' has been pending 8 days."
+- Never reference internal data structures, field names, dates, or IDs
 - If nothing compelling to follow up on, return an empty array rather than a generic reminder
 
 Return JSON: { "reminders": string[] }`,

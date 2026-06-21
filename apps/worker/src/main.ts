@@ -23,6 +23,7 @@ import { withDigestLock, DigestAlreadyRunningError, type LockRedis } from "./dig
 import { runEmbedEventJob } from "./embed-job";
 import { runClassifyEventJob } from "./classify-job";
 import { runDetectEmotionalPatternsJob } from "./detect-patterns";
+import { runDailyRemindJob } from "./daily-remind";
 import Redis from "ioredis";
 
 const connection = {
@@ -627,98 +628,10 @@ setInterval(() => {
   });
 }, 6 * 60 * 60 * 1000);
 
-async function runDailyRemindJob() {
-  if (!llm) return;
-  const scopes = await prisma.projectScope.findMany({
-    where: { notificationWebhook: { not: null } }
-  });
-
-  for (const scope of scopes) {
-    const config = getDomainConfig((scope as any).template ?? "project");
-    if (!config.dailyReminderPrompt) continue;
-    if (!scope.notificationWebhook) continue;
-
-    const stateSnapshot = await prisma.digestStateSnapshot.findFirst({
-      where: { scopeId: scope.id },
-      orderBy: { createdAt: "desc" }
-    });
-    if (!stateSnapshot) continue;
-
-    const commitments = await prisma.memoryEvent.findMany({
-      where: {
-        scopeId: scope.id,
-        classifiedType: "commitment",
-        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10
-    });
-
-    const personalDetails = await prisma.memoryEvent.findMany({
-      where: { scopeId: scope.id, classifiedType: "personal_detail" },
-      orderBy: { createdAt: "asc" },
-      take: 10
-    });
-
-    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000);
-    const pendingFollowUps = await prisma.memoryEvent.findMany({
-      where: {
-        scopeId: scope.id,
-        classifiedType: { in: ["commitment", "experience"] },
-        createdAt: { lt: sevenDaysAgo }
-      },
-      orderBy: { createdAt: "asc" },
-      take: 3
-    });
-
-    const recentPatterns = await prisma.memoryEvent.findMany({
-      where: { scopeId: scope.id, classifiedType: "emotional_pattern" },
-      orderBy: { createdAt: "desc" },
-      take: 5
-    });
-
-    const context = JSON.stringify({
-      stableFacts: (stateSnapshot.state as any)?.stableFacts ?? {},
-      personalDetails: personalDetails.map((e) => e.content),
-      commitments: commitments.map((e) => e.content),
-      pendingFollowUps: pendingFollowUps.map((e) => {
-        const daysAgo = Math.floor((Date.now() - e.createdAt.getTime()) / 86_400_000);
-        return `${e.classifiedType}: "${e.content.slice(0, 60)}" (${daysAgo} days ago, no update)`;
-      }),
-      emotionalPatterns: recentPatterns.map((e) => e.content)
-    });
-
-    let reminders: string[];
-    try {
-      const raw = await llm.chat([
-        { role: "system", content: config.dailyReminderPrompt },
-        { role: "user",   content: context }
-      ]);
-      const parsed = JSON.parse(raw) as { reminders?: string[] };
-      reminders = (parsed.reminders ?? []).slice(0, 2).filter((r) => typeof r === "string");
-    } catch (err) {
-      logger.warn({ scopeId: scope.id, err }, "daily_remind LLM call failed");
-      continue;
-    }
-
-    if (!reminders.length) continue;
-
-    try {
-      await fetch(scope.notificationWebhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scopeId: scope.id, reminders })
-      });
-      logger.info({ scopeId: scope.id, count: reminders.length }, "Daily reminders sent");
-    } catch (err) {
-      logger.warn({ scopeId: scope.id, err }, "daily_remind webhook delivery failed");
-    }
-  }
-}
-
 // Run daily_remind once per day (24h)
 setInterval(() => {
-  runDailyRemindJob().catch((err) => {
+  if (!llm) return;
+  runDailyRemindJob(llm, prisma).catch((err) => {
     logger.error({ err }, "daily_remind job crashed");
   });
 }, 24 * 60 * 60 * 1000);
