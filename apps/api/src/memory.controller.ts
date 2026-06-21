@@ -563,6 +563,7 @@ export class MemoryController {
       FROM "MemoryEvent" me
       LEFT JOIN "MemoryEventEmbedding" mee ON me.id = mee."eventId"
       WHERE me."scopeId" = ${input.scopeId}
+        AND me."userId" = ${req.userId}
         AND mee."eventId" IS NULL
       ORDER BY me."createdAt" DESC
       LIMIT 1000
