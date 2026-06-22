@@ -693,10 +693,15 @@ export const PublicV1Contracts = {
   "POST /scopes/:id/active": { response: ScopeActivationOutput },
   "GET /state": { response: StateOutput },
   "POST /memory/events": { request: MemoryEventInput, response: MemoryEventOutput },
-  "POST /memory/retrieve": { request: RetrieveInput, response: RetrieveOutput },
-  "POST /memory/answer": { request: AnswerInput, response: AnswerOutput },
+  // Narrowed to stable top-level fields: the diagnostic/ranking sub-objects
+  // (RetrieveOutput.retrieval, AnswerOutput.evidence, RuntimeTurnOutput
+  // layerAlignment/retrievalPlan/version/notes/warnings/evidence) are still
+  // returned in the HTTP response but are intentionally NOT part of the frozen
+  // /v1 contract, so they can evolve without a breaking change.
+  "POST /memory/retrieve": { request: RetrieveInput, response: RetrieveOutput.omit({ retrieval: true }) },
+  "POST /memory/answer": { request: AnswerInput, response: AnswerOutput.pick({ answer: true }) },
   "POST /memory/digest": { request: DigestRequestInput, response: DigestEnqueueOutput },
-  "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput },
+  "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput.pick({ answer: true, answerMode: true, writeTier: true, digestTriggered: true }) },
   "POST /reminders": { request: ReminderCreateInput, response: ReminderOutput },
   "GET /reminders": { response: ReminderListOutput },
   "POST /reminders/:id/cancel": { response: ReminderCancelOutput },

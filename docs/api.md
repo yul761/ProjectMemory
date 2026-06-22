@@ -325,6 +325,12 @@ additive-only change is accepted by regenerating the snapshot
 removal/rename/retype/required-addition is a breaking change — do not ship it
 under `/v1`.
 
+> **Diagnostic fields are not frozen.** `POST /v1/memory/retrieve`,
+> `/v1/memory/answer`, and `/v1/memory/runtime/turn` return additional
+> diagnostic/ranking fields (e.g. `retrieval`, `evidence`, `layerAlignment`,
+> `retrievalPlan`) that are **not** part of the frozen contract and may change
+> without notice. Only the stable top-level fields of these endpoints are frozen.
+
 ### Not part of `/v1`
 
 All other endpoints (diagnostics, `fast-view`, `layer-status`, `working-state`,
