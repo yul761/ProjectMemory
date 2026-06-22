@@ -192,6 +192,84 @@ describe("selectEventsForDigest — properties", () => {
   });
 });
 
+describe("protectedStateMerge — properties", () => {
+  function decisionDelta(content: string): DeltaCandidate {
+    const event = ev({ type: "stream", content });
+    return {
+      eventId: event.id,
+      reason: "stable_fact_signal",
+      features: { kind: "decision", importanceScore: 0.9, noveltyScore: 1 },
+      event
+    };
+  }
+  function noiseDelta(content: string): DeltaCandidate {
+    const event = ev({ type: "stream", content });
+    return {
+      eventId: event.id,
+      reason: "novel_event",
+      features: { kind: "note", importanceScore: 0.3, noveltyScore: 1 },
+      event
+    };
+  }
+
+  it("is deterministic with a deterministic idFactory", () => {
+    const deltasArb = fc.array(fc.string({ minLength: 3, maxLength: 30 }).map(decisionDelta), { maxLength: 10 });
+    fc.assert(
+      fc.property(deltasArb, (deltas) => {
+        // nowFactory must also be deterministic: addedAt: new Date() is the real bug this test surfaces.
+        const run = () => protectedStateMerge({ prevState: null, deltaCandidates: deltas, documents: [], idFactory: deterministicIdFactory(), nowFactory: () => "2026-01-01T00:00:00.000Z" });
+        expect(run()).toEqual(run());
+      })
+    );
+  });
+
+  it("does not let unrelated noise stream events delete a protected decision", () => {
+    // Seed a protected decision, then bombard with unrelated noise; the decision must survive.
+    const seed = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [decisionDelta("we decide to use postgres")],
+      documents: [],
+      idFactory: deterministicIdFactory()
+    });
+    expect(seed.stableFacts.decisions).toContain("we decide to use postgres");
+
+    fc.assert(
+      fc.property(fc.array(fc.string({ minLength: 1, maxLength: 30 }).map(noiseDelta), { maxLength: 15 }), (noise) => {
+        const after = protectedStateMerge({
+          prevState: seed,
+          deltaCandidates: noise,
+          documents: [],
+          idFactory: deterministicIdFactory()
+        });
+        expect(after.stableFacts.decisions).toContain("we decide to use postgres");
+      })
+    );
+  });
+
+  it("a low-similarity stream event never overwrites an existing goal (anti-flip-flop)", () => {
+    const seed = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [],
+      documents: [ev({ type: "document", key: "doc:plan", content: "goal: launch the beta" })],
+      idFactory: deterministicIdFactory()
+    });
+    expect(seed.stableFacts.goal).toBe("launch the beta");
+
+    fc.assert(
+      fc.property(fc.array(fc.string({ minLength: 3, maxLength: 30 }).map(decisionDelta), { maxLength: 10 }), (deltas) => {
+        const after = protectedStateMerge({
+          prevState: seed,
+          deltaCandidates: deltas,
+          documents: [],
+          idFactory: deterministicIdFactory()
+        });
+        // Stream events cannot replace a document-set goal (overwrite threshold 0.95 for stream).
+        expect(after.stableFacts.goal).toBe("launch the beta");
+      })
+    );
+  });
+});
+
 describe("detectDeltas — properties", () => {
   const kindArb = fc.constantFrom<MemoryEventKind>("decision", "constraint", "todo", "note", "status", "question", "noise");
   const selectedArb = fc.array(
