@@ -54,7 +54,7 @@ describe("runGcDigestsJob", () => {
 
 describe("runGcJobLogsJob", () => {
   it("deletes job logs older than the retention window by completedAt", async () => {
-    const deleteMany = vi.fn(async () => ({ count: 5 }));
+    const deleteMany = vi.fn(async (_: { where: { completedAt: { lt: Date } } }) => ({ count: 5 }));
     const prisma = { digestJobLog: { deleteMany } };
     const result = await runGcJobLogsJob(prisma as any, 30);
     expect(result).toEqual({ count: 5 });
@@ -65,7 +65,7 @@ describe("runGcJobLogsJob", () => {
 
 describe("runGcRemindersJob", () => {
   it("deletes terminal (sent/cancelled) reminders older than the window, keeping scheduled", async () => {
-    const deleteMany = vi.fn(async () => ({ count: 2 }));
+    const deleteMany = vi.fn(async (_: { where: { status: { in: string[] }; createdAt: { lt: Date } } }) => ({ count: 2 }));
     const prisma = { reminder: { deleteMany } };
     const result = await runGcRemindersJob(prisma as any, 30);
     expect(result).toEqual({ count: 2 });

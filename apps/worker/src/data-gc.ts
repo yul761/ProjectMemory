@@ -62,7 +62,9 @@ export async function runGcJobLogsJob(prisma: GcJobLogPrisma, retentionDays: num
 
 export type GcReminderPrisma = {
   reminder: {
-    deleteMany: (args: { where: { status: { in: string[] }; createdAt: { lt: Date } } }) => Promise<{ count: number }>;
+    // Use the literal union (a subtype of Prisma's ReminderStatus[]) to satisfy
+    // Prisma's EnumReminderStatusFilter without importing generated Prisma types.
+    deleteMany: (args: { where: { status: { in: Array<"sent" | "cancelled"> }; createdAt: { lt: Date } } }) => Promise<{ count: number }>;
   };
 };
 

@@ -64,7 +64,10 @@ const envSchema = z.object({
   DIGEST_CONCURRENCY: z.string().optional(),
   REMINDER_CONCURRENCY: z.string().optional(),
   REMINDER_BATCH_SIZE: z.string().optional(),
-  REMINDER_MAX_BATCHES: z.string().optional()
+  REMINDER_MAX_BATCHES: z.string().optional(),
+  DIGEST_RETENTION_DAYS: z.string().optional(),
+  JOB_LOG_RETENTION_DAYS: z.string().optional(),
+  REMINDER_RETENTION_DAYS: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -162,5 +165,8 @@ export const workerEnv = {
   digestConcurrency: Number(env.DIGEST_CONCURRENCY || 2),
   reminderConcurrency: Number(env.REMINDER_CONCURRENCY || 1),
   reminderBatchSize: Number(env.REMINDER_BATCH_SIZE || 50),
-  reminderMaxBatches: Number(env.REMINDER_MAX_BATCHES || 4)
+  reminderMaxBatches: Number(env.REMINDER_MAX_BATCHES || 4),
+  digestRetentionDays: Number(env.DIGEST_RETENTION_DAYS || 90),
+  jobLogRetentionDays: Number(env.JOB_LOG_RETENTION_DAYS || 30),
+  reminderRetentionDays: Number(env.REMINDER_RETENTION_DAYS || 30)
 };

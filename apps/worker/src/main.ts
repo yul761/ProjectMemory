@@ -26,6 +26,7 @@ import { runClassifyEventJob } from "./classify-job";
 import { runDetectEmotionalPatternsJob } from "./detect-patterns";
 import { runDailyRemindJob } from "./daily-remind";
 import { runExpireEventsJob } from "./expire-events";
+import { runGcDigestsJob, runGcJobLogsJob, runGcRemindersJob } from "./data-gc";
 import Redis from "ioredis";
 
 const connection = {
@@ -647,6 +648,16 @@ new Worker(
       await runDetectEmotionalPatternsJob(llm, prisma);
       return { ok: true };
     }
+    if (job.name === "data_gc") {
+      const digests = await runGcDigestsJob(prisma, workerEnv.digestRetentionDays);
+      const jobLogs = await runGcJobLogsJob(prisma, workerEnv.jobLogRetentionDays);
+      const reminders = await runGcRemindersJob(prisma, workerEnv.reminderRetentionDays);
+      logger.info(
+        { gc: { deletedDigests: digests.deletedDigests, deletedSnapshots: digests.deletedSnapshots, deletedJobLogs: jobLogs.count, deletedReminders: reminders.count } },
+        "data_gc completed"
+      );
+      return { ok: true };
+    }
     return { ok: true };
   },
   { connection, concurrency: 1 }
@@ -664,5 +675,8 @@ void maintenanceQueue
 void maintenanceQueue
   .upsertJobScheduler("detect-emotional-patterns-7d", { every: 7 * 24 * HOUR_MS }, { name: "detect_emotional_patterns", opts: { removeOnComplete: true, removeOnFail: true } })
   .catch((err) => logger.error({ err }, "failed to register detect_emotional_patterns scheduler"));
+void maintenanceQueue
+  .upsertJobScheduler("data-gc-daily", { every: 24 * HOUR_MS }, { name: "data_gc", opts: { removeOnComplete: true, removeOnFail: true } })
+  .catch((err) => logger.error({ err }, "failed to register data_gc scheduler"));
 
 logger.info("Worker started");
