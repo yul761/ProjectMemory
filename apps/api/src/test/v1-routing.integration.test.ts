@@ -44,5 +44,13 @@ describe("/v1 dual-mount routing", () => {
       .get("/v1/memory/working-state?scopeId=00000000-0000-0000-0000-000000000000")
       .set("x-user-id", USER);
     expect(v1.status).toBe(404);
+
+    const checkContradiction = await request(app.getHttpServer())
+      .get("/v1/memory/check-contradiction").set("x-user-id", USER);
+    expect(checkContradiction.status).toBe(404);
+
+    const digestRebuild = await request(app.getHttpServer())
+      .get("/v1/memory/digest/rebuild").set("x-user-id", USER);
+    expect(digestRebuild.status).toBe(404);
   });
 });
