@@ -2,8 +2,6 @@ import { BadRequestException, Body, Controller, Get, Inject, NotFoundException, 
 import { checkContradiction } from "./check-contradiction";
 import { createHash, randomUUID } from "crypto";
 import {
-  AGENT_SCENARIOS,
-  AgentScenarioRunOutput,
   AnswerInput,
   AnswerOutput,
   DigestEnqueueOutput,
@@ -54,26 +52,6 @@ import { answerSystemPrompt, answerUserPrompt, runtimeSystemPrompt, runtimeUserP
 
 const WORKING_MEMORY_CAUGHT_UP_WINDOW_MS = 15_000;
 const STABLE_STATE_CAUGHT_UP_WINDOW_MS = 60_000;
-const AGENT_SCENARIO_TIMEOUT_MS = 15_000;
-const AGENT_SCENARIO_STABLE_SOFT_WAIT_MS = 8_000;
-
-type SimpleWorkingView = {
-  goal?: string;
-  constraints?: string[];
-  decisions?: string[];
-  progressSummary?: string;
-  openQuestions?: string[];
-  taskFrame?: string;
-} | null;
-
-type SimpleStableView = {
-  goal?: string;
-  constraints?: string[];
-  decisions?: string[];
-  todos?: string[];
-  openQuestions?: string[];
-  risks?: string[];
-} | null;
 
 function splitStructuredTurnLines(message: string) {
   const lines = message
@@ -95,76 +73,6 @@ function splitStructuredTurnLines(message: string) {
   }
 
   return lines;
-}
-
-function summarizeFieldDiff(
-  label: string,
-  previousValue: unknown,
-  nextValue: unknown
-) {
-  if (Array.isArray(previousValue) || Array.isArray(nextValue)) {
-    const previousItems = Array.isArray(previousValue) ? previousValue : [];
-    const nextItems = Array.isArray(nextValue) ? nextValue : [];
-    const added = nextItems.filter((item) => !previousItems.includes(item));
-    const removed = previousItems.filter((item) => !nextItems.includes(item));
-    if (!added.length && !removed.length) {
-      return null;
-    }
-
-    const parts = [
-      added.length ? `added ${added.join(" | ")}` : null,
-      removed.length ? `removed ${removed.join(" | ")}` : null
-    ].filter(Boolean);
-    return `${label}: ${parts.join("; ")}`;
-  }
-
-  const normalizedPrevious = previousValue ?? null;
-  const normalizedNext = nextValue ?? null;
-  if (normalizedPrevious === normalizedNext) {
-    return null;
-  }
-
-  return `${label}: ${normalizedPrevious || "none"} -> ${normalizedNext || "none"}`;
-}
-
-function diffWorkingView(previous: SimpleWorkingView, next: SimpleWorkingView) {
-  return [
-    summarizeFieldDiff("Goal", previous?.goal, next?.goal),
-    summarizeFieldDiff("Constraints", previous?.constraints, next?.constraints),
-    summarizeFieldDiff("Decisions", previous?.decisions, next?.decisions),
-    summarizeFieldDiff("Progress", previous?.progressSummary, next?.progressSummary),
-    summarizeFieldDiff("Open Questions", previous?.openQuestions, next?.openQuestions),
-    summarizeFieldDiff("Task Frame", previous?.taskFrame, next?.taskFrame)
-  ].filter((value): value is string => Boolean(value));
-}
-
-function diffStableView(previous: SimpleStableView, next: SimpleStableView) {
-  return [
-    summarizeFieldDiff("Goal", previous?.goal, next?.goal),
-    summarizeFieldDiff("Constraints", previous?.constraints, next?.constraints),
-    summarizeFieldDiff("Decisions", previous?.decisions, next?.decisions),
-    summarizeFieldDiff("Todos", previous?.todos, next?.todos),
-    summarizeFieldDiff("Open Questions", previous?.openQuestions, next?.openQuestions),
-    summarizeFieldDiff("Risks", previous?.risks, next?.risks)
-  ].filter((value): value is string => Boolean(value));
-}
-
-function buildNextAgentSees(workingView: SimpleWorkingView, stableView: SimpleStableView) {
-  const goal = stableView?.goal ?? workingView?.goal;
-  const constraints = stableView?.constraints?.length ? stableView.constraints : workingView?.constraints;
-  const decisions = stableView?.decisions?.length ? stableView.decisions : workingView?.decisions;
-  const risks = stableView?.risks ?? [];
-
-  return [
-    goal ? `Goal: ${goal}` : null,
-    constraints?.length ? `Constraints: ${constraints.join("; ")}` : null,
-    decisions?.length ? `Decisions: ${decisions.join("; ")}` : null,
-    risks.length ? `Risks: ${risks.join("; ")}` : null
-  ].filter((value): value is string => Boolean(value));
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 @Controller()
@@ -441,65 +349,6 @@ export class MemoryController {
       digestMode: input.digestMode ?? "auto",
       metadata: input.metadata
     });
-  }
-
-  private async waitForRuntimeArtifacts(scopeId: string, message: string, digestTriggered: boolean) {
-    const deadline = Date.now() + AGENT_SCENARIO_TIMEOUT_MS;
-    const stableSoftDeadline = Date.now() + AGENT_SCENARIO_STABLE_SOFT_WAIT_MS;
-    let latestWorking = await this.domain.getLatestWorkingMemory(scopeId);
-    let latestStable = await this.domain.getStateLayerView(scopeId);
-    let latestLayer = parseOutput(LayerStatusOutput, {
-      scopeId,
-      message,
-      workingMemoryVersion: latestWorking?.version ?? null,
-      stableStateVersion: latestStable?.digestId ?? null,
-      workingMemoryView: latestWorking?.view ?? null,
-      stableStateView: latestStable?.view ?? null,
-      fastLayerSummary: "",
-      retrievalPlan: null,
-      layerAlignment: {
-        goalAligned: false,
-        sharedConstraintCount: 0,
-        sharedDecisionCount: 0,
-        fastPathReady: false
-      },
-      freshness: {
-        latestEventCreatedAt: null,
-        workingMemoryUpdatedAt: latestWorking?.updatedAt?.toISOString() ?? null,
-        stableStateCreatedAt: latestStable?.createdAt?.toISOString() ?? null,
-        workingMemoryLagMs: null,
-        stableStateLagMs: null,
-        workingMemoryCaughtUp: !latestWorking,
-        stableStateCaughtUp: !latestStable
-      },
-      warnings: []
-    });
-
-    while (Date.now() < deadline) {
-      const recall = await this.resolveRuntimeRecall(scopeId, message);
-      latestLayer = await this.buildLayerStatus(scopeId, message, recall);
-      latestWorking = await this.domain.getLatestWorkingMemory(scopeId);
-      latestStable = await this.domain.getStateLayerView(scopeId);
-
-      if (
-        latestLayer.freshness.workingMemoryCaughtUp
-        && (
-          !digestTriggered
-          || latestLayer.freshness.stableStateCaughtUp
-          || Date.now() >= stableSoftDeadline
-        )
-      ) {
-        break;
-      }
-
-      await sleep(1500);
-    }
-
-    return {
-      working: latestWorking,
-      stable: latestStable,
-      layer: latestLayer
-    };
   }
 
   @Post(["/memory/events", "/v1/memory/events"])
@@ -895,78 +744,4 @@ export class MemoryController {
     return parseOutput(RuntimeTurnOutput, await this.executeRuntimeTurn(req.userId, input));
   }
 
-  @Post("/demo/agent-scenarios/:id/run")
-  async runAgentScenario(@Req() req: RequestWithUser, @Param("id") scenarioId: string) {
-    if (!apiEnv.featureLlm || !this.runtimeLlm) {
-      throw new BadRequestException("FEATURE_LLM disabled");
-    }
-
-    const scenario = AGENT_SCENARIOS.find((item) => item.id === scenarioId);
-    if (!scenario) {
-      throw new BadRequestException(`Unknown agent scenario: ${scenarioId}`);
-    }
-
-    const scope = await this.domain.projectService.createScope(
-      req.userId,
-      `${scenario.title} run`,
-      null,
-      "build"
-    );
-
-    let previousWorkingView: SimpleWorkingView = null;
-    let previousStableView: SimpleStableView = null;
-    const steps = [];
-
-    for (const step of scenario.steps) {
-      const runtimeMessage = step.runtimeMessage ?? step.userTurn;
-      const result = await this.executeRuntimeTurn(req.userId, {
-        scopeId: scope.id,
-        message: runtimeMessage,
-        source: "api",
-        writeTier: "stable",
-        digestMode: "force",
-        metadata: {
-          demoKind: "agent_scenario",
-          agentScenarioId: scenario.id,
-          agentRole: step.activeAgent
-        }
-      });
-
-      const settled = await this.waitForRuntimeArtifacts(scope.id, runtimeMessage, result.digestTriggered);
-      const workingView = (settled.working?.view ?? null) as SimpleWorkingView;
-      const stableView = (settled.stable?.view ?? null) as SimpleStableView;
-
-      steps.push({
-        label: step.label,
-        activeAgent: step.activeAgent,
-        userTurn: step.userTurn,
-        answer: result.answer,
-        answerMode: result.answerMode ?? null,
-        retrievalPlan: result.retrievalPlan ?? null,
-        digestTriggered: result.digestTriggered,
-        workingMemoryVersion: settled.working?.version ?? result.workingMemoryVersion ?? null,
-        stableStateVersion: settled.stable?.digestId ?? result.stableStateVersion ?? null,
-        workingMemoryView: workingView,
-        stableStateView: stableView,
-        layerAlignment: settled.layer.layerAlignment ?? result.layerAlignment ?? null,
-        warnings: Array.from(new Set([...(settled.layer.warnings || []), ...(result.warnings || [])])),
-        workingWrites: diffWorkingView(previousWorkingView, workingView),
-        stableWrites: diffStableView(previousStableView, stableView),
-        nextAgentSees: buildNextAgentSees(workingView, stableView),
-        completedAt: new Date().toISOString()
-      });
-
-      previousWorkingView = workingView;
-      previousStableView = stableView;
-    }
-
-    return parseOutput(AgentScenarioRunOutput, {
-      scenarioId: scenario.id,
-      title: scenario.title,
-      scopeId: scope.id,
-      scopeName: scope.name,
-      completedAt: new Date().toISOString(),
-      steps
-    });
-  }
 }

@@ -58,10 +58,10 @@ const envSchema = z.object({
   MODEL_EMBEDDING_BASE_URL: z.string().optional(),
   MODEL_EMBEDDING_NAME: z.string().optional(),
   MODEL_TIMEOUT_MS: z.string().optional(),
-  DEMO_RATE_LIMIT_WINDOW_MS: z.string().optional(),
-  DEMO_RATE_LIMIT_MAX: z.string().optional(),
-  DEMO_TURN_RATE_LIMIT_WINDOW_MS: z.string().optional(),
-  DEMO_TURN_RATE_LIMIT_MAX: z.string().optional(),
+  RATE_LIMIT_WINDOW_MS: z.string().optional(),
+  RATE_LIMIT_MAX: z.string().optional(),
+  TURN_RATE_LIMIT_WINDOW_MS: z.string().optional(),
+  TURN_RATE_LIMIT_MAX: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_BASE_URL: z.string().optional(),
   OPENAI_MODEL: z.string().optional()
@@ -174,8 +174,8 @@ export const apiEnv = {
   embeddingModelBaseUrl,
   embeddingModelName,
   modelTimeoutMs: Number(env.MODEL_TIMEOUT_MS || 20000),
-  demoRateLimitWindowMs: Number(env.DEMO_RATE_LIMIT_WINDOW_MS || 60000),
-  demoRateLimitMax: Number(env.DEMO_RATE_LIMIT_MAX || 120),
-  demoTurnRateLimitWindowMs: Number(env.DEMO_TURN_RATE_LIMIT_WINDOW_MS || 60000),
-  demoTurnRateLimitMax: Number(env.DEMO_TURN_RATE_LIMIT_MAX || 24)
+  rateLimitWindowMs: Number(env.RATE_LIMIT_WINDOW_MS || 60000),
+  rateLimitMax: Number(env.RATE_LIMIT_MAX || 120),
+  turnRateLimitWindowMs: Number(env.TURN_RATE_LIMIT_WINDOW_MS || 60000),
+  turnRateLimitMax: Number(env.TURN_RATE_LIMIT_MAX || 24)
 };
