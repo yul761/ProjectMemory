@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import type { Request, Response, NextFunction } from "express";
+import { apiReference } from "@scalar/express-api-reference";
 import { AppModule } from "./app.module";
 import { apiEnv } from "./env";
 import { GlobalErrorFilter } from "./error.filter";
@@ -36,7 +37,7 @@ function consumeRateLimit(key: string, windowMs: number, maxRequests: number) {
 }
 
 function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (req.path === "/health") {
+  if (req.path === "/health" || req.path === "/openapi.json" || req.path === "/docs" || req.path.startsWith("/docs/")) {
     next();
     return;
   }
@@ -67,6 +68,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { logger: ["log", "error", "warn"] });
   app.enableCors({ origin: "*" });
   app.use(rateLimitMiddleware);
+  app.use("/docs", apiReference({ url: "/openapi.json" }));
   app.useGlobalFilters(new GlobalErrorFilter());
   await app.listen(apiEnv.port);
 }

@@ -13,7 +13,13 @@ async function getOrCreateUserByIdentity(identity: string, telegramUserId?: stri
 
 export async function authMiddleware(req: RequestWithUser, res: Response, next: NextFunction) {
   const path = req.originalUrl.split("?")[0];
-  if (path === "/health" || path === "/v1/health") {
+  if (
+    path === "/health" ||
+    path === "/v1/health" ||
+    path === "/openapi.json" ||
+    path === "/docs" ||
+    path.startsWith("/docs/")
+  ) {
     return next();
   }
 
