@@ -111,6 +111,8 @@ Reference documentation: `docs/api.md`
 | `GET` | `/v1/memory/working-state` | Current working-memory snapshot |
 | `GET` | `/v1/memory/layer-status` | Aggregated layer health |
 
+> **API stability:** the `/v1` API is frozen as of v1.1.0 — see [STABILITY.md](STABILITY.md).
+
 ## Architecture
 
 ```
