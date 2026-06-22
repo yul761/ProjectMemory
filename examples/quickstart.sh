@@ -32,7 +32,16 @@ curl -fsS "${H_AUTH[@]}" "${H_JSON[@]}" -X POST "${URL}/v1/memory/events" \
 say "trigger a digest (async job)"
 curl -fsS "${H_AUTH[@]}" "${H_JSON[@]}" -X POST "${URL}/v1/memory/digest" \
   -d "{\"scopeId\":\"${SCOPE_ID}\"}" | jq .
-echo "waiting for the digest worker..."; sleep 8
+say "wait for the digest worker to build stable state"
+# The digest is async (an LLM call — typically ~10-20s). Poll the stable-state
+# read model until it populates, or give up after ~30s (if LLM is disabled the
+# digest is a no-op and stable state stays empty — that's expected).
+for _ in $(seq 1 15); do
+  GOAL=$(curl -fsS "${H_AUTH[@]}" "${URL}/memory/stable-state?scopeId=${SCOPE_ID}" | jq -r '.state.stableFacts.goal // empty')
+  if [ -n "${GOAL}" ]; then echo "stable state ready (goal: ${GOAL})"; break; fi
+  printf '.'; sleep 2
+done
+echo
 
 say "retrieve grounded evidence"
 curl -fsS "${H_AUTH[@]}" "${H_JSON[@]}" -X POST "${URL}/v1/memory/retrieve" \
