@@ -683,6 +683,26 @@ export const DemoWebContracts = {
   HealthOutput
 } as const;
 
+// The frozen public /v1 API surface — the single source of truth for what
+// external layers (hosted version, GPT-API layer) may depend on. Guarded by
+// apps/api/src/public-v1-contract.snapshot.test.ts. Additive-optional changes
+// are allowed; removals/renames/retypes/required-additions are breaking.
+export const PublicV1Contracts = {
+  "POST /scopes": { request: ScopeCreateInput, response: ScopeOutput },
+  "GET /scopes": { response: ScopeListOutput },
+  "POST /scopes/:id/active": { response: ScopeActivationOutput },
+  "GET /state": { response: StateOutput },
+  "POST /memory/events": { request: MemoryEventInput, response: MemoryEventOutput },
+  "POST /memory/retrieve": { request: RetrieveInput, response: RetrieveOutput },
+  "POST /memory/answer": { request: AnswerInput, response: AnswerOutput },
+  "POST /memory/digest": { request: DigestRequestInput, response: DigestEnqueueOutput },
+  "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput },
+  "POST /reminders": { request: ReminderCreateInput, response: ReminderOutput },
+  "GET /reminders": { response: ReminderListOutput },
+  "POST /reminders/:id/cancel": { response: ReminderCancelOutput },
+  "GET /health": { response: HealthOutput }
+} as const;
+
 export const DemoWebRoutes = {
   health: PublicRuntimeRoutes.health,
   createScope: PublicRuntimeRoutes.createScope,
