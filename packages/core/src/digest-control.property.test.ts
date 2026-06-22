@@ -90,3 +90,36 @@ describe("protectedStateMerge — deterministic ids", () => {
     expect(a.factRegistry?.[0]?.id).toBe("fact-test-1");
   });
 });
+
+describe("normalizeDigestState — properties", () => {
+  it("is total (never throws) on arbitrary type-valid states", () => {
+    fc.assert(
+      fc.property(stateArb, (s) => {
+        expect(() => normalizeDigestState(s)).not.toThrow();
+      })
+    );
+  });
+
+  it("is idempotent: normalize(normalize(s)) deep-equals normalize(s)", () => {
+    fc.assert(
+      fc.property(stateArb, (s) => {
+        const once = normalizeDigestState(s);
+        const twice = normalizeDigestState(once);
+        expect(twice).toEqual(once);
+      })
+    );
+  });
+
+  it("enforces facet caps", () => {
+    fc.assert(
+      fc.property(stateArb, (s) => {
+        const n = normalizeDigestState(s);
+        expect(n.stableFacts.constraints!.length).toBeLessThanOrEqual(100);
+        expect(n.stableFacts.decisions!.length).toBeLessThanOrEqual(100);
+        expect(n.workingNotes.openQuestions!.length).toBeLessThanOrEqual(10);
+        expect(n.workingNotes.risks!.length).toBeLessThanOrEqual(10);
+        expect(n.volatileContext!.length).toBeLessThanOrEqual(10);
+      })
+    );
+  });
+});
