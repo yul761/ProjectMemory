@@ -268,6 +268,34 @@ describe("protectedStateMerge — properties", () => {
       })
     );
   });
+
+  it("does not let a stream revoke delete a factRegistry-protected decision", () => {
+    // Merge 1: seed a high-importance decision (importanceScore 0.9 >= 0.7) so it is
+    // promoted into factRegistry via promoteToFactRegistry (digest-control.ts ~line 1459).
+    const seed = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [decisionDelta("we decide to use postgres")],
+      documents: [],
+      idFactory: deterministicIdFactory()
+    });
+    expect(seed.stableFacts.decisions).toContain("we decide to use postgres");
+    // The decision must be in the factRegistry — that is what makes it write-protected in merge 2.
+    expect((seed.factRegistry ?? []).some((e) => !e.supersededBy && e.content === "we decide to use postgres")).toBe(true);
+
+    // Merge 2: a kind="decision" delta whose content starts with "revoke" triggers the
+    // revoke branch (digest-control.ts line 1428: /\b(revoke|undo|cancel decision)\b/).
+    // stripDecisionRevocationPrefix strips the prefix → target = "we decide to use postgres".
+    // findBestDecisionMatch (threshold 0.45) finds the exact match.
+    // The protectedByRegistry check (lines 1432-1434) finds the entry in prevFactRegistryIds
+    // and blocks deletion. Without that guard, the decision would be removed here.
+    const after = protectedStateMerge({
+      prevState: seed,
+      deltaCandidates: [decisionDelta("revoke we decide to use postgres")],
+      documents: [],
+      idFactory: deterministicIdFactory()
+    });
+    expect(after.stableFacts.decisions).toContain("we decide to use postgres");
+  });
 });
 
 describe("detectDeltas — properties", () => {
