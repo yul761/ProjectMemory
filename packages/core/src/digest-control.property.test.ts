@@ -64,3 +64,29 @@ describe("fast-check tooling smoke", () => {
     );
   });
 });
+
+describe("protectedStateMerge — deterministic ids", () => {
+  function decisionDelta(content: string, id: string): DeltaCandidate {
+    return {
+      eventId: id,
+      reason: "stable_fact_signal",
+      features: { kind: "decision", importanceScore: 0.9, noveltyScore: 1 },
+      event: ev({ id, type: "stream", content })
+    };
+  }
+
+  it("produces identical factRegistry ids across runs with the same idFactory", () => {
+    const run = () =>
+      protectedStateMerge({
+        prevState: null,
+        deltaCandidates: [decisionDelta("we decide to use postgres", "d1")],
+        documents: [],
+        idFactory: deterministicIdFactory()
+      });
+
+    const a = run();
+    const b = run();
+    expect(a.factRegistry?.map((e) => e.id)).toEqual(b.factRegistry?.map((e) => e.id));
+    expect(a.factRegistry?.[0]?.id).toBe("fact-test-1");
+  });
+});

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { Digest, MemoryEvent, ProjectScope } from "./index";
 
+function createDefaultIdFactory(): () => string {
+  return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export type MemoryEventKind = "decision" | "constraint" | "todo" | "note" | "status" | "question" | "noise";
 
 export interface EventFeatures {
@@ -1006,12 +1010,13 @@ function promoteToFactRegistry(
   type: FactRegistryEntry["type"],
   confidence: number,
   evidence: DigestEvidenceRef,
+  makeId: () => string,
   facet?: string
 ): void {
   if (!state.factRegistry) state.factRegistry = [];
   if (isInFactRegistry(state, content)) return;
   const entry: FactRegistryEntry = {
-    id: `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: makeId(),
     content,
     type,
     confidence,
@@ -1028,6 +1033,7 @@ function supersedeFact(
   content: string,
   newContent: string,
   evidence: DigestEvidenceRef,
+  makeId: () => string,
   overrides?: { facet?: string; confidence?: number; type?: FactRegistryEntry["type"] }
 ): void {
   if (!state.factRegistry) return;
@@ -1035,7 +1041,7 @@ function supersedeFact(
     (entry) => !entry.supersededBy && sameFactCjkAware(entry.content, content, 0.6)
   );
   if (!toSupersede) return;
-  const newId = `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const newId = makeId();
   toSupersede.supersededBy = newId;
   const newEntry: FactRegistryEntry = {
     id: newId,
@@ -1068,7 +1074,8 @@ const PROFILE_FACET_ROUTING: Record<string, { facet: keyof NonNullable<DigestSta
 function mergeProfileFacets(
   state: DigestState,
   events: MemoryEvent[],
-  prevFactRegistryIds: Set<string>
+  prevFactRegistryIds: Set<string>,
+  makeId: () => string
 ): void {
   // Lazy-init guard: only initialise profile if at least one event is routable
   if (!events.some((e) => e.classifiedType != null && e.classifiedType in PROFILE_FACET_ROUTING)) return;
@@ -1124,7 +1131,7 @@ function mergeProfileFacets(
     // Write-protect via factRegistry (write-protected facets only)
     if (writeProtected) {
       const evidence: DigestEvidenceRef = { id: evt.id, sourceType: "event" };
-      promoteToFactRegistry(state, incomingValue, "profile", 0.7, evidence, facet);
+      promoteToFactRegistry(state, incomingValue, "profile", 0.7, evidence, makeId, facet);
     }
   }
 }
@@ -1132,7 +1139,8 @@ function mergeProfileFacets(
 function applyProfileFactsFromDigest(
   state: DigestState,
   profileFacts: { facet: string; value: string }[],
-  documents: MemoryEvent[]
+  documents: MemoryEvent[],
+  makeId: () => string
 ): void {
   if (!profileFacts.some((pf) => pf.facet === "identity")) return;
   if (!state.profile) state.profile = {};
@@ -1165,7 +1173,7 @@ function applyProfileFactsFromDigest(
       // Pass identity overrides so the replacement entry retains facet, document-authority
       // confidence, and correct type — without these, write-protection is silently lost.
       if (docEvidence) {
-        supersedeFact(state, existing, value, docEvidence, {
+        supersedeFact(state, existing, value, docEvidence, makeId, {
           facet: "identity",
           confidence: 0.85,
           type: "profile"
@@ -1180,7 +1188,7 @@ function applyProfileFactsFromDigest(
 
     identityFacts.push(value);
     if (docEvidence) {
-      promoteToFactRegistry(state, value, "profile", 0.85, docEvidence, "identity");
+      promoteToFactRegistry(state, value, "profile", 0.85, docEvidence, makeId, "identity");
     }
   }
 }
@@ -1296,7 +1304,9 @@ export function protectedStateMerge(input: {
   prevState?: DigestState | null;
   deltaCandidates: DeltaCandidate[];
   documents: MemoryEvent[];
+  idFactory?: () => string;
 }): DigestState {
+  const makeId = input.idFactory ?? createDefaultIdFactory();
   const next = normalizeDigestState(input.prevState ?? DEFAULT_DIGEST_STATE);
   next.stableFacts.decisions = next.stableFacts.decisions ?? [];
   next.stableFacts.constraints = next.stableFacts.constraints ?? [];
@@ -1436,7 +1446,7 @@ export function protectedStateMerge(input: {
           pushRecentChange(next, { field: "decisions", action: "add", value: text, evidence });
           next.provenance.decisions = upsertValueProvenance(next.provenance.decisions, text, evidence);
           if (delta.features.importanceScore >= 0.7) {
-            promoteToFactRegistry(next, text, "decision", delta.features.importanceScore, evidence);
+            promoteToFactRegistry(next, text, "decision", delta.features.importanceScore, evidence, makeId);
           }
         } else if (!valueHasEvidence(next.provenance.decisions, existing, evidence)) {
           pushRecentChange(next, { field: "decisions", action: "reaffirm", value: existing, evidence });
@@ -1467,7 +1477,7 @@ export function protectedStateMerge(input: {
         next.stableFacts.constraints.push(normalizedConstraint);
         pushRecentChange(next, { field: "constraints", action: "add", value: normalizedConstraint, evidence });
         next.provenance.constraints = upsertValueProvenance(next.provenance.constraints, normalizedConstraint, evidence);
-        promoteToFactRegistry(next, normalizedConstraint, "constraint", delta.features.importanceScore, evidence);
+        promoteToFactRegistry(next, normalizedConstraint, "constraint", delta.features.importanceScore, evidence, makeId);
       } else if (!valueHasEvidence(next.provenance.constraints, existing, evidence)) {
         pushRecentChange(next, { field: "constraints", action: "reaffirm", value: existing, evidence });
         next.provenance.constraints = upsertValueProvenance(next.provenance.constraints, existing, evidence);
@@ -1576,7 +1586,7 @@ export function protectedStateMerge(input: {
 
   // Profile facet routing: personal_detail stream events → profile.identity (Stage 1)
   const streamEventsForProfile = input.deltaCandidates.map((d) => d.event);
-  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds);
+  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds, makeId);
 
   next.stableFacts.decisions = [...new Set(next.stableFacts.decisions)];
   next.stableFacts.constraints = [...new Set(next.stableFacts.constraints ?? [])];
@@ -2191,7 +2201,7 @@ export async function runDigestControlPipeline(input: {
 
   // Apply profile facts extracted by LLM from documents into stable state
   if (digest.profileFacts && digest.profileFacts.length > 0) {
-    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents);
+    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, createDefaultIdFactory());
   }
 
   const resolvedGoal = input.scope.goal?.trim() || undefined;
