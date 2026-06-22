@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NotFoundException, BadRequestException, HttpException } from "@nestjs/common";
 import type { ArgumentsHost } from "@nestjs/common";
+import { z, ZodError } from "zod";
+import { logger } from "@statecore/core";
 import { GlobalErrorFilter } from "./error.filter";
 
 function makeHost(): { host: ArgumentsHost; status: ReturnType<typeof vi.fn>; json: ReturnType<typeof vi.fn> } {
@@ -17,6 +19,11 @@ describe("GlobalErrorFilter", () => {
 
   beforeEach(() => {
     filter = new GlobalErrorFilter();
+    vi.spyOn(logger, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("maps NotFoundException to 404 with error message", () => {
@@ -45,5 +52,23 @@ describe("GlobalErrorFilter", () => {
     filter.catch(new HttpException("custom error", 422), host);
     expect(status).toHaveBeenCalledWith(422);
     expect(json).toHaveBeenCalledWith({ error: "custom error" });
+  });
+
+  it("maps ZodError to 400 with validation details", () => {
+    const { host, status, json } = makeHost();
+    const parsed = z.object({ scopeId: z.string() }).safeParse({});
+    const error = (parsed as { success: false; error: ZodError }).error;
+    filter.catch(error, host);
+    expect(status).toHaveBeenCalledWith(400);
+    const payload = json.mock.calls[0][0] as { error: string; details: unknown[] };
+    expect(payload.error).toBe("Validation failed");
+    expect(Array.isArray(payload.details)).toBe(true);
+    expect(payload.details.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("logs unexpected (500) errors via logger.error", () => {
+    const { host } = makeHost();
+    filter.catch(new Error("database exploded"), host);
+    expect(logger.error).toHaveBeenCalledTimes(1);
   });
 });
