@@ -123,3 +123,71 @@ describe("normalizeDigestState — properties", () => {
     );
   });
 });
+
+describe("selectEventsForDigest — properties", () => {
+  // Arbitrary content biased toward durable/noise kinds so we exercise the durable-preservation path.
+  const durableContentArb = fc.constantFrom(
+    "we decide to use postgres",
+    "constraint: must ship by friday",
+    "todo: write integration tests"
+  );
+  const noiseContentArb = fc.constantFrom("ok", "thanks", "lol", "noted");
+  const contentArb = fc.oneof(durableContentArb, noiseContentArb, fc.string({ minLength: 1, maxLength: 30 }));
+
+  const streamEventArb = contentArb.map((content) => ev({ type: "stream", content }));
+  const eventsArb = fc.array(streamEventArb, { maxLength: 40 });
+
+  const budgetsArb = fc.record({
+    eventBudgetTotal: fc.integer({ min: 1, max: 20 }),
+    eventBudgetDocs: fc.integer({ min: 0, max: 5 }),
+    eventBudgetStream: fc.integer({ min: 0, max: 15 })
+  });
+
+  it("never exceeds the total budget", () => {
+    fc.assert(
+      fc.property(eventsArb, budgetsArb, (events, b) => {
+        const r = selectEventsForDigest({ recentEvents: events, lastDigest: null, ...b });
+        expect(r.selectedEvents.length).toBeLessThanOrEqual(b.eventBudgetTotal);
+      })
+    );
+  });
+
+  it("is deterministic: same input → same selected ids", () => {
+    fc.assert(
+      fc.property(eventsArb, budgetsArb, (events, b) => {
+        const a = selectEventsForDigest({ recentEvents: events, lastDigest: null, ...b }).selectedEvents.map((s) => s.event.id);
+        const c = selectEventsForDigest({ recentEvents: events, lastDigest: null, ...b }).selectedEvents.map((s) => s.event.id);
+        expect(a).toEqual(c);
+      })
+    );
+  });
+
+  it("keeps durable stream facts as long as the total budget allows", () => {
+    // With a generous total budget, every durable (decision/constraint/todo) event survives selection.
+    fc.assert(
+      fc.property(fc.array(durableContentArb, { minLength: 1, maxLength: 8 }), (contents) => {
+        const events = contents.map((content) => ev({ type: "stream", content }));
+        const r = selectEventsForDigest({
+          recentEvents: events,
+          lastDigest: null,
+          eventBudgetTotal: 50,
+          eventBudgetDocs: 0,
+          eventBudgetStream: 0 // contextual stream budget is 0; durable must still survive
+        });
+        const selectedIds = new Set(r.selectedEvents.map((s) => s.event.id));
+        // Every distinct durable content survives selection (dedup may collapse exact duplicates).
+        // We check by content rather than specific id: the ev() helper uses
+        //   Date.UTC(2026, 0, 1, 0, 0, seq % 60, seq)
+        // which wraps at every multiple of 60, making timestamps non-monotonic relative to
+        // creation order. Dedup keeps the highest-timestamp event, not the highest-seq one, so
+        // distinctById (which maps content → last-created event) can point to the deduped-away
+        // copy. The true invariant is "at least one representative per distinct content survives."
+        const distinctContents = new Set(events.map((e) => e.content));
+        for (const content of distinctContents) {
+          const anyWithContentSelected = events.some((e) => e.content === content && selectedIds.has(e.id));
+          expect(anyWithContentSelected).toBe(true);
+        }
+      })
+    );
+  });
+});
