@@ -341,6 +341,53 @@ describe("detectDeltas — properties", () => {
   });
 });
 
+describe("CJK over-merge guard — properties (via protectedStateMerge)", () => {
+  function decisionDelta(content: string): DeltaCandidate {
+    const event = ev({ type: "stream", content });
+    return {
+      eventId: event.id,
+      reason: "stable_fact_signal",
+      features: { kind: "decision", importanceScore: 0.9, noveltyScore: 1 },
+      event
+    };
+  }
+
+  it("does not merge two CJK decisions whose ASCII tokens diverge (PostgreSQL vs MySQL)", () => {
+    const merged = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [
+        decisionDelta("我决定用 PostgreSQL"),
+        decisionDelta("我决定用 MySQL")
+      ],
+      documents: [],
+      idFactory: deterministicIdFactory()
+    });
+    // Both must be retained as distinct decisions — divergent ASCII content overrides bigram similarity.
+    expect(merged.stableFacts.decisions).toContain("我决定用 PostgreSQL");
+    expect(merged.stableFacts.decisions).toContain("我决定用 MySQL");
+  });
+
+  it("treats two genuinely different pure-CJK decisions as distinct", () => {
+    const pairArb = fc.constantFrom(
+      ["我喜欢喝茶", "我喜欢爬山"],
+      ["项目要上线", "团队要扩招"]
+    );
+    fc.assert(
+      fc.property(pairArb, ([a, b]) => {
+        const merged = protectedStateMerge({
+          prevState: null,
+          deltaCandidates: [decisionDelta(a), decisionDelta(b)],
+          documents: [],
+          idFactory: deterministicIdFactory()
+        });
+        // Two unrelated Chinese facts must not collapse into one via the empty-normalization pitfall.
+        expect(merged.stableFacts.decisions).toContain(a);
+        expect(merged.stableFacts.decisions).toContain(b);
+      })
+    );
+  });
+});
+
 describe("consistencyCheck — properties", () => {
   it("does not flag goal_contradiction when the summary restates the protected goal verbatim", () => {
     fc.assert(
