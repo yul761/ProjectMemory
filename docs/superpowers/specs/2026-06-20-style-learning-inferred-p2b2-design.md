@@ -4,6 +4,7 @@
 > 背景接续：`StateCore-记忆引擎-讨论记录.md` §8.2/§8.3/§8.4，§20（P2a 种子），§21（P2b-v1 显式风格）。
 > 这是 P2b 的推断阶段：从观察用户消息**推断**交流风格，经**确认**后采纳。
 > ★ **数据门（§8.4）**：机制可设计、可用合成数据单测；但「真养出对的风格」需真实使用数据。本 spec 定义机制；实现可分阶段，efficacy 调优待数据。
+> Status: Designed, not implemented — awaiting real usage data (core-readiness W4 confirms this is intentional, not a gap).
 
 ## 1. 问题
 
