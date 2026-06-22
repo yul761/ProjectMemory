@@ -439,11 +439,13 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
       }
     });
 
-    // Cast: createDigestWithSnapshot returns { id } but lastDigest is typed as the
-    // full Prisma Digest for toCoreDigest(). The remaining fields are not read
-    // from lastDigest after this point in the same iteration; toCoreDigest()
-    // is only called on the next iteration where this becomes the "previous" digest.
-    // The real prisma $transaction returns the full row so the cast is safe at runtime.
+    // Cast: createDigestWithSnapshot's static return type is { id: string } but
+    // lastDigest must also satisfy toCoreDigest()'s shape (id, scopeId, summary,
+    // changes, nextSteps, createdAt, rebuildGroupId). toCoreDigest(lastDigest) IS
+    // called at the top of every subsequent loop iteration (line 421), so ALL those
+    // fields ARE read. The cast is runtime-safe: Prisma's $transaction returns the
+    // full digest row, so every field toCoreDigest() needs is present at runtime
+    // even though the helper's static return type is narrowed to { id: string }.
     lastDigest = await createDigestWithSnapshot(prisma, {
       scopeId: data.scopeId,
       summary: result.digest.summary,
