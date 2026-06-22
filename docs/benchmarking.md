@@ -147,6 +147,23 @@ Retrieval-semantic benchmark:
 BENCH_FIXTURE=benchmark-fixtures/retrieval-semantic.json BENCH_RETRIEVE_USE_EMBEDDINGS=true pnpm benchmark
 ```
 
+### Verifying the HNSW index is used
+
+The HNSW index (`MemoryEventEmbedding_embedding_hnsw_idx`, `vector_cosine_ops`)
+is used only when the query uses the matching cosine operator `<=>`. To confirm
+on a populated database:
+
+    EXPLAIN ANALYZE
+    SELECT mee."eventId" FROM "MemoryEventEmbedding" mee
+    JOIN "MemoryEvent" me ON me.id = mee."eventId"
+    WHERE me."scopeId" = '<scope>'
+    ORDER BY mee.embedding <=> '<query-vector>'::vector LIMIT 20;
+
+Look for an `Index Scan using MemoryEventEmbedding_embedding_hnsw_idx`. On small
+tables the planner may still choose a sequential scan — that is expected and
+correct; the index matters at scale. Set `SET hnsw.ef_search = <n>;` to trade
+recall vs latency.
+
 Document-heavy runtime benchmark:
 ```bash
 BENCH_FIXTURE=benchmark-fixtures/document-heavy.json BENCH_RUNTIME_POLICY_PROFILE=document-heavy pnpm benchmark

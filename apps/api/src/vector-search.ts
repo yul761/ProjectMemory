@@ -15,7 +15,7 @@ export function createVectorSearchFn(client: RawQueryClient) {
       FROM "MemoryEventEmbedding" mee
       JOIN "MemoryEvent" me ON me.id = mee."eventId"
       WHERE me."scopeId" = ${scopeId}
-      ORDER BY mee.embedding <-> ${vectorString}::vector
+      ORDER BY mee.embedding <=> ${vectorString}::vector
       LIMIT ${limit}
     `;
     return rows.map((r) => r.eventId);
