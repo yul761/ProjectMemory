@@ -500,3 +500,85 @@ EOF
 **Placeholder scan:** No TBD/TODO; every code step shows full code/commands. ✓
 
 **Type consistency:** `PublicV1Contracts` is `Record<"<METHOD> <path>", { request?: ZodType; response: ZodType }>` in Task 2 (definition) and consumed identically by the snapshot test (Task 2). The 13 endpoint keys in the registry, the `has exactly the 13` test, and the Task 3 route edits, and the Task 4 docs table all list the same 13 paths. ✓
+
+---
+
+### Task 5: Narrow frozen response schemas for retrieve/answer/runtime-turn (final-review #1) + dep cleanup
+
+The final whole-branch review flagged that freezing `POST /memory/retrieve`, `/memory/answer`, `/memory/runtime/turn` also freezes their diagnostic/ranking internals (labeled "Debug surface", still evolving per roadmap). Decision: narrow the FROZEN response schemas for these three to their stable top-level fields. The HTTP responses are unchanged (the shared handlers still return the full objects); only what `PublicV1Contracts` declares as frozen — and what the snapshot guards — is trimmed, so diagnostic sub-objects can evolve without a breaking-change dance. Also moves the test-only `zod-to-json-schema` dep to devDependencies.
+
+**Files:**
+- Modify: `packages/contracts/src/index.ts` (3 `PublicV1Contracts` entries)
+- Modify: `apps/api/package.json` (move `zod-to-json-schema` to devDependencies) + `pnpm-lock.yaml`
+- Regenerate: `apps/api/src/__snapshots__/public-v1-contract.snapshot.test.ts.snap`
+- Modify: `docs/api.md` (note diagnostic sub-objects are returned but not frozen)
+
+**Interfaces:**
+- Consumes: existing `RetrieveOutput`, `AnswerOutput`, `RuntimeTurnOutput` (Zod objects support `.pick()`/`.omit()`, returning new ZodObjects that `zod-to-json-schema` serializes).
+
+- [ ] **Step 1: Narrow the three registry entries**
+
+In `packages/contracts/src/index.ts`, inside `PublicV1Contracts`, replace the three entries and add an explanatory comment:
+
+```ts
+  // Narrowed to stable top-level fields: the diagnostic/ranking sub-objects
+  // (RetrieveOutput.retrieval, AnswerOutput.evidence, RuntimeTurnOutput
+  // layerAlignment/retrievalPlan/version/notes/warnings/evidence) are still
+  // returned in the HTTP response but are intentionally NOT part of the frozen
+  // /v1 contract, so they can evolve without a breaking change.
+  "POST /memory/retrieve": { request: RetrieveInput, response: RetrieveOutput.omit({ retrieval: true }) },
+  "POST /memory/answer": { request: AnswerInput, response: AnswerOutput.pick({ answer: true }) },
+  "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput.pick({ answer: true, answerMode: true, writeTier: true, digestTriggered: true }) },
+```
+
+(Leave the other 10 entries unchanged. Requests stay full — accepting more input later is additive.)
+
+- [ ] **Step 2: Move `zod-to-json-schema` to devDependencies**
+
+Run: `pnpm --filter @statecore/api remove zod-to-json-schema && pnpm --filter @statecore/api add -D zod-to-json-schema`
+Expected: `apps/api/package.json` now lists `zod-to-json-schema` under `devDependencies`, not `dependencies`; lockfile updates.
+
+- [ ] **Step 3: Regenerate the snapshot (intentional, additive-removal of frozen fields)**
+
+Run: `pnpm --filter @statecore/api test -- public-v1-contract -u`
+Expected: PASS; the snapshot file updates. Open
+`apps/api/src/__snapshots__/public-v1-contract.snapshot.test.ts.snap` and confirm:
+- `POST /memory/runtime/turn` response now lists only `answer`, `answerMode`, `writeTier`, `digestTriggered` (no `layerAlignment`, no `retrievalPlan`).
+- `POST /memory/retrieve` response no longer has `retrieval`.
+- `POST /memory/answer` response has only `answer` (no `evidence`).
+
+- [ ] **Step 4: Run the test normally + typecheck**
+
+Run: `pnpm --filter @statecore/api test -- public-v1-contract && pnpm --filter @statecore/api exec tsc --noEmit`
+Expected: PASS (both the 13-key test and the snapshot test); no type errors.
+
+- [ ] **Step 5: Note the narrowing in docs/api.md**
+
+In `docs/api.md`, under the `## API versioning (/v1)` section's "Compatibility rules" subsection, append:
+
+```markdown
+> **Diagnostic fields are not frozen.** `POST /v1/memory/retrieve`,
+> `/v1/memory/answer`, and `/v1/memory/runtime/turn` return additional
+> diagnostic/ranking fields (e.g. `retrieval`, `evidence`, `layerAlignment`,
+> `retrievalPlan`) that are **not** part of the frozen contract and may change
+> without notice. Only the stable top-level fields of these endpoints are frozen.
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/contracts/src/index.ts apps/api/package.json pnpm-lock.yaml \
+  apps/api/src/__snapshots__/public-v1-contract.snapshot.test.ts.snap docs/api.md
+git commit -m "$(cat <<'EOF'
+refactor(contracts): freeze only stable top-level fields for retrieve/answer/turn
+
+Narrows the /v1 frozen response schemas for retrieve, answer, and runtime/turn
+to their stable top-level fields; diagnostic/ranking sub-objects are still
+returned but excluded from the frozen contract so they can evolve without a
+breaking change (final-review #1). Also moves test-only zod-to-json-schema to
+devDependencies and documents the non-frozen diagnostic fields.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
