@@ -14,6 +14,7 @@ import type { DigestConsistencyResult, DigestState, WorkingMemorySnapshot, Worki
 import { apiEnv } from "./env";
 import { registerLiteHandlers } from "./queue";
 import { selectWorkingMemoryEvents } from "@statecore/core";
+import { createVectorSearchFn } from "./vector-search";
 
 @Injectable()
 export class DomainService {
@@ -241,16 +242,7 @@ export class DomainService {
       embeddingCandidateLimit: apiEnv.retrieveEmbeddingCandidateLimit,
       useVectorSearch: apiEnv.retrieveUseVectorSearch,
       vectorSearchFn: apiEnv.retrieveUseVectorSearch && provider?.embedding
-        ? async (queryVector: number[], limit: number) => {
-            const vectorString = `[${queryVector.join(",")}]`;
-            const rows = await prisma.$queryRaw<{ eventId: string }[]>`
-              SELECT "eventId"
-              FROM "MemoryEventEmbedding"
-              ORDER BY embedding <-> ${vectorString}::vector
-              LIMIT ${limit}
-            `;
-            return rows.map((r) => r.eventId);
-          }
+        ? createVectorSearchFn(prisma)
         : undefined
     });
     this.reminderService = new ReminderService(reminderRepo);

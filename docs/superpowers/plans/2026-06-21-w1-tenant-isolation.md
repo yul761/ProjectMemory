@@ -461,3 +461,136 @@ EOF
 **Placeholder scan:** No TBD/TODO; every code step shows full code. ✓
 
 **Type consistency:** `vectorSearchFn` is `(queryVector: number[], limit: number, scopeId: string) => Promise<string[]>` in Task 1 (definition), Task 2 (`createVectorSearchFn` return), and the call site — consistent. `RawQueryClient` defined and reused in Task 2 test + impl. ✓
+
+---
+
+### Task 5: Real pgvector scope-isolation regression test (closes final-review issue #1)
+
+The final whole-branch review found that the vector-search fix is proven by unit/mock tests only — the HTTP integration suite never exercises the real pgvector path because vector search is disabled in the test env. This task proves the actual SQL scope predicate against a real pgvector DB by calling `createVectorSearchFn(prisma)` directly with seeded cross-scope embeddings, and fixes the related `clearDatabase` gap (minor #3).
+
+**Prerequisite:** same provisioned Postgres test DB as Task 4 (`statecore_test`, already migrated — the pgvector migration `20260615020000_pgvector_embeddings` creates the `vector(1536)` `embedding` column and the `vector` extension).
+
+**Files:**
+- Modify: `apps/api/src/test/helpers.ts` (clear `MemoryEventEmbedding`)
+- Create: `apps/api/src/vector-search.integration.test.ts`
+
+**Interfaces:**
+- Consumes: `createVectorSearchFn(prisma)` from `./vector-search` (Task 2) — `(queryVector: number[], limit: number, scopeId: string) => Promise<string[]>`; `clearDatabase` from `./test/helpers`; `prisma` from `@statecore/db`.
+
+- [ ] **Step 1: Clear embeddings in `clearDatabase`**
+
+In `apps/api/src/test/helpers.ts`, add a `MemoryEventEmbedding` clear as the FIRST statement in `clearDatabase` (before `memoryEvent.deleteMany`), so seeded embeddings are removed deterministically rather than only via FK cascade:
+
+```ts
+export async function clearDatabase() {
+  await prisma.memoryEventEmbedding.deleteMany();
+  await prisma.reminder.deleteMany();
+  await prisma.workingMemorySnapshot.deleteMany();
+  await prisma.digestStateSnapshot.deleteMany();
+  await prisma.digest.deleteMany();
+  await prisma.memoryEvent.deleteMany();
+  await prisma.userState.deleteMany();
+  await prisma.projectScope.deleteMany();
+  await prisma.user.deleteMany();
+}
+```
+
+- [ ] **Step 2: Write the real-DB isolation test**
+
+Create `apps/api/src/vector-search.integration.test.ts`:
+
+```ts
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { prisma } from "@statecore/db";
+import { createVectorSearchFn } from "./vector-search";
+import { clearDatabase } from "./test/helpers";
+
+// A 1536-dim vector with one "hot" dimension, so L2 distance is controlled by `hot`.
+function vecLiteral(hot: number): string {
+  const arr = new Array(1536).fill(0);
+  arr[0] = hot;
+  return `[${arr.join(",")}]`;
+}
+function queryVector(hot: number): number[] {
+  const arr = new Array(1536).fill(0);
+  arr[0] = hot;
+  return arr;
+}
+
+async function seedScopeWithEmbedding(opts: {
+  identity: string;
+  scopeName: string;
+  content: string;
+  hot: number;
+}): Promise<{ scopeId: string; eventId: string }> {
+  const user = await prisma.user.create({ data: { identity: opts.identity } });
+  const scope = await prisma.projectScope.create({ data: { userId: user.id, name: opts.scopeName } });
+  const event = await prisma.memoryEvent.create({
+    data: { userId: user.id, scopeId: scope.id, type: "stream", source: "api", content: opts.content }
+  });
+  await prisma.$executeRaw`
+    INSERT INTO "MemoryEventEmbedding" ("eventId", "embedding", "model")
+    VALUES (${event.id}, ${vecLiteral(opts.hot)}::vector, 'test-model')
+  `;
+  return { scopeId: scope.id, eventId: event.id };
+}
+
+describe("createVectorSearchFn — real pgvector tenant isolation", () => {
+  beforeEach(async () => {
+    await clearDatabase();
+  });
+  afterAll(async () => {
+    await clearDatabase();
+  });
+
+  it("never returns another scope's event, even when it is the nearest neighbor", async () => {
+    // Scope A's event is far from the query; Scope B's event sits exactly on the
+    // query vector (distance 0) — so without scope filtering B would rank first.
+    const a = await seedScopeWithEmbedding({ identity: "user-a", scopeName: "a", content: "alpha", hot: 1 });
+    const b = await seedScopeWithEmbedding({ identity: "user-b", scopeName: "b", content: "beta", hot: 10 });
+
+    const fn = createVectorSearchFn(prisma);
+    const query = queryVector(10); // identical to B's embedding → B is the nearest neighbor
+
+    const idsForA = await fn(query, 10, a.scopeId);
+    expect(idsForA).toContain(a.eventId);
+    expect(idsForA).not.toContain(b.eventId); // isolation holds despite B being nearest
+
+    const idsForB = await fn(query, 10, b.scopeId);
+    expect(idsForB).toContain(b.eventId);
+    expect(idsForB).not.toContain(a.eventId);
+  });
+});
+```
+
+- [ ] **Step 3: Run the test and confirm it passes against the fixed code**
+
+Run: `pnpm --filter @statecore/api test -- vector-search.integration`
+Expected: PASS (1 test). If it fails with `PrismaClientInitializationError`, provision the test DB (see Task 4 Prerequisite).
+
+- [ ] **Step 4: Prove the test is non-vacuous (would catch a regression)**
+
+Temporarily delete the line `WHERE me."scopeId" = ${scopeId}` from `apps/api/src/vector-search.ts`, re-run `pnpm --filter @statecore/api test -- vector-search.integration`, and confirm it now FAILS (`b.eventId` leaks into `idsForA`). Then restore the line exactly and re-run to confirm PASS again. Record both outputs in the report as RED/GREEN evidence. Do NOT commit the temporary deletion.
+
+- [ ] **Step 5: Run the full api suite**
+
+Run: `pnpm --filter @statecore/api test`
+Expected: PASS (no regressions; `fileParallelism: false` is already in place).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add apps/api/src/test/helpers.ts apps/api/src/vector-search.integration.test.ts
+git commit -m "$(cat <<'EOF'
+test(api): prove pgvector scope isolation against a real DB
+
+Calls createVectorSearchFn(prisma) directly with two seeded scopes whose
+embeddings are crafted so the other tenant's event is the nearest neighbor,
+and asserts it is still excluded — closing the final-review gap where vector
+isolation was guarded only by mocks. Also clears MemoryEventEmbedding in
+clearDatabase for deterministic teardown.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```

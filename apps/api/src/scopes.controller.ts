@@ -60,10 +60,11 @@ export class ScopesController {
     const scope = await this.domain.projectService.getScope(req.userId, id);
     if (!scope) throw new NotFoundException("Scope not found");
 
-    await prisma.projectScope.update({
-      where: { id },
+    const updated = await prisma.projectScope.updateMany({
+      where: { id, userId: req.userId },
       data: { notificationWebhook: input.notificationWebhook }
     });
+    if (updated.count === 0) throw new NotFoundException("Scope not found");
 
     return { ok: true };
   }
