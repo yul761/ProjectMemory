@@ -1,0 +1,44 @@
+import { describe, it, expect } from "vitest";
+import { buildOpenApiDocument } from "./openapi";
+
+type SecuritySchemes = { apiKey?: { type: string; in: string; name: string } };
+type Op = { security?: unknown[] };
+
+describe("buildOpenApiDocument", () => {
+  const doc = buildOpenApiDocument();
+  const paths = doc.paths as Record<string, Record<string, Op>>;
+
+  it("is an OpenAPI 3.0.x document", () => {
+    expect(String(doc.openapi)).toMatch(/^3\.0\./);
+    expect(typeof doc.info).toBe("object");
+  });
+
+  it("documents exactly the 13 /v1 operations", () => {
+    const opCount = Object.values(paths).reduce(
+      (n, methods) => n + Object.keys(methods).length,
+      0
+    );
+    expect(opCount).toBe(13);
+    // every documented path is under /v1
+    expect(Object.keys(paths).every((p) => p.startsWith("/v1/"))).toBe(true);
+  });
+
+  it("declares the x-user-id apiKey security scheme, applied globally", () => {
+    const schemes = (doc.components as { securitySchemes: SecuritySchemes }).securitySchemes;
+    expect(schemes.apiKey).toEqual({ type: "apiKey", in: "header", name: "x-user-id" });
+    expect(doc.security).toEqual([{ apiKey: [] }]);
+  });
+
+  it("marks GET /v1/health as public (security: [])", () => {
+    expect(paths["/v1/health"].get.security).toEqual([]);
+  });
+
+  it("converts :id path params to {id} with a path parameter", () => {
+    const op = paths["/v1/scopes/{id}/active"].post as { parameters?: Array<{ name: string; in: string }> };
+    expect(op.parameters?.some((p) => p.name === "id" && p.in === "path")).toBe(true);
+  });
+
+  it("matches the committed snapshot", () => {
+    expect(doc).toMatchSnapshot();
+  });
+});
