@@ -12,7 +12,8 @@ async function getOrCreateUserByIdentity(identity: string, telegramUserId?: stri
 }
 
 export async function authMiddleware(req: RequestWithUser, res: Response, next: NextFunction) {
-  if (req.originalUrl.split("?")[0] === "/health") {
+  const path = req.originalUrl.split("?")[0];
+  if (path === "/health" || path === "/v1/health") {
     return next();
   }
 

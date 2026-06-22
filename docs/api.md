@@ -281,3 +281,60 @@ curl -X POST "$API_BASE_URL/memory/runtime/turn" \
 curl "$API_BASE_URL/memory/layer-status?scopeId=SCOPE_ID&message=What%20is%20the%20current%20goal%3F" \
   -H 'x-user-id: dev-user'
 ```
+
+## API versioning (/v1)
+
+StateCore exposes a **frozen public API subset** under the `/v1` prefix. External
+layers (the hosted version, the GPT-API integration layer) should depend ONLY on
+`/v1`. Every `/v1` endpoint is also served at its legacy unversioned path for
+backward compatibility; reference integrations (`cli`, `adapter-mcp`,
+`adapter-telegram`) continue to use the legacy paths.
+
+### Frozen public subset
+
+| Method | `/v1` path |
+|---|---|
+| POST | `/v1/scopes` |
+| GET | `/v1/scopes` |
+| POST | `/v1/scopes/:id/active` |
+| GET | `/v1/state` |
+| POST | `/v1/memory/events` |
+| POST | `/v1/memory/retrieve` |
+| POST | `/v1/memory/answer` |
+| POST | `/v1/memory/digest` |
+| POST | `/v1/memory/runtime/turn` |
+| POST | `/v1/reminders` |
+| GET | `/v1/reminders` |
+| POST | `/v1/reminders/:id/cancel` |
+| GET | `/v1/health` |
+
+The source of truth is `PublicV1Contracts` in `@statecore/contracts`, guarded by
+the snapshot test `apps/api/src/public-v1-contract.snapshot.test.ts`.
+
+### Compatibility rules (additively-compatible freeze)
+
+For the public subset:
+
+1. Existing fields are never removed, renamed, or retyped.
+2. New fields are always optional — never newly required.
+3. Enums are open sets; clients must tolerate unknown values.
+
+The snapshot test fails on any change to the surface. An intentional,
+additive-only change is accepted by regenerating the snapshot
+(`pnpm --filter @statecore/api test -- public-v1-contract -u`). A
+removal/rename/retype/required-addition is a breaking change — do not ship it
+under `/v1`.
+
+> **Diagnostic fields are not frozen.** `POST /v1/memory/retrieve`,
+> `/v1/memory/answer`, and `/v1/memory/runtime/turn` return additional
+> diagnostic/ranking fields (e.g. `retrieval`, `evidence`, `layerAlignment`,
+> `retrievalPlan`) that are **not** part of the frozen contract and may change
+> without notice. Only the stable top-level fields of these endpoints are frozen.
+
+### Not part of `/v1`
+
+All other endpoints (diagnostics, `fast-view`, `layer-status`, `working-state`,
+`stable-state`, `state/history`, `relationship-context`, `check-contradiction`,
+`embed/backfill`, `digest/rebuild`, `digests`, the `GET /memory/events` list,
+`scopes/:id/webhook`, demo, metrics) are **internal**: unversioned, legacy-path
+only, and may change without notice.

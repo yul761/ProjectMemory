@@ -501,7 +501,7 @@ export class MemoryController {
     };
   }
 
-  @Post("/memory/events")
+  @Post(["/memory/events", "/v1/memory/events"])
   async ingestEvent(@Req() req: RequestWithUser, @Body() body: unknown) {
     const input = MemoryEventInput.parse(body);
     if (input.type === "document" && !input.key) {
@@ -617,7 +617,7 @@ export class MemoryController {
     });
   }
 
-  @Post("/memory/digest")
+  @Post(["/memory/digest", "/v1/memory/digest"])
   async enqueueDigest(@Req() req: RequestWithUser, @Body() body: unknown) {
     if (!apiEnv.featureLlm) {
       throw new BadRequestException("FEATURE_LLM disabled. Enable FEATURE_LLM=true and configure MODEL_* or OPENAI_* to run digest.");
@@ -817,7 +817,7 @@ export class MemoryController {
     });
   }
 
-  @Post("/memory/retrieve")
+  @Post(["/memory/retrieve", "/v1/memory/retrieve"])
   async retrieve(@Req() req: RequestWithUser, @Body() body: unknown) {
     const input = RetrieveInput.parse(body);
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
@@ -842,7 +842,7 @@ export class MemoryController {
     });
   }
 
-  @Post("/memory/answer")
+  @Post(["/memory/answer", "/v1/memory/answer"])
   async answer(@Req() req: RequestWithUser, @Body() body: unknown) {
     if (!apiEnv.featureLlm || !this.answerLlm) {
       throw new BadRequestException("FEATURE_LLM disabled");
@@ -878,7 +878,7 @@ export class MemoryController {
     });
   }
 
-  @Post("/memory/runtime/turn")
+  @Post(["/memory/runtime/turn", "/v1/memory/runtime/turn"])
   async runtimeTurn(@Req() req: RequestWithUser, @Body() body: unknown) {
     if (!apiEnv.featureLlm || !this.runtimeLlm) {
       throw new BadRequestException("FEATURE_LLM disabled");

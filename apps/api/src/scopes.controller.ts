@@ -10,7 +10,7 @@ import { z } from "zod";
 export class ScopesController {
   constructor(@Inject(DomainService) private readonly domain: DomainService) {}
 
-  @Post("/scopes")
+  @Post(["/scopes", "/v1/scopes"])
   async createScope(@Req() req: RequestWithUser, @Body() body: unknown) {
     const input = ScopeCreateInput.parse(body);
     const scope = await this.domain.projectService.createScope(req.userId, input.name, input.goal ?? null, input.stage, input.template);
@@ -23,7 +23,7 @@ export class ScopesController {
     });
   }
 
-  @Get("/scopes")
+  @Get(["/scopes", "/v1/scopes"])
   async listScopes(@Req() req: RequestWithUser) {
     const scopes = await this.domain.projectService.listScopes(req.userId);
     return parseOutput(ScopeListOutput, {
@@ -37,7 +37,7 @@ export class ScopesController {
     });
   }
 
-  @Post("/scopes/:id/active")
+  @Post(["/scopes/:id/active", "/v1/scopes/:id/active"])
   async setActiveScope(@Req() req: RequestWithUser, @Param("id") scopeId: string) {
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) {
@@ -69,7 +69,7 @@ export class ScopesController {
     return { ok: true };
   }
 
-  @Get("/state")
+  @Get(["/state", "/v1/state"])
   async getState(@Req() req: RequestWithUser) {
     const state = await this.domain.projectService.getState(req.userId);
     return parseOutput(StateOutput, { activeScopeId: state?.activeProjectId ?? null });

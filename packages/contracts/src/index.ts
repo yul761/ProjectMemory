@@ -113,7 +113,7 @@ export const DigestRebuildInput = z.object({
 // Debug surface contracts
 export const RetrieveInput = z.object({
   scopeId: z.string().uuid(),
-  query: z.string().min(1),
+  query: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(100).optional()
 });
 
@@ -681,6 +681,31 @@ export const DemoWebContracts = {
   FastLayerViewOutput,
   LayerStatusOutput,
   HealthOutput
+} as const;
+
+// The frozen public /v1 API surface — the single source of truth for what
+// external layers (hosted version, GPT-API layer) may depend on. Guarded by
+// apps/api/src/public-v1-contract.snapshot.test.ts. Additive-optional changes
+// are allowed; removals/renames/retypes/required-additions are breaking.
+export const PublicV1Contracts = {
+  "POST /scopes": { request: ScopeCreateInput, response: ScopeOutput },
+  "GET /scopes": { response: ScopeListOutput },
+  "POST /scopes/:id/active": { response: ScopeActivationOutput },
+  "GET /state": { response: StateOutput },
+  "POST /memory/events": { request: MemoryEventInput, response: MemoryEventOutput },
+  // Narrowed to stable top-level fields: the diagnostic/ranking sub-objects
+  // (RetrieveOutput.retrieval, AnswerOutput.evidence, RuntimeTurnOutput
+  // layerAlignment/retrievalPlan/version/notes/warnings/evidence) are still
+  // returned in the HTTP response but are intentionally NOT part of the frozen
+  // /v1 contract, so they can evolve without a breaking change.
+  "POST /memory/retrieve": { request: RetrieveInput, response: RetrieveOutput.omit({ retrieval: true }) },
+  "POST /memory/answer": { request: AnswerInput, response: AnswerOutput.pick({ answer: true }) },
+  "POST /memory/digest": { request: DigestRequestInput, response: DigestEnqueueOutput },
+  "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput.pick({ answer: true, answerMode: true, writeTier: true, digestTriggered: true }) },
+  "POST /reminders": { request: ReminderCreateInput, response: ReminderOutput },
+  "GET /reminders": { response: ReminderListOutput },
+  "POST /reminders/:id/cancel": { response: ReminderCancelOutput },
+  "GET /health": { response: HealthOutput }
 } as const;
 
 export const DemoWebRoutes = {
