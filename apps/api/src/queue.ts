@@ -10,6 +10,10 @@ export let reminderQueue: IQueue;
 export let embedQueue: IQueue;
 export let classifyQueue: IQueue;
 
+// NOTE: lite mode uses in-process InMemoryQueueAdapter — jobs are NOT shared
+// across processes. It is for single-instance / development use ONLY. A
+// multi-replica deployment MUST use full mode (STATECORE_MODE unset/non-lite)
+// so all replicas share the Redis-backed BullMQ queues.
 if (isLite) {
   digestQueue = new InMemoryQueueAdapter();
   workingMemoryQueue = new InMemoryQueueAdapter();
