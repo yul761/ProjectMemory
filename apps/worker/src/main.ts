@@ -25,6 +25,7 @@ import { runEmbedEventJob } from "./embed-job";
 import { runClassifyEventJob } from "./classify-job";
 import { runDetectEmotionalPatternsJob } from "./detect-patterns";
 import { runDailyRemindJob } from "./daily-remind";
+import { runExpireEventsJob } from "./expire-events";
 import Redis from "ioredis";
 
 const connection = {
@@ -622,30 +623,45 @@ setInterval(() => {
   );
 }, 60_000);
 
-// expire_events: purge MemoryEvent rows past their expiresAt (runs every 6 hours)
-setInterval(() => {
-  prisma.memoryEvent.deleteMany({
-    where: { expiresAt: { lt: new Date() } }
-  }).then(({ count }) => {
-    if (count > 0) logger.info({ count }, "Expired events purged");
-  }).catch((err) => {
-    logger.error({ err }, "expire_events failed");
-  });
-}, 6 * 60 * 60 * 1000);
+// Maintenance jobs run cluster-wide once per interval via BullMQ repeatable
+// schedulers (idempotent by schedulerId across replicas), replacing per-replica
+// setInterval calls that would fire N times with N worker replicas.
+const maintenanceQueue = new Queue("maintenance", { connection });
 
-// Run daily_remind once per day (24h)
-setInterval(() => {
-  if (!llm) return;
-  runDailyRemindJob(llm, prisma).catch((err) => {
-    logger.error({ err }, "daily_remind job crashed");
-  });
-}, 24 * 60 * 60 * 1000);
+new Worker(
+  "maintenance",
+  async (job) => {
+    if (job.name === "expire_events") {
+      const { count } = await runExpireEventsJob(prisma);
+      if (count > 0) logger.info({ count }, "Expired events purged");
+      return { ok: true };
+    }
+    if (job.name === "daily_remind") {
+      if (!llm) return { ok: true, skipped: true };
+      await runDailyRemindJob(llm, prisma);
+      return { ok: true };
+    }
+    if (job.name === "detect_emotional_patterns") {
+      if (!llm) return { ok: true, skipped: true };
+      await runDetectEmotionalPatternsJob(llm, prisma);
+      return { ok: true };
+    }
+    return { ok: true };
+  },
+  { connection, concurrency: 1 }
+).on("failed", (job, err) => {
+  logger.error({ jobId: job?.id, name: job?.name, err }, "Maintenance job failed");
+});
 
-setInterval(() => {
-  if (!llm) return;
-  runDetectEmotionalPatternsJob(llm, prisma).catch((err) => {
-    logger.error({ err }, "detect_emotional_patterns job crashed");
-  });
-}, 7 * 24 * 60 * 60 * 1000);
+const HOUR_MS = 60 * 60 * 1000;
+void maintenanceQueue
+  .upsertJobScheduler("expire-events-6h", { every: 6 * HOUR_MS }, { name: "expire_events" })
+  .catch((err) => logger.error({ err }, "failed to register expire_events scheduler"));
+void maintenanceQueue
+  .upsertJobScheduler("daily-remind-24h", { every: 24 * HOUR_MS }, { name: "daily_remind" })
+  .catch((err) => logger.error({ err }, "failed to register daily_remind scheduler"));
+void maintenanceQueue
+  .upsertJobScheduler("detect-emotional-patterns-7d", { every: 7 * 24 * HOUR_MS }, { name: "detect_emotional_patterns" })
+  .catch((err) => logger.error({ err }, "failed to register detect_emotional_patterns scheduler"));
 
 logger.info("Worker started");
