@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { BoundedTtlCache } from "./bounded-ttl-cache";
 import type { ChatModel, LlmChatOptions } from "./model-provider";
 import {
   compileFastLayerContext,
@@ -426,14 +427,14 @@ function isEmptyContentError(error: unknown) {
 }
 
 const RUNTIME_RECALL_CACHE_TTL_MS = 15_000;
-const runtimeRecallCache = new Map<string, {
-  expiresAt: number;
-  result: Awaited<ReturnType<RuntimeRetrieveService["retrieve"]>>;
-}>();
-const runtimeResolvedRecallCache = new Map<string, {
-  expiresAt: number;
-  result: ResolvedRecall;
-}>();
+const RUNTIME_RECALL_CACHE_MAX_ENTRIES = 500;
+const runtimeRecallCache = new BoundedTtlCache<
+  Awaited<ReturnType<RuntimeRetrieveService["retrieve"]>>
+>(RUNTIME_RECALL_CACHE_TTL_MS, RUNTIME_RECALL_CACHE_MAX_ENTRIES);
+const runtimeResolvedRecallCache = new BoundedTtlCache<ResolvedRecall>(
+  RUNTIME_RECALL_CACHE_TTL_MS,
+  RUNTIME_RECALL_CACHE_MAX_ENTRIES
+);
 
 function buildRecallCacheKey(input: {
   scopeId: string;
@@ -879,11 +880,11 @@ export class DefaultRecallPolicy implements RecallPolicy {
       recentTurnIds: recentTurns.map((turn) => turn.id)
     });
     const resolvedCached = runtimeResolvedRecallCache.get(resolvedCacheKey);
-    if (resolvedCached && resolvedCached.expiresAt > Date.now()) {
+    if (resolvedCached !== undefined) {
       return {
-        ...resolvedCached.result,
-        retrievalPlan: resolvedCached.result.retrievalPlan
-          ? { ...resolvedCached.result.retrievalPlan, cacheHit: true }
+        ...resolvedCached,
+        retrievalPlan: resolvedCached.retrievalPlan
+          ? { ...resolvedCached.retrievalPlan, cacheHit: true }
           : undefined
       };
     }
@@ -903,20 +904,17 @@ export class DefaultRecallPolicy implements RecallPolicy {
         recentTurnIds: recentTurns.map((turn) => turn.id)
       });
       const cached = runtimeRecallCache.get(cacheKey);
-      if (cached && cached.expiresAt > Date.now()) {
-        result = cached.result;
+      if (cached !== undefined) {
+        result = cached;
       } else {
         result = await this.retrieveService.retrieve(
           input.scopeId,
           retrievalPlan.limit,
           retrievalPlan.query || input.message
         );
-        runtimeRecallCache.set(cacheKey, {
-          expiresAt: Date.now() + RUNTIME_RECALL_CACHE_TTL_MS,
-          result
-        });
+        runtimeRecallCache.set(cacheKey, result);
       }
-      retrievalPlan.cacheHit = Boolean(cached && cached.expiresAt > Date.now());
+      retrievalPlan.cacheHit = cached !== undefined;
     }
     const fastLayerContext = compileFastLayerContext({
       message: input.message,
@@ -942,10 +940,7 @@ export class DefaultRecallPolicy implements RecallPolicy {
       fastLayerContext,
       retrievalPlan
     };
-    runtimeResolvedRecallCache.set(resolvedCacheKey, {
-      expiresAt: Date.now() + RUNTIME_RECALL_CACHE_TTL_MS,
-      result: resolvedRecall
-    });
+    runtimeResolvedRecallCache.set(resolvedCacheKey, resolvedRecall);
     return resolvedRecall;
   }
 }
