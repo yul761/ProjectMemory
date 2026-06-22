@@ -36,7 +36,7 @@ export class HealthController {
     return { today, counts };
   }
 
-  @Get("/health")
+  @Get(["/health", "/v1/health"])
   getHealth() {
     return parseOutput(HealthOutput, {
       status: "ok",

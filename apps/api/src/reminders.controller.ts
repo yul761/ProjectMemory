@@ -8,7 +8,7 @@ import { reminderQueue } from "./queue";
 export class RemindersController {
   constructor(@Inject(DomainService) private readonly domain: DomainService) {}
 
-  @Post("/reminders")
+  @Post(["/reminders", "/v1/reminders"])
   async createReminder(@Req() req: RequestWithUser, @Body() body: unknown) {
     const input = ReminderCreateInput.parse(body);
     if (input.scopeId) {
@@ -32,7 +32,7 @@ export class RemindersController {
     };
   }
 
-  @Get("/reminders")
+  @Get(["/reminders", "/v1/reminders"])
   async listReminders(
     @Req() req: RequestWithUser,
     @Query("status") status?: string,
@@ -56,7 +56,7 @@ export class RemindersController {
     };
   }
 
-  @Post("/reminders/:id/cancel")
+  @Post(["/reminders/:id/cancel", "/v1/reminders/:id/cancel"])
   async cancelReminder(@Req() req: RequestWithUser, @Param("id") reminderId: string) {
     const ok = await this.domain.reminderService.cancelReminder(reminderId, req.userId);
     return { ok };
