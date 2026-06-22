@@ -39,12 +39,7 @@ Set at minimum:
 - `FEATURE_LLM=true`
 - `MODEL_API_KEY` (or the model-specific key variants)
 
-Optional rate-limit knobs (defaults are usually fine):
-
-- `RATE_LIMIT_WINDOW_MS`
-- `RATE_LIMIT_MAX`
-- `TURN_RATE_LIMIT_WINDOW_MS`
-- `TURN_RATE_LIMIT_MAX`
+Rate limiting is handled by the upstream gateway/reverse proxy, not the API process.
 
 Recommended model defaults:
 
