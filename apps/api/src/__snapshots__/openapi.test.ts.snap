@@ -1,0 +1,1380 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
+{
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "in": "header",
+        "name": "x-user-id",
+        "type": "apiKey",
+      },
+    },
+  },
+  "info": {
+    "description": "Frozen public /v1 surface of the StateCore memory runtime.",
+    "title": "StateCore API",
+    "version": "1.0.0",
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "get_health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "featureLlm": {
+                      "type": "boolean",
+                    },
+                    "model": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "baseUrl": {
+                          "type": "string",
+                        },
+                        "chatModel": {
+                          "type": "string",
+                        },
+                        "embeddingModel": {
+                          "nullable": true,
+                          "type": "string",
+                        },
+                        "model": {
+                          "type": "string",
+                        },
+                        "provider": {
+                          "type": "string",
+                        },
+                        "runtimeMaxOutputTokens": {
+                          "minimum": 1,
+                          "type": "integer",
+                        },
+                        "runtimeModel": {
+                          "type": "string",
+                        },
+                        "runtimeModelBaseUrl": {
+                          "type": "string",
+                        },
+                        "runtimeReasoningEffort": {
+                          "enum": [
+                            "low",
+                            "medium",
+                            "high",
+                          ],
+                          "type": "string",
+                        },
+                        "structuredOutputModel": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "provider",
+                        "model",
+                        "baseUrl",
+                        "chatModel",
+                        "structuredOutputModel",
+                        "embeddingModel",
+                      ],
+                      "type": "object",
+                    },
+                    "retrieve": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "embeddingCandidateLimit": {
+                          "minimum": 1,
+                          "type": "integer",
+                        },
+                        "useEmbeddings": {
+                          "type": "boolean",
+                        },
+                        "useVectorSearch": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "useEmbeddings",
+                        "embeddingCandidateLimit",
+                      ],
+                      "type": "object",
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                      ],
+                      "type": "string",
+                    },
+                    "workingMemory": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean",
+                        },
+                        "maxItemsPerField": {
+                          "minimum": 1,
+                          "type": "integer",
+                        },
+                        "maxRecentTurns": {
+                          "minimum": 1,
+                          "type": "integer",
+                        },
+                        "useLlm": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "enabled",
+                        "useLlm",
+                        "maxRecentTurns",
+                        "maxItemsPerField",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "status",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "security": [],
+        "tags": [
+          "health",
+        ],
+      },
+    },
+    "/v1/memory/answer": {
+      "post": {
+        "operationId": "post_memory_answer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "question": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "scopeId": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "scopeId",
+                  "question",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "answer": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "answer",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/digest": {
+      "post": {
+        "operationId": "post_memory_digest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "scopeId": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "scopeId",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "jobId": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "jobId",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/events": {
+      "post": {
+        "operationId": "post_memory_events",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "content": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "key": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "scopeId": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                  "source": {
+                    "enum": [
+                      "telegram",
+                      "cli",
+                      "api",
+                      "sdk",
+                    ],
+                    "type": "string",
+                  },
+                  "type": {
+                    "enum": [
+                      "stream",
+                      "document",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "scopeId",
+                  "type",
+                  "content",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "content": {
+                      "type": "string",
+                    },
+                    "createdAt": {
+                      "type": "string",
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                    "key": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "scopeId": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                    "source": {
+                      "enum": [
+                        "telegram",
+                        "cli",
+                        "api",
+                        "sdk",
+                      ],
+                      "type": "string",
+                    },
+                    "type": {
+                      "enum": [
+                        "stream",
+                        "document",
+                      ],
+                      "type": "string",
+                    },
+                    "updatedAt": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "userId": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "userId",
+                    "scopeId",
+                    "type",
+                    "source",
+                    "key",
+                    "content",
+                    "createdAt",
+                    "updatedAt",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/retrieve": {
+      "post": {
+        "operationId": "post_memory_retrieve",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "limit": {
+                    "maximum": 100,
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                  "query": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "scopeId": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "scopeId",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "digest": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "events": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                          },
+                          "createdAt": {
+                            "type": "string",
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "content",
+                          "createdAt",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "factRegistry": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "addedAt": {
+                            "type": "string",
+                          },
+                          "confidence": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number",
+                          },
+                          "content": {
+                            "type": "string",
+                          },
+                          "evidenceId": {
+                            "type": "string",
+                          },
+                          "evidenceType": {
+                            "enum": [
+                              "event",
+                              "document",
+                            ],
+                            "type": "string",
+                          },
+                          "facet": {
+                            "type": "string",
+                          },
+                          "id": {
+                            "type": "string",
+                          },
+                          "supersededBy": {
+                            "type": "string",
+                          },
+                          "type": {
+                            "enum": [
+                              "decision",
+                              "constraint",
+                              "profile",
+                            ],
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "content",
+                          "type",
+                          "confidence",
+                          "addedAt",
+                          "evidenceId",
+                          "evidenceType",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "digest",
+                    "events",
+                    "factRegistry",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/runtime/turn": {
+      "post": {
+        "operationId": "post_memory_runtime_turn",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "digestMode": {
+                    "enum": [
+                      "auto",
+                      "force",
+                      "skip",
+                    ],
+                    "type": "string",
+                  },
+                  "documentKey": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "message": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "metadata": {
+                    "additionalProperties": {},
+                    "type": "object",
+                  },
+                  "policyOverrides": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "digestOnCandidate": {
+                        "type": "boolean",
+                      },
+                      "promoteLongFormToDocumented": {
+                        "type": "boolean",
+                      },
+                      "recallLimit": {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "policyProfile": {
+                    "enum": [
+                      "default",
+                      "conservative",
+                      "document-heavy",
+                    ],
+                    "type": "string",
+                  },
+                  "scopeId": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                  "source": {
+                    "enum": [
+                      "telegram",
+                      "cli",
+                      "api",
+                      "sdk",
+                    ],
+                    "type": "string",
+                  },
+                  "writeTier": {
+                    "enum": [
+                      "ephemeral",
+                      "candidate",
+                      "stable",
+                      "documented",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "scopeId",
+                  "message",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "answer": {
+                      "type": "string",
+                    },
+                    "answerMode": {
+                      "enum": [
+                        "direct_state_fast_path",
+                        "llm_fast_path",
+                      ],
+                      "type": "string",
+                    },
+                    "digestTriggered": {
+                      "type": "boolean",
+                    },
+                    "writeTier": {
+                      "enum": [
+                        "ephemeral",
+                        "candidate",
+                        "stable",
+                        "documented",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "answer",
+                    "writeTier",
+                    "digestTriggered",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/reminders": {
+      "get": {
+        "operationId": "get_reminders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "createdAt": {
+                            "type": "string",
+                          },
+                          "dueAt": {
+                            "type": "string",
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string",
+                          },
+                          "scopeId": {
+                            "format": "uuid",
+                            "nullable": true,
+                            "type": "string",
+                          },
+                          "status": {
+                            "enum": [
+                              "scheduled",
+                              "sent",
+                              "cancelled",
+                            ],
+                            "type": "string",
+                          },
+                          "text": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "scopeId",
+                          "dueAt",
+                          "text",
+                          "status",
+                          "createdAt",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "items",
+                    "nextCursor",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "reminders",
+        ],
+      },
+      "post": {
+        "operationId": "post_reminders",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "dueAt": {
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "scopeId": {
+                    "format": "uuid",
+                    "nullable": true,
+                    "type": "string",
+                  },
+                  "text": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "dueAt",
+                  "text",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "createdAt": {
+                      "type": "string",
+                    },
+                    "dueAt": {
+                      "type": "string",
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                    "scopeId": {
+                      "format": "uuid",
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "status": {
+                      "enum": [
+                        "scheduled",
+                        "sent",
+                        "cancelled",
+                      ],
+                      "type": "string",
+                    },
+                    "text": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "scopeId",
+                    "dueAt",
+                    "text",
+                    "status",
+                    "createdAt",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "reminders",
+        ],
+      },
+    },
+    "/v1/reminders/{id}/cancel": {
+      "post": {
+        "operationId": "post_reminders_id_cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                    },
+                  },
+                  "required": [
+                    "ok",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "reminders",
+        ],
+      },
+    },
+    "/v1/scopes": {
+      "get": {
+        "operationId": "get_scopes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "createdAt": {
+                            "type": "string",
+                          },
+                          "goal": {
+                            "nullable": true,
+                            "type": "string",
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string",
+                          },
+                          "name": {
+                            "type": "string",
+                          },
+                          "stage": {
+                            "enum": [
+                              "idea",
+                              "build",
+                              "test",
+                              "launch",
+                            ],
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "goal",
+                          "stage",
+                          "createdAt",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "items",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "scopes",
+        ],
+      },
+      "post": {
+        "operationId": "post_scopes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "goal": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "name": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "stage": {
+                    "enum": [
+                      "idea",
+                      "build",
+                      "test",
+                      "launch",
+                    ],
+                    "type": "string",
+                  },
+                  "template": {
+                    "enum": [
+                      "project",
+                      "personal",
+                      "health",
+                      "learning",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "name",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "createdAt": {
+                      "type": "string",
+                    },
+                    "goal": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                    "name": {
+                      "type": "string",
+                    },
+                    "stage": {
+                      "enum": [
+                        "idea",
+                        "build",
+                        "test",
+                        "launch",
+                      ],
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "goal",
+                    "stage",
+                    "createdAt",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "scopes",
+        ],
+      },
+    },
+    "/v1/scopes/{id}/active": {
+      "post": {
+        "operationId": "post_scopes_id_active",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "activeScopeId": {
+                      "format": "uuid",
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "activeScopeId",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "scopes",
+        ],
+      },
+    },
+    "/v1/state": {
+      "get": {
+        "operationId": "get_state",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "activeScopeId": {
+                      "format": "uuid",
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "activeScopeId",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "scopes",
+        ],
+      },
+    },
+  },
+  "security": [
+    {
+      "apiKey": [],
+    },
+  ],
+  "servers": [
+    {
+      "url": "/",
+    },
+  ],
+}
+`;
