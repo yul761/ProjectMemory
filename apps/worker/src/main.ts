@@ -649,11 +649,36 @@ new Worker(
       return { ok: true };
     }
     if (job.name === "data_gc") {
-      const digests = await runGcDigestsJob(prisma, workerEnv.digestRetentionDays);
-      const jobLogs = await runGcJobLogsJob(prisma, workerEnv.jobLogRetentionDays);
-      const reminders = await runGcRemindersJob(prisma, workerEnv.reminderRetentionDays);
+      let digests: { deletedDigests: number; deletedSnapshots: number } | null = null;
+      try {
+        digests = await runGcDigestsJob(prisma, workerEnv.digestRetentionDays);
+      } catch (err) {
+        logger.error({ err }, "data_gc digests failed");
+      }
+
+      let jobLogs: { count: number } | null = null;
+      try {
+        jobLogs = await runGcJobLogsJob(prisma, workerEnv.jobLogRetentionDays);
+      } catch (err) {
+        logger.error({ err }, "data_gc jobLogs failed");
+      }
+
+      let reminders: { count: number } | null = null;
+      try {
+        reminders = await runGcRemindersJob(prisma, workerEnv.reminderRetentionDays);
+      } catch (err) {
+        logger.error({ err }, "data_gc reminders failed");
+      }
+
       logger.info(
-        { gc: { deletedDigests: digests.deletedDigests, deletedSnapshots: digests.deletedSnapshots, deletedJobLogs: jobLogs.count, deletedReminders: reminders.count } },
+        {
+          gc: {
+            deletedDigests: digests?.deletedDigests ?? -1,
+            deletedSnapshots: digests?.deletedSnapshots ?? -1,
+            deletedJobLogs: jobLogs?.count ?? -1,
+            deletedReminders: reminders?.count ?? -1
+          }
+        },
         "data_gc completed"
       );
       return { ok: true };

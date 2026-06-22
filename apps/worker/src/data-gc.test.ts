@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { runGcDigestsJob, runGcJobLogsJob, runGcRemindersJob } from "./data-gc";
 
 describe("runGcDigestsJob", () => {
@@ -53,6 +53,14 @@ describe("runGcDigestsJob", () => {
 });
 
 describe("runGcJobLogsJob", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T00:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("deletes job logs older than the retention window by completedAt", async () => {
     const deleteMany = vi.fn(async (_: { where: { completedAt: { lt: Date } } }) => ({ count: 5 }));
     const prisma = { digestJobLog: { deleteMany } };
@@ -60,10 +68,20 @@ describe("runGcJobLogsJob", () => {
     expect(result).toEqual({ count: 5 });
     const arg = deleteMany.mock.calls[0][0];
     expect(arg.where.completedAt.lt).toBeInstanceOf(Date);
+    const expected = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(arg.where.completedAt.lt.getTime() - expected)).toBeLessThan(1000);
   });
 });
 
 describe("runGcRemindersJob", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-22T00:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("deletes terminal (sent/cancelled) reminders older than the window, keeping scheduled", async () => {
     const deleteMany = vi.fn(async (_: { where: { status: { in: string[] }; createdAt: { lt: Date } } }) => ({ count: 2 }));
     const prisma = { reminder: { deleteMany } };
@@ -72,5 +90,7 @@ describe("runGcRemindersJob", () => {
     const arg = deleteMany.mock.calls[0][0];
     expect(arg.where.status.in).toEqual(["sent", "cancelled"]);
     expect(arg.where.createdAt.lt).toBeInstanceOf(Date);
+    const expected = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    expect(Math.abs(arg.where.createdAt.lt.getTime() - expected)).toBeLessThan(1000);
   });
 });
