@@ -27,6 +27,7 @@ import { runDetectEmotionalPatternsJob } from "./detect-patterns";
 import { runDailyRemindJob } from "./daily-remind";
 import { runExpireEventsJob } from "./expire-events";
 import { runGcDigestsJob, runGcJobLogsJob, runGcRemindersJob } from "./data-gc";
+import { createDigestWithSnapshot } from "./digest-write";
 import Redis from "ioredis";
 
 const connection = {
@@ -277,22 +278,13 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
 
   const driftMetrics = computeDriftMetrics(prevDigestState, result.state);
 
-  const createdDigest = await prisma.digest.create({
-    data: {
-      scopeId: data.scopeId,
-      summary: result.digest.summary,
-      changes: result.digest.changes.map((c) => `- ${c}`).join("\n"),
-      nextSteps: result.digest.nextSteps
-    } as any
-  });
-
-  await prisma.digestStateSnapshot.create({
-    data: {
-      scopeId: data.scopeId,
-      digestId: createdDigest.id,
-      state: result.state as any,
-      consistency: result.consistency as any
-    } as any
+  const createdDigest = await createDigestWithSnapshot(prisma, {
+    scopeId: data.scopeId,
+    summary: result.digest.summary,
+    changes: result.digest.changes.map((c) => `- ${c}`).join("\n"),
+    nextSteps: result.digest.nextSteps,
+    state: result.state,
+    consistency: result.consistency
   });
 
   logger.info({
@@ -447,24 +439,20 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
       }
     });
 
-    lastDigest = await prisma.digest.create({
-      data: {
-        scopeId: data.scopeId,
-        summary: result.digest.summary,
-        changes: result.digest.changes.map((c) => `- ${c}`).join("\n"),
-        nextSteps: result.digest.nextSteps,
-        rebuildGroupId
-      } as any
-    });
-
-    await prisma.digestStateSnapshot.create({
-      data: {
-        scopeId: data.scopeId,
-        digestId: lastDigest.id,
-        state: result.state as any,
-        consistency: result.consistency as any
-      } as any
-    });
+    // Cast: createDigestWithSnapshot returns { id } but lastDigest is typed as the
+    // full Prisma Digest for toCoreDigest(). The remaining fields are not read
+    // from lastDigest after this point in the same iteration; toCoreDigest()
+    // is only called on the next iteration where this becomes the "previous" digest.
+    // The real prisma $transaction returns the full row so the cast is safe at runtime.
+    lastDigest = await createDigestWithSnapshot(prisma, {
+      scopeId: data.scopeId,
+      summary: result.digest.summary,
+      changes: result.digest.changes.map((c) => `- ${c}`).join("\n"),
+      nextSteps: result.digest.nextSteps,
+      state: result.state,
+      consistency: result.consistency,
+      rebuildGroupId
+    }) as any;
 
     lastState = result.state;
   }
