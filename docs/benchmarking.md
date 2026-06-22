@@ -154,6 +154,7 @@ reports end-to-end p95; the breakdown lives in logs to keep it out of the /v1
 response):
 
 - Retrieve: log `"retrieve stage timings"` → `retrieveTimings: { embedMs, vectorSearchMs, rerankMs, totalMs }`
+  (`embedMs` is the vector-search query-embedding cost only; the rerank's own embedding cost is folded into `rerankMs`, so `embedMs: 0` means vector search was not active, not that no embedding ran at all)
 - Digest: log `"digest stage timings"` → `digestTimings: { selectionMs, classificationMs, deltaMs, mergeMs, generationMs }`
 
 Filter the API/worker logs by these messages to see where retrieve/digest time
