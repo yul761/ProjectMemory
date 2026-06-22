@@ -16,7 +16,7 @@ import type { MemoryEvent } from "./index";
 // Deterministic event builder. `seq` guarantees unique ids + monotonic timestamps
 // across the many runs fast-check performs.
 let seq = 0;
-export function ev(
+function ev(
   over: Partial<MemoryEvent> & Pick<MemoryEvent, "content" | "type">
 ): MemoryEvent {
   seq += 1;
@@ -31,7 +31,7 @@ export function ev(
 }
 
 // Deterministic id factory for reproducible factRegistry ids.
-export function deterministicIdFactory(): () => string {
+function deterministicIdFactory(): () => string {
   let n = 0;
   return () => {
     n += 1;
@@ -42,7 +42,7 @@ export function deterministicIdFactory(): () => string {
 // Arbitrary string facets (used for normalize idempotence/cap properties).
 const factsArb = fc.array(fc.string({ minLength: 1, maxLength: 40 }), { maxLength: 200 });
 
-export const stateArb: fc.Arbitrary<DigestState> = fc.record({
+const stateArb: fc.Arbitrary<DigestState> = fc.record({
   stableFacts: fc.record({
     goal: fc.option(fc.string({ minLength: 1, maxLength: 40 }), { nil: undefined }),
     constraints: factsArb,

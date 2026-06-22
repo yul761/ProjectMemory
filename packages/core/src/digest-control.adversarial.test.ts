@@ -72,7 +72,7 @@ describe("adversarial: goal flip-flop", () => {
 describe("adversarial: noise flood", () => {
   it("preserves a durable decision buried under heavy noise", () => {
     // 30 DISTINCT noise strings: using (i+1)*100 for the index means each string contains a
-    // unique 3-digit token ("100", "200", ..., "3000") that passes the length-2 filter in
+    // unique ≥3-digit token (100, 200, …, 3000) that passes the length-2 filter in
     // tokenize(). Pairwise Jaccard ≈ 4/6 ≈ 0.67 < 0.92, so dedupeNearDuplicateEvents keeps
     // all 30 — they genuinely compete for budget.
     const events = [
@@ -93,7 +93,7 @@ describe("adversarial: noise flood", () => {
     // the merged array — it is never displaced by the total-budget slice.
     expect(result.selectedEvents.map((s) => s.event.content)).toContain("we decide to ship api v1");
     // (b) Budget genuinely bit: 31 events in, only ≤ 3 selected (28 noise events dropped).
-    expect(result.selectedEvents.length).toBeLessThanOrEqual(3);
+    expect(result.selectedEvents.length).toBe(3);
   });
 });
 

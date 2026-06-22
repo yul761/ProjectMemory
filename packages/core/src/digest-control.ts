@@ -2217,7 +2217,7 @@ export async function runDigestControlPipeline(input: {
 
   // Apply profile facts extracted by LLM from documents into stable state
   if (digest.profileFacts && digest.profileFacts.length > 0) {
-    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, createDefaultIdFactory());
+    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, createDefaultIdFactory(), createDefaultNowFactory());
   }
 
   const resolvedGoal = input.scope.goal?.trim() || undefined;
