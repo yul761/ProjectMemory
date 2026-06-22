@@ -560,35 +560,6 @@ export const LayerStatusOutput = z.object({
   warnings: z.array(z.string())
 });
 
-export const AgentScenarioRunStepOutput = z.object({
-  label: z.string(),
-  activeAgent: z.enum(["researcher", "planner", "executor"]),
-  userTurn: z.string(),
-  answer: z.string(),
-  answerMode: z.enum(["direct_state_fast_path", "llm_fast_path"]).nullable().optional(),
-  retrievalPlan: RetrievalPlanOutput.nullable().optional(),
-  digestTriggered: z.boolean(),
-  workingMemoryVersion: z.number().int().min(0).nullable(),
-  stableStateVersion: z.string().nullable(),
-  workingMemoryView: WorkingMemoryView.nullable(),
-  stableStateView: StateLayerView.nullable(),
-  layerAlignment: LayerAlignmentOutput.nullable().optional(),
-  warnings: z.array(z.string()).optional(),
-  workingWrites: z.array(z.string()),
-  stableWrites: z.array(z.string()),
-  nextAgentSees: z.array(z.string()),
-  completedAt: z.string()
-});
-
-export const AgentScenarioRunOutput = z.object({
-  scenarioId: z.string(),
-  title: z.string(),
-  scopeId: z.string().uuid(),
-  scopeName: z.string(),
-  completedAt: z.string(),
-  steps: z.array(AgentScenarioRunStepOutput)
-});
-
 // Grouped API surface contracts
 // These maps exist so a demo app or SDK can import the intended contract
 // boundary directly instead of depending on the entire file as one flat list.
@@ -604,8 +575,7 @@ export const PublicRuntimeContracts = {
   StableStateOutput,
   FastLayerViewOutput,
   LayerStatusOutput,
-  HealthOutput,
-  AgentScenarioRunOutput
+  HealthOutput
 } as const;
 
 export const DebugSurfaceContracts = {
@@ -663,26 +633,6 @@ export const InternalControlRoutes = {
   rebuildDigest: "/memory/digest/rebuild"
 } as const;
 
-// Demo-web minimal surface
-// This is the smallest intended set of contracts and routes for a chat-style
-// demo that shows the three-layer runtime without depending on debug or control
-// internals.
-export const DemoWebContracts = {
-  ScopeCreateInput,
-  ScopeOutput,
-  ScopeListOutput,
-  StateOutput,
-  ScopeActivationOutput,
-  RuntimeTurnInput,
-  RuntimeTurnOutput,
-  AgentScenarioRunOutput,
-  WorkingMemoryOutput,
-  StableStateOutput,
-  FastLayerViewOutput,
-  LayerStatusOutput,
-  HealthOutput
-} as const;
-
 // The frozen public /v1 API surface — the single source of truth for what
 // external layers (hosted version, GPT-API layer) may depend on. Guarded by
 // apps/api/src/public-v1-contract.snapshot.test.ts. Additive-optional changes
@@ -707,20 +657,3 @@ export const PublicV1Contracts = {
   "POST /reminders/:id/cancel": { response: ReminderCancelOutput },
   "GET /health": { response: HealthOutput }
 } as const;
-
-export const DemoWebRoutes = {
-  health: PublicRuntimeRoutes.health,
-  createScope: PublicRuntimeRoutes.createScope,
-  listScopes: PublicRuntimeRoutes.listScopes,
-  setActiveScope: PublicRuntimeRoutes.setActiveScope,
-  getActiveState: PublicRuntimeRoutes.getActiveState,
-  runtimeTurn: PublicRuntimeRoutes.runtimeTurn,
-  agentScenarioRun: "/demo/agent-scenarios/:id/run",
-  workingState: PublicRuntimeRoutes.workingState,
-  stableState: PublicRuntimeRoutes.stableState,
-  fastView: PublicRuntimeRoutes.fastView,
-  layerStatus: PublicRuntimeRoutes.layerStatus
-} as const;
-
-export { AGENT_SCENARIOS } from "./agent-scenarios";
-export type { AgentRole, AgentScenario, AgentScenarioStep } from "./agent-scenarios";

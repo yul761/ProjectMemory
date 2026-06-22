@@ -70,11 +70,10 @@ function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
   const keySeed = `${userTokenHeader}:${ipHeader}`;
   const isTurnRoute = req.method === "POST" && req.path === "/memory/runtime/turn";
   const isScopeCreateRoute = req.method === "POST" && req.path === "/scopes";
-  const isAgentScenarioRunRoute = req.method === "POST" && req.path.startsWith("/demo/agent-scenarios/");
 
-  const isWriteRoute = isTurnRoute || isScopeCreateRoute || isAgentScenarioRunRoute;
-  const windowMs = isWriteRoute ? apiEnv.demoTurnRateLimitWindowMs : apiEnv.demoRateLimitWindowMs;
-  const maxRequests = isWriteRoute ? apiEnv.demoTurnRateLimitMax : apiEnv.demoRateLimitMax;
+  const isWriteRoute = isTurnRoute || isScopeCreateRoute;
+  const windowMs = isWriteRoute ? apiEnv.turnRateLimitWindowMs : apiEnv.rateLimitWindowMs;
+  const maxRequests = isWriteRoute ? apiEnv.turnRateLimitMax : apiEnv.rateLimitMax;
   const bucket = consumeRateLimit(getBucketKey(isWriteRoute ? "write" : "read", keySeed), windowMs, maxRequests);
 
   if (!bucket.allowed) {

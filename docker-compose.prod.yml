@@ -38,19 +38,6 @@ services:
         condition: service_healthy
     restart: "no"
 
-  cleanup-demo-guests:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime-base
-    env_file:
-      - .env.production
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["pnpm", "--filter", "@statecore/db", "exec", "tsx", "../../scripts/cleanup-demo-guests.ts"]
-    restart: "no"
-
   api:
     build:
       context: .
@@ -81,37 +68,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  demo-web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: demo-web-runtime
-    env_file:
-      - .env.production
-    environment:
-      DEMO_WEB_PORT: 3100
-      DEMO_API_BASE_URL: http://api:3000
-    depends_on:
-      - api
-    restart: unless-stopped
-
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    depends_on:
-      - demo-web
-    environment:
-      CADDY_DOMAIN: ${CADDY_DOMAIN:-:80}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-
 volumes:
   pgdata:
   redisdata:
-  caddy-data:
-  caddy-config:

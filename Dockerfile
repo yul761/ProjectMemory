@@ -12,10 +12,6 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
-COPY apps/demo-web/package.json apps/demo-web/package.json
-COPY apps/cli/package.json apps/cli/package.json
-COPY apps/adapter-telegram/package.json apps/adapter-telegram/package.json
-COPY apps/adapter-mcp/package.json apps/adapter-mcp/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/db/package.json packages/db/package.json
@@ -56,12 +52,6 @@ CMD ["pnpm", "--filter", "@statecore/api", "start"]
 FROM runtime-base AS worker-runtime
 
 CMD ["pnpm", "--filter", "@statecore/worker", "start"]
-
-FROM runtime-base AS demo-web-runtime
-
-EXPOSE 3100
-
-CMD ["pnpm", "--filter", "@statecore/demo-web", "start"]
 
 FROM runtime-base AS migrate
 

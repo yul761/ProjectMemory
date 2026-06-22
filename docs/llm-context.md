@@ -22,7 +22,7 @@ StateCore is an OSS, developer-first long-term memory engine (API + worker + ada
 - Queue: Redis + BullMQ
 - Contracts: Zod (`packages/contracts`)
 - Prompts: `packages/prompts`
-- Adapters: Telegram (`apps/adapter-telegram`), CLI (`apps/cli`)
+- External clients: call the HTTP API
 
 ## Digest Control Pipeline
 The digest flow is controlled and multi-stage:
@@ -44,7 +44,7 @@ Important env vars:
 - `DIGEST_REBUILD_CHUNK_SIZE`
 
 ## Public API Notes
-- Identity via headers: `x-user-id` or `x-telegram-user-id`.
+- Identity via header: `x-user-id`.
 - Digest endpoints require `FEATURE_LLM=true`; otherwise return actionable 400.
 - Rebuild endpoint exists: `POST /memory/digest/rebuild`.
 
