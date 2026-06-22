@@ -15,5 +15,4 @@ StateCore is positioned as a research-grade long-term memory engine. The goal is
 ## Artifacts
 - Evaluation protocol: `docs/evaluation-protocol.md`
 - Research questions: `docs/research-questions.md`
-- Report template: `docs/research-report-template.md`
 - Benchmark runner: `scripts/benchmark/run-benchmark.mjs`

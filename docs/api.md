@@ -188,8 +188,8 @@ manual `Runtime Smoke` workflow under `.github/workflows/runtime-smoke.yml`.
 
 ## Layer Diagnostics
 
-The `doctor` summary now reads from `GET /memory/layer-status` and includes
-`layerAlignment`, which reports:
+`GET /memory/layer-status` provides aggregated three-layer diagnostics that
+includes `layerAlignment`, which reports:
 
 - whether Working Memory and Stable State agree on the current goal
 - how many constraints overlap
@@ -206,20 +206,18 @@ The `doctor` summary now reads from `GET /memory/layer-status` and includes
 - lag in milliseconds from the event stream to each layer
 - whether each layer is currently considered caught up
 
-`doctor --assert-clean` exits non-zero when:
+A clean diagnostic state requires:
 
-- the API is not healthy
-- `FEATURE_LLM` is off
-- there is no diagnosed scope
-- `layerAlignment.goalAligned` is false
-- `layerAlignment.fastPathReady` is false
-- Working Memory is not caught up
-- Stable State is not caught up
-- layer warnings are present
-- the runtime probe returns warnings or missing answer metadata
+- the API is healthy
+- `FEATURE_LLM` is enabled
+- `layerAlignment.goalAligned` is true
+- `layerAlignment.fastPathReady` is true
+- Working Memory is caught up
+- Stable State is caught up
+- no layer warnings are present
+- runtime probe returns no warnings and complete answer metadata
 
-The manual `Runtime Smoke` GitHub workflow uploads `runtime-doctor.json` as an
-artifact.
+The manual `Runtime Smoke` GitHub workflow uploads diagnostics as an artifact.
 
 ## Example
 
