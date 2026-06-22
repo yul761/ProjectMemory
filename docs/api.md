@@ -3,11 +3,6 @@
 All endpoints require an identity header:
 
 - `x-user-id` for developer/self-host use
-- `x-telegram-user-id` for adapter usage
-
-Server stores a normalized `identity` per user (for example `user:...`,
-`local:...`, `telegram:...`), while `telegramUserId` is reserved for raw
-Telegram IDs used by reminder delivery.
 
 This API is easiest to understand if you group it into three layers:
 
@@ -15,10 +10,9 @@ This API is easiest to understand if you group it into three layers:
 - debug surface
 - internal control surface
 
-If you are building a demo app or future web UI, stay on the public runtime
+If you are building an integration or operator tool, stay on the public runtime
 surface unless you are explicitly building an inspector or operator tool.
 
-For the intended boundary, see `docs/product-surface.md`.
 For code-level reuse, `packages/contracts/src/index.ts` now also exports grouped
 route constants:
 
@@ -95,7 +89,7 @@ dependency of a product demo.
   - works in both full mode (BullMQ/Redis) and lite mode (in-memory, always returns zeros)
 - `GET /diagnostics/mcp-usage`
   - returns today's MCP tool call counts aggregated from the JSONL usage log
-  - log file: `mcp-usage-log/usage-YYYY-MM-DD.jsonl` (written by `adapter-mcp`)
+  - log file: `mcp-usage-log/usage-YYYY-MM-DD.jsonl`
   - returns `{ today, counts: { tool_name: count } }`
 
 ### Retrieval And Answer Inspection
@@ -192,44 +186,6 @@ pnpm smoke
 For GitHub-hosted LLM runtime verification, the repository also includes a
 manual `Runtime Smoke` workflow under `.github/workflows/runtime-smoke.yml`.
 
-For a quick local diagnosis of runtime configuration, active scope, layer
-versions, and fast-view retrieval planning:
-
-```bash
-pnpm dev:cli -- layer-status
-pnpm dev:cli -- doctor
-```
-
-For the same diagnosis plus a real runtime probe with latency, `answerMode`, and
-`retrievalPlan`:
-
-```bash
-pnpm dev:cli -- doctor --probe-turn
-```
-
-For a pass/fail assertion over the same diagnostics:
-
-```bash
-pnpm dev:cli -- doctor --probe-turn --assert-clean
-```
-
-For CI or automation, pin the CLI to a known user id so it reads the intended
-scope:
-
-```bash
-STATECORE_CLI_USER_ID=runtime-ci-user pnpm dev:cli -- doctor --probe-turn --assert-clean
-```
-
-To persist the diagnosis as a JSON artifact:
-
-```bash
-STATECORE_CLI_USER_ID=runtime-ci-user pnpm dev:cli -- doctor --probe-turn --assert-clean --output-file runtime-doctor.json
-```
-
-When you run that command from the repo root, `runtime-doctor.json` is written
-relative to the invocation directory, so local smoke and CI can pick it up
-directly from the repository root.
-
 ## Layer Diagnostics
 
 The `doctor` summary now reads from `GET /memory/layer-status` and includes
@@ -287,8 +243,7 @@ curl "$API_BASE_URL/memory/layer-status?scopeId=SCOPE_ID&message=What%20is%20the
 StateCore exposes a **frozen public API subset** under the `/v1` prefix. External
 layers (the hosted version, the GPT-API integration layer) should depend ONLY on
 `/v1`. Every `/v1` endpoint is also served at its legacy unversioned path for
-backward compatibility; reference integrations (`cli`, `adapter-mcp`,
-`adapter-telegram`) continue to use the legacy paths.
+backward compatibility; existing integrations continue to use the legacy paths.
 
 ### Frozen public subset
 

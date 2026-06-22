@@ -27,7 +27,7 @@ StateCore now separates memory into three explicit layers:
 - Contracts: Zod schemas (`packages/contracts`)
 - Engine: Pure domain logic (`packages/core`)
 - Prompt assets: `packages/prompts`
-- Integrations: Telegram adapter + CLI
+- Integrations: external clients via the HTTP API
 
 ## Why This Split
 
@@ -40,7 +40,7 @@ StateCore now separates memory into three explicit layers:
 
 ```mermaid
 flowchart TD
-  U[Adapter / CLI] --> A[API Runtime]
+  U[Client] --> A[API Runtime]
   A --> F[Fast Layer Context Compiler]
   F --> LLM[Answer Model]
   LLM --> A

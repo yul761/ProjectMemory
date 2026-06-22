@@ -33,4 +33,4 @@ An optional LLM-powered response generated from retrieved memory. If LLM is disa
 A scheduled item with a due time and text. The worker periodically checks due reminders and marks them as sent.
 
 ## Adapter
-A reference integration that converts external signals into memory events (e.g., Telegram). Adapters call the API and never touch the database directly.
+A reference integration that converts external signals into memory events. Adapters call the API and never touch the database directly.

@@ -49,8 +49,7 @@ It sits above raw endpoints like:
 
 And below interaction surfaces like:
 
-- CLI
-- Telegram adapter
+- external client integrations
 - future reference apps
 
 ## Why a Runtime Layer Is Needed
@@ -283,7 +282,7 @@ The current codebase already contains the pieces needed for an initial runtime:
 - `/memory/retrieve` for baseline recall
 - `/memory/answer` for answer generation
 - `/memory/digest` for digest triggering
-- CLI and Telegram adapter as reference interaction layers
+- the HTTP API as the integration boundary
 
 What is missing is a single, documented abstraction that composes these primitives into one coherent developer flow.
 
@@ -383,16 +382,16 @@ This is preferable to forcing all integrations into a single cadence.
 
 ## Reference Integrations
 
-The current CLI and Telegram adapter should be treated as reference integrations for the future runtime.
+External clients that call the HTTP API are the intended integration model.
 
-They are useful because they demonstrate:
+They demonstrate:
 
 - session-scoped interaction
 - event ingestion
 - digest triggering
 - answer retrieval
 
-But they should not become the product boundary themselves.
+The API contract (not any specific client) is the product boundary.
 
 ## Non-goals
 
