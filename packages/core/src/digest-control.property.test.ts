@@ -352,6 +352,7 @@ describe("CJK over-merge guard — properties (via protectedStateMerge)", () => 
     };
   }
 
+  // Baseline (Jaccard ≈ 0.6 < 0.8 — passes even without asciiContentDiverges, kept for regression).
   it("does not merge two CJK decisions whose ASCII tokens diverge (PostgreSQL vs MySQL)", () => {
     const merged = protectedStateMerge({
       prevState: null,
@@ -367,24 +368,67 @@ describe("CJK over-merge guard — properties (via protectedStateMerge)", () => 
     expect(merged.stableFacts.decisions).toContain("我决定用 MySQL");
   });
 
-  it("treats two genuinely different pure-CJK decisions as distinct", () => {
-    const pairArb = fc.constantFrom(
-      ["我喜欢喝茶", "我喜欢爬山"],
-      ["项目要上线", "团队要扩招"]
-    );
-    fc.assert(
-      fc.property(pairArb, ([a, b]) => {
-        const merged = protectedStateMerge({
-          prevState: null,
-          deltaCandidates: [decisionDelta(a), decisionDelta(b)],
-          documents: [],
-          idFactory: deterministicIdFactory()
-        });
-        // Two unrelated Chinese facts must not collapse into one via the empty-normalization pitfall.
-        expect(merged.stableFacts.decisions).toContain(a);
-        expect(merged.stableFacts.decisions).toContain(b);
-      })
-    );
+  // Non-vacuous guard test for asciiContentDiverges:
+  // "我决定在下个版本中使用" contributes 10 shared CJK bigrams; ASCII "postgresql" vs "mysql"
+  // are disjoint → tokenize union = 12 → Jaccard = 10/12 ≈ 0.833 ≥ 0.8 (findBestDecisionMatch
+  // threshold, digest-control.ts line 785).  The asciiContentDiverges guard at line 461 is
+  // therefore the deciding factor: without it sameFactCjkAware returns true and MySQL is
+  // treated as a dup of PostgreSQL, so only one decision is kept — both toContain assertions
+  // would fail.  The factRegistry path (isInFactRegistry, threshold 0.6, line 1003) is also
+  // exercised: Jaccard 0.833 ≥ 0.6 but asciiContentDiverges = true → both entries are promoted
+  // separately; without the guard MySQL would be blocked from factRegistry promotion.
+  it("does not merge CJK+ASCII decisions when Jaccard ≥ 0.8 but ASCII tokens diverge", () => {
+    const merged = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [
+        decisionDelta("我决定在下个版本中使用 PostgreSQL"),
+        decisionDelta("我决定在下个版本中使用 MySQL")
+      ],
+      documents: [],
+      idFactory: deterministicIdFactory()
+    });
+    expect(merged.stableFacts.decisions).toContain("我决定在下个版本中使用 PostgreSQL");
+    expect(merged.stableFacts.decisions).toContain("我决定在下个版本中使用 MySQL");
+    // Both must be independently promoted to factRegistry (0.6-threshold site, line 1003).
+    expect(merged.factRegistry?.some(e => !e.supersededBy && e.content === "我决定在下个版本中使用 PostgreSQL")).toBe(true);
+    expect(merged.factRegistry?.some(e => !e.supersededBy && e.content === "我决定在下个版本中使用 MySQL")).toBe(true);
+  });
+
+  // Non-vacuous guard test for the empty-normalization shortcut in findBestSemanticMatch
+  // (digest-control.ts line 762: `normalizedValue.length > 0 && normalizedValue === normalizedCandidate`).
+  // Without that guard all pure-CJK strings normalise to "" and any two of them score 1 via
+  // "" === "".  In a multi-entry values list the first entry wins on ties, so the best-match
+  // for B' becomes the unrelated A (not the genuine near-dup B); sameFactCjkAware(A, B') is
+  // false, and B' is added spuriously.  The not.toContain assertion is the one that would fail.
+  it("does not spuriously add a near-dup pure-CJK decision when an unrelated entry shadows it", () => {
+    // Merge 1: seed prevState with A (unrelated) and B (near-dup base).
+    // Jaccard(A, B) ≈ 0 → both are added as distinct decisions.
+    const seed = protectedStateMerge({
+      prevState: null,
+      deltaCandidates: [
+        decisionDelta("我喜欢喝茶"),           // A — unrelated; bigrams: 我喜,喜欢,欢喝,喝茶
+        decisionDelta("我打算下周去北京出差")   // B — base; bigrams: 我打,打算,算下,下周,周去,去北,北京,京出,出差
+      ],
+      documents: [],
+      idFactory: deterministicIdFactory()
+    });
+    expect(seed.stableFacts.decisions).toContain("我喜欢喝茶");
+    expect(seed.stableFacts.decisions).toContain("我打算下周去北京出差");
+
+    // Merge 2: B' = B + one char → Jaccard(B, B') = 9/10 = 0.9 ≥ 0.8.
+    // With the guard: best-match = B (score 0.9; A scores ≈ 0) → sameFactCjkAware(B, B', 0.8)
+    //   = true → B' deduped, not added → decisions = {A, B}.
+    // Without the guard: A and B both score 1 via "" === "" → first wins (A) →
+    //   sameFactCjkAware(A, B', 0.8) = false (Jaccard ≈ 0) → B' added → decisions = {A, B, B'}.
+    const after = protectedStateMerge({
+      prevState: seed,
+      deltaCandidates: [decisionDelta("我打算下周去北京出差啊")],
+      documents: [],
+      idFactory: deterministicIdFactory()
+    });
+    expect(after.stableFacts.decisions).toContain("我打算下周去北京出差");
+    expect(after.stableFacts.decisions).not.toContain("我打算下周去北京出差啊");
+    expect(after.stableFacts.decisions).toContain("我喜欢喝茶");
   });
 });
 
