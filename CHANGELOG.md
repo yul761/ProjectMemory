@@ -4,26 +4,40 @@ All notable changes to this project are documented in this file.
 
 The format loosely follows Keep a Changelog and Semantic Versioning.
 
-## [Unreleased]
+## [1.1.0] - 2026-06-22
+
+Freeze-readiness release. The `/v1` API is now frozen — see STABILITY.md. This
+release is additive + internal hardening only; the `/v1` contract is unchanged
+since 1.0.0.
+
+### Changed / Removed
+- Trimmed the runtime to `apps/api` + `apps/worker` + `packages/*`. Removed the
+  peripheral apps (demo-web, adapter-telegram, cli, adapter-mcp) and demo-only
+  code paths.
+- Removed the in-process rate limiter — rate limiting now belongs to the hosting
+  gateway/reverse proxy (the open core no longer rate-limits in-process). `429`
+  was never part of the `/v1` contract.
 
 ### Added
-- `apps/adapter-mcp`: `list_scopes` tool — discover all available scopes before cross-scope recall.
-- `apps/adapter-mcp`: `recall` now accepts optional `scopeId` parameter for querying any scope, not just the current project scope.
-- `apps/adapter-mcp`: scope resolution from `.statecore` project file or `STATECORE_SCOPE_NAME` env var, with directory-name fallback.
-- `apps/adapter-mcp`: `save_turn` now uses `/memory/runtime/turn` endpoint for richer digest handling.
-- `GET /diagnostics/queues` — active/waiting/failed counts for digest and workingMemory queues.
-- `GET /diagnostics/mcp-usage` — today's MCP tool call counts from JSONL usage log.
-- `docker-compose.local.yml` — full local Docker stack (Postgres 16, Redis 7, API, Worker).
-- `Makefile` — local dev shortcuts (`start`, `stop`, `logs`, `rebuild`, `clean`).
-- `start.ps1` — Windows startup script with health polling and status widget auto-launch.
-- `status.html` — floating real-time status widget.
-- `scripts/ingest-docs.ts` — bulk-ingest a folder of markdown/text files into a scope (`pnpm ingest:docs`).
-- `scripts/wake-monitor.ps1` / `wake-recovery.ps1` — Windows background monitor that restores Docker networking after sleep/wake.
-- `CLAUDE.md` — Claude Code project context for this repo.
+- Drift-control robustness: property-based (fast-check) + adversarial regression
+  tests over the digest-control pure functions; deterministic `idFactory`/`nowFactory`.
+- Multi-instance safety: `rebuild_digest_chain` now runs under the distributed
+  digest-lock; the periodic maintenance tasks run as cluster-safe BullMQ repeatable
+  jobs; the runtime recall caches are bounded (`BoundedTtlCache`).
+- pgvector **HNSW index** on embeddings, with the vector query aligned to the
+  cosine operator so the index is used at scale.
+- Per-stage latency logs for retrieve and digest (`retrieveTimings`/`digestTimings`).
+- Request body size limit (`MAX_REQUEST_BODY_BYTES`, default 1 MB) with clean
+  413 (too large) / 400 (malformed JSON) responses.
+- Daily data-lifecycle GC (`data_gc`): prunes old digest/snapshot history (always
+  keeping the latest per scope), old job logs, and terminal reminders.
+- `examples/quickstart.sh` — a runnable `/v1` worked example.
+- `STABILITY.md` — the `/v1` freeze + stability policy.
 
 ### Fixed
-- `apps/api/src/auth.middleware.ts`: health check bypass now uses `originalUrl` to correctly match `/health`.
-- `Dockerfile`: now copies `apps/adapter-mcp/package.json` in the dependency-install stage.
+- `consistencyCheck` no longer false-flags `goal_contradiction` when a summary
+  appends prose after the goal.
+- digest + state snapshot are now written atomically in a transaction.
 
 ## [1.0.0] - 2026-03-18
 
