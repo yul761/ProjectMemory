@@ -10,6 +10,21 @@ StateCore is an open-source, self-hosted, developer-oriented long-term memory ru
 
 It does not aim to be the best chat shell, model hosting platform, or general-purpose agent framework. Its purpose is to provide a reusable memory layer that developers can attach to local models, remote models, or OpenAI-compatible endpoints.
 
+## Layered Model: Open Core and Product Stack
+
+StateCore ships as two layers:
+
+- **Open-source runtime core** (this repository): the reusable, self-hosted,
+  low-drift memory layer described throughout this document. The Positioning and
+  Non-goals sections below scope THIS core.
+- **Commercial product stack on top**: a hosted/managed version, a GPT-API
+  integration layer, and a frontend app — built on the core through its frozen
+  `/v1` API (see `docs/api.md`). These are distinct products layered above the
+  open core, not a redefinition of it.
+
+The non-goals below describe the open-source core. They do not forbid the
+commercial stack above it; that stack is a separate, additive layer.
+
 ## North Star
 
 The project should optimize for four outcomes:
@@ -80,7 +95,9 @@ StateCore is:
 - a benchmark and evaluation framework
 - an assistant memory runtime
 
-StateCore is not:
+The open-source core is not (these scope the core; the commercial product stack
+above it — hosted version, GPT-API layer, app — is a separate layer, see Layered
+Model above):
 
 - a model deployment platform
 - a general chat UI
@@ -151,6 +168,10 @@ Key areas:
 - IDE integrations
 
 ### Non-goals for the Near and Mid Term
+
+These scope the open-source core. The commercial product stack (hosted version,
+GPT-API layer, app) lives above the core and is out of scope for this list — see
+Layered Model above.
 
 - model download and management
 - broad consumer chat UI competition
