@@ -715,12 +715,7 @@ function parseGoal(text: string) {
     .find((entry) => /^goal\s*:/i.test(entry));
   if (!line) return undefined;
   const raw = line.replace(/^goal\s*:/i, "").trim();
-  // Split at the first sentence boundary (". " followed by any text), not just at known
-  // section keywords. This fixes the false-positive case where the summary says
-  // "goal: X. Progress is steady." — the goal is X, not "X. Progress is steady".
-  // Section-keyword boundaries (constraints, decisions, etc.) are a strict subset of ". ",
-  // so existing structured-summary behaviour is preserved.
-  const sectionBoundary = raw.match(/^(.*?)(?:\.\s+.*)?$/i);
+  const sectionBoundary = raw.match(/^(.*?)(?:\.\s+(?:constraints?|decisions?|todos?|next steps?|(?:active\s+)?risks?|(?:open\s+)?questions?|changes?|status)\b.*)?$/i);
   return sectionBoundary?.[1]?.trim().replace(/\.$/, "") || undefined;
 }
 
@@ -1895,7 +1890,13 @@ export function consistencyCheck(input: {
 
   const stableGoal = input.protectedState.stableFacts.goal;
   const mentionedGoal = parseGoal(input.output.summary);
-  if (stableGoal && mentionedGoal && normalizeText(stableGoal) !== normalizeText(mentionedGoal)) {
+  // Compare goals by their first sentence only: an LLM summary often appends prose
+  // after the goal ("goal: X. Progress is steady."), which must not read as a goal
+  // change. parseGoal stays lossless for goal STORAGE; only this contradiction
+  // comparison is lenient to trailing sentences.
+  // normalizeText removes periods, so split on the RAW string first, then normalize.
+  const firstSentence = (s: string) => normalizeText(s.split(/\.\s+/)[0] ?? s);
+  if (stableGoal && mentionedGoal && firstSentence(stableGoal) !== firstSentence(mentionedGoal)) {
     errors.push("goal_contradiction");
   }
 
