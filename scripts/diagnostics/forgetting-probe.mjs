@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // StateCore「遗忘边界」诊断探针
-// spec: docs/superpowers/specs/2026-06-19-forgetting-boundary-probe-design.md
 // 用法: node scripts/diagnostics/forgetting-probe.mjs
 // 前置: 全栈在 localhost:3002 运行 (docker compose -f docker-compose.local.yml up -d)
 
