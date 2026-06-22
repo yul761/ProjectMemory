@@ -15,6 +15,7 @@ describe("POST /memory/retrieve without query", () => {
   it("accepts a request with no query and returns recent events", async () => {
     const scopeRes = await request(app.getHttpServer())
       .post("/scopes").set("x-user-id", USER).send({ name: "s" });
+    expect(scopeRes.status).toBe(201);
     const scopeId = scopeRes.body.id as string;
 
     await request(app.getHttpServer())
@@ -27,5 +28,6 @@ describe("POST /memory/retrieve without query", () => {
 
     expect(res.status).toBe(201);
     expect(Array.isArray(res.body.events)).toBe(true);
+    expect(res.body.events.length).toBeGreaterThanOrEqual(1);
   });
 });

@@ -40,7 +40,8 @@ import {
   createModelProvider,
   generateAnswer,
   getActiveFactRegistry,
-  getDomainConfig
+  getDomainConfig,
+  logger
 } from "@statecore/core";
 import { z } from "zod";
 import { prisma } from "@statecore/db";
@@ -520,8 +521,10 @@ export class MemoryController {
       content: input.content
     });
     // Queue async embedding generation (best-effort, ingest must not fail if queue is unavailable)
-    embedQueue.add("embed_event",       { eventId: event.id, scopeId: input.scopeId }).catch(() => {});
-    classifyQueue.add("classify_event", { eventId: event.id, scopeId: input.scopeId }).catch(() => {});
+    embedQueue.add("embed_event",       { eventId: event.id, scopeId: input.scopeId })
+      .catch((err) => logger.error({ err, eventId: event.id }, "embed_event enqueue failed"));
+    classifyQueue.add("classify_event", { eventId: event.id, scopeId: input.scopeId })
+      .catch((err) => logger.error({ err, eventId: event.id }, "classify_event enqueue failed"));
     return parseOutput(MemoryEventOutput, {
       id: event.id,
       userId: event.userId,

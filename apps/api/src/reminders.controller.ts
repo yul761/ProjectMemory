@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Inject, NotFoundException, Param, Post, Query, Req } from "@nestjs/common";
-import { ReminderCreateInput, ReminderStatus } from "@statecore/contracts";
+import { ReminderCreateInput, ReminderStatus, ReminderOutput, ReminderListOutput, ReminderCancelOutput } from "@statecore/contracts";
 import { DomainService } from "./domain.service";
 import type { RequestWithUser } from "./types";
 import { reminderQueue } from "./queue";
+import { parseOutput } from "./output";
 
 @Controller()
 export class RemindersController {
@@ -22,14 +23,14 @@ export class RemindersController {
       input.text
     );
     await reminderQueue.add("send_reminders", {});
-    return {
+    return parseOutput(ReminderOutput, {
       id: reminder.id,
       scopeId: reminder.scopeId ?? null,
       dueAt: reminder.dueAt.toISOString(),
       text: reminder.text,
       status: reminder.status,
       createdAt: reminder.createdAt.toISOString()
-    };
+    });
   }
 
   @Get(["/reminders", "/v1/reminders"])
@@ -43,7 +44,7 @@ export class RemindersController {
     const take = Math.min(Number.isFinite(parsed) ? parsed : 20, 100);
     const statusValue = status ? ReminderStatus.parse(status) : undefined;
     const { items, nextCursor } = await this.domain.reminderService.listReminders(req.userId, statusValue, take, cursor ?? null);
-    return {
+    return parseOutput(ReminderListOutput, {
       items: items.map((reminder) => ({
         id: reminder.id,
         scopeId: reminder.scopeId ?? null,
@@ -53,12 +54,12 @@ export class RemindersController {
         createdAt: reminder.createdAt.toISOString()
       })),
       nextCursor
-    };
+    });
   }
 
   @Post(["/reminders/:id/cancel", "/v1/reminders/:id/cancel"])
   async cancelReminder(@Req() req: RequestWithUser, @Param("id") reminderId: string) {
     const ok = await this.domain.reminderService.cancelReminder(reminderId, req.userId);
-    return { ok };
+    return parseOutput(ReminderCancelOutput, { ok });
   }
 }
