@@ -41,7 +41,6 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statecore
       REDIS_URL: redis://localhost:6379
       FEATURE_LLM: "true"
-      FEATURE_TELEGRAM: "false"
       WORKING_MEMORY_ENABLED: "true"
       WORKING_MEMORY_USE_LLM: "false"
       MODEL_PROVIDER: openai-compatible
