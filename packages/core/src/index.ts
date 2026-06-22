@@ -419,10 +419,19 @@ export class RetrieveService {
   }
 
   async retrieve(scopeId: string, limit: number, query?: string) {
+    const tStart = Date.now();
+    let embedMs = 0;
+    let vectorSearchMs = 0;
+    let rerankMs = 0;
+
     const digest = await this.digests.findLatest(scopeId);
     const candidateSize = Math.min(Math.max(limit * 4, 40), 200);
     const events = await this.memories.listRecent(scopeId, candidateSize);
     if (!query || !query.trim()) {
+      logger.info(
+        { retrieveTimings: { embedMs: 0, vectorSearchMs: 0, rerankMs: 0, totalMs: Date.now() - tStart } },
+        "retrieve stage timings"
+      );
       return { digest, events: events.items.slice(0, limit) };
     }
 
@@ -434,10 +443,14 @@ export class RetrieveService {
       this.options.vectorSearchFn
     ) {
       try {
+        const tEmbed = Date.now();
         const queryVectors = await this.options.embeddingModel.embed([query]);
+        embedMs = Date.now() - tEmbed;
         const queryVector = queryVectors[0];
         if (queryVector?.length) {
+          const tVectorSearch = Date.now();
           const vectorIds = await this.options.vectorSearchFn(queryVector, candidateSize, scopeId);
+          vectorSearchMs = Date.now() - tVectorSearch;
           if (vectorIds.length) {
             const keywordIdSet = new Set(events.items.map((e) => e.id));
             const newIds = vectorIds.filter((id) => !keywordIdSet.has(id));
@@ -477,7 +490,10 @@ export class RetrieveService {
         return b.event.createdAt.getTime() - a.event.createdAt.getTime();
       });
 
+    const tRerank = Date.now();
     const reranked = await this.rerankWithEmbeddings(query, ranked);
+    rerankMs = Date.now() - tRerank;
+
     const matches = reranked.slice(0, limit).map((item) => {
       const reasonParts = [
         item.embeddingScore !== undefined ? "embedding_rerank" : "heuristic_rank",
@@ -500,6 +516,11 @@ export class RetrieveService {
         rankingReason: reasonParts.join(", ")
       };
     });
+
+    logger.info(
+      { retrieveTimings: { embedMs, vectorSearchMs, rerankMs, totalMs: Date.now() - tStart } },
+      "retrieve stage timings"
+    );
 
     return {
       digest,

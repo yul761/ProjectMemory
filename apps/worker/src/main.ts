@@ -324,6 +324,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     stage: "generation",
     tookMs: result.metrics.generationMs
   }, "Digest stage completed");
+  logger.info({ digestTimings: result.metrics }, "digest stage timings");
   logger.info({
     scopeId: data.scopeId,
     selectedCount: result.selection.selectedEvents.length,

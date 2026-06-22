@@ -147,6 +147,18 @@ Retrieval-semantic benchmark:
 BENCH_FIXTURE=benchmark-fixtures/retrieval-semantic.json BENCH_RETRIEVE_USE_EMBEDDINGS=true pnpm benchmark
 ```
 
+### Per-stage latency breakdown
+
+Retrieve and digest emit structured stage timings to the logs (the benchmark
+reports end-to-end p95; the breakdown lives in logs to keep it out of the /v1
+response):
+
+- Retrieve: log `"retrieve stage timings"` → `retrieveTimings: { embedMs, vectorSearchMs, rerankMs, totalMs }`
+- Digest: log `"digest stage timings"` → `digestTimings: { selectionMs, classificationMs, deltaMs, mergeMs, generationMs }`
+
+Filter the API/worker logs by these messages to see where retrieve/digest time
+goes (the current p95 is dominated by the embedding/LLM calls, not the DB query).
+
 ### Verifying the HNSW index is used
 
 The HNSW index (`MemoryEventEmbedding_embedding_hnsw_idx`, `vector_cosine_ops`)
