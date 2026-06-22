@@ -45,12 +45,14 @@ describe("/v1 dual-mount routing", () => {
       .set("x-user-id", USER);
     expect(v1.status).toBe(404);
 
+    // check-contradiction and digest/rebuild are POST-only; POST (their real
+    // method) to the /v1 path must 404 — a mistaken POST mount would 201/400.
     const checkContradiction = await request(app.getHttpServer())
-      .get("/v1/memory/check-contradiction").set("x-user-id", USER);
+      .post("/v1/memory/check-contradiction").set("x-user-id", USER).send({});
     expect(checkContradiction.status).toBe(404);
 
     const digestRebuild = await request(app.getHttpServer())
-      .get("/v1/memory/digest/rebuild").set("x-user-id", USER);
+      .post("/v1/memory/digest/rebuild").set("x-user-id", USER).send({});
     expect(digestRebuild.status).toBe(404);
   });
 });
