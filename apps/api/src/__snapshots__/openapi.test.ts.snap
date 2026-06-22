@@ -26,7 +26,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "featureLlm": {
                       "type": "boolean",
@@ -206,7 +206,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "answer": {
                       "type": "string",
@@ -277,7 +277,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "jobId": {
                       "type": "string",
@@ -374,7 +374,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "content": {
                       "type": "string",
@@ -501,7 +501,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "digest": {
                       "nullable": true,
@@ -719,7 +719,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "answer": {
                       "type": "string",
@@ -791,7 +791,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "items": {
                       "items": {
@@ -915,7 +915,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "createdAt": {
                       "type": "string",
@@ -1004,7 +1004,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "ok": {
                       "type": "boolean",
@@ -1055,7 +1055,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "items": {
                       "items": {
@@ -1182,7 +1182,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "createdAt": {
                       "type": "string",
@@ -1267,7 +1267,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "activeScopeId": {
                       "format": "uuid",
@@ -1320,7 +1320,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": false,
+                  "additionalProperties": true,
                   "properties": {
                     "activeScopeId": {
                       "format": "uuid",

@@ -15,6 +15,19 @@ function jsonSchema(schema: ZodTypeAny): unknown {
   return toJsonSchema(schema, { target: "openApi3", $refStrategy: "none" });
 }
 
+// Response schemas document "at least these fields": some /v1 responses are
+// narrowed (W2) to stable top-level fields while the live endpoint still returns
+// extra diagnostic fields. zod-to-json-schema emits additionalProperties:false
+// for z.object(), which would make the doc wrongly reject those valid responses,
+// so open the top level for responses.
+function responseSchema(schema: ZodTypeAny): unknown {
+  const json = jsonSchema(schema);
+  if (json && typeof json === "object" && (json as JsonObject).type === "object") {
+    (json as JsonObject).additionalProperties = true;
+  }
+  return json;
+}
+
 function tagFor(path: string): string {
   const seg = path.split("/").filter(Boolean)[0] ?? "default";
   return seg === "state" ? "scopes" : seg;
@@ -52,7 +65,7 @@ export function buildOpenApiDocument(): JsonObject {
       responses: {
         [successCode]: {
           description: "Success",
-          content: { "application/json": { schema: jsonSchema(io.response as ZodTypeAny) } }
+          content: { "application/json": { schema: responseSchema(io.response as ZodTypeAny) } }
         },
         "400": {
           description: "Validation failed",
