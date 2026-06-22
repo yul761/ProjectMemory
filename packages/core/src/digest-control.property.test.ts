@@ -191,3 +191,46 @@ describe("selectEventsForDigest — properties", () => {
     );
   });
 });
+
+describe("detectDeltas — properties", () => {
+  const kindArb = fc.constantFrom<MemoryEventKind>("decision", "constraint", "todo", "note", "status", "question", "noise");
+  const selectedArb = fc.array(
+    fc.record({
+      content: fc.string({ minLength: 1, maxLength: 40 }),
+      kind: kindArb,
+      importanceScore: fc.double({ min: 0, max: 1, noNaN: true })
+    }),
+    { maxLength: 25 }
+  ).map((rows) =>
+    rows.map((r): SelectedEvent => ({
+      event: ev({ type: "stream", content: r.content }),
+      features: { kind: r.kind, importanceScore: r.importanceScore, noveltyScore: 0 }
+    }))
+  );
+
+  it("always keeps decision and constraint events regardless of novelty", () => {
+    fc.assert(
+      fc.property(selectedArb, fc.string({ maxLength: 60 }), (selected, lastDigestText) => {
+        const deltas = detectDeltas({ lastDigestText, selectedEvents: selected, noveltyThreshold: 1 });
+        const keptIds = new Set(deltas.map((d) => d.eventId));
+        for (const s of selected) {
+          if (s.features.kind === "decision" || s.features.kind === "constraint") {
+            expect(keptIds.has(s.event.id)).toBe(true);
+          }
+        }
+      })
+    );
+  });
+
+  it("is monotonic in threshold: higher threshold → subset of deltas", () => {
+    fc.assert(
+      fc.property(selectedArb, fc.string({ maxLength: 60 }), (selected, lastDigestText) => {
+        const low = new Set(detectDeltas({ lastDigestText, selectedEvents: selected, noveltyThreshold: 0.2 }).map((d) => d.eventId));
+        const high = detectDeltas({ lastDigestText, selectedEvents: selected, noveltyThreshold: 0.8 }).map((d) => d.eventId);
+        for (const id of high) {
+          expect(low.has(id)).toBe(true);
+        }
+      })
+    );
+  });
+});
