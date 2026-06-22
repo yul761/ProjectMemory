@@ -340,3 +340,61 @@ describe("detectDeltas — properties", () => {
     );
   });
 });
+
+describe("consistencyCheck — properties", () => {
+  it("does not flag goal_contradiction when the summary restates the protected goal verbatim", () => {
+    fc.assert(
+      fc.property(fc.constantFrom("launch the beta", "ship api v1", "reduce p95 latency"), (goal) => {
+        const result = consistencyCheck({
+          output: {
+            summary: `goal: ${goal}. Progress is steady.`,
+            changes: ["documented the goal"],
+            nextSteps: ["ship the next milestone"]
+          },
+          protectedState: {
+            stableFacts: { goal, constraints: [], decisions: [] },
+            workingNotes: {},
+            todos: []
+          },
+          previousDigest: null
+        });
+        expect(result.errors).not.toContain("goal_contradiction");
+      })
+    );
+  });
+
+  it("flags goal_contradiction when the summary states a different goal", () => {
+    const result = consistencyCheck({
+      output: {
+        summary: "goal: build a mobile app. Progress is steady.",
+        changes: ["pivoted scope"],
+        nextSteps: ["ship the next milestone"]
+      },
+      protectedState: {
+        stableFacts: { goal: "launch the beta web platform", constraints: [], decisions: [] },
+        workingNotes: {},
+        todos: []
+      },
+      previousDigest: null
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("goal_contradiction");
+  });
+
+  it("flags decision_contradiction when a protected decision is negated", () => {
+    const result = consistencyCheck({
+      output: {
+        summary: "We will no longer use postgres for storage.",
+        changes: ["reversed the database decision"],
+        nextSteps: ["migrate the data"]
+      },
+      protectedState: {
+        stableFacts: { goal: undefined, constraints: [], decisions: ["use postgres for storage"] },
+        workingNotes: {},
+        todos: []
+      },
+      previousDigest: null
+    });
+    expect(result.errors).toContain("decision_contradiction");
+  });
+});

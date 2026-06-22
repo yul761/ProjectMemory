@@ -715,7 +715,12 @@ function parseGoal(text: string) {
     .find((entry) => /^goal\s*:/i.test(entry));
   if (!line) return undefined;
   const raw = line.replace(/^goal\s*:/i, "").trim();
-  const sectionBoundary = raw.match(/^(.*?)(?:\.\s+(?:constraints?|decisions?|todos?|next steps?|(?:active\s+)?risks?|(?:open\s+)?questions?|changes?|status)\b.*)?$/i);
+  // Split at the first sentence boundary (". " followed by any text), not just at known
+  // section keywords. This fixes the false-positive case where the summary says
+  // "goal: X. Progress is steady." — the goal is X, not "X. Progress is steady".
+  // Section-keyword boundaries (constraints, decisions, etc.) are a strict subset of ". ",
+  // so existing structured-summary behaviour is preserved.
+  const sectionBoundary = raw.match(/^(.*?)(?:\.\s+.*)?$/i);
   return sectionBoundary?.[1]?.trim().replace(/\.$/, "") || undefined;
 }
 
