@@ -20,6 +20,7 @@ import {
 } from "@statecore/prompts";
 import { workerEnv } from "./env";
 import { withDigestLock, DigestAlreadyRunningError, type LockRedis } from "./digest-lock";
+import { processRebuildDigestChainJob } from "./rebuild-job";
 import { runEmbedEventJob } from "./embed-job";
 import { runClassifyEventJob } from "./classify-job";
 import { runDetectEmotionalPatternsJob } from "./detect-patterns";
@@ -499,8 +500,12 @@ new Worker(
     }
 
     if (job.name === "rebuild_digest_chain") {
-      await runRebuildDigestChainJob(job.data as { userId: string; scopeId: string; from?: string; to?: string; strategy?: "full" | "since_last_good"; rebuildGroupId?: string });
-      return { ok: true };
+      return processRebuildDigestChainJob(
+        lockRedis,
+        job.data as { userId: string; scopeId: string; from?: string; to?: string; strategy?: "full" | "since_last_good"; rebuildGroupId?: string },
+        runRebuildDigestChainJob,
+        logger
+      );
     }
   },
   { connection, concurrency: workerEnv.digestConcurrency }
