@@ -655,13 +655,13 @@ new Worker(
 
 const HOUR_MS = 60 * 60 * 1000;
 void maintenanceQueue
-  .upsertJobScheduler("expire-events-6h", { every: 6 * HOUR_MS }, { name: "expire_events" })
+  .upsertJobScheduler("expire-events-6h", { every: 6 * HOUR_MS }, { name: "expire_events", opts: { removeOnComplete: true, removeOnFail: true } })
   .catch((err) => logger.error({ err }, "failed to register expire_events scheduler"));
 void maintenanceQueue
-  .upsertJobScheduler("daily-remind-24h", { every: 24 * HOUR_MS }, { name: "daily_remind" })
+  .upsertJobScheduler("daily-remind-24h", { every: 24 * HOUR_MS }, { name: "daily_remind", opts: { removeOnComplete: true, removeOnFail: true } })
   .catch((err) => logger.error({ err }, "failed to register daily_remind scheduler"));
 void maintenanceQueue
-  .upsertJobScheduler("detect-emotional-patterns-7d", { every: 7 * 24 * HOUR_MS }, { name: "detect_emotional_patterns" })
+  .upsertJobScheduler("detect-emotional-patterns-7d", { every: 7 * 24 * HOUR_MS }, { name: "detect_emotional_patterns", opts: { removeOnComplete: true, removeOnFail: true } })
   .catch((err) => logger.error({ err }, "failed to register detect_emotional_patterns scheduler"));
 
 logger.info("Worker started");

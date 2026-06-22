@@ -127,5 +127,4 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d api w
 
 - `worker` must stay running. This project is not API-only.
 - **Multi-instance:** Run multiple API/worker replicas only in full mode (Redis-backed BullMQ). `STATECORE_MODE=lite` uses an in-process queue and is single-instance / development only.
-- Rate limiting is applied in-process by `api` using in-memory buckets. This is sufficient for a single-server deployment; a distributed setup would need an external store.
 - For public HTTPS, place your own reverse proxy (nginx, Traefik, etc.) in front of the `api` port.
