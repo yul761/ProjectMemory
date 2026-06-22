@@ -1,12 +1,13 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { Request, Response } from "express";
 import { apiReference } from "@scalar/express-api-reference";
 import { dirname, join } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { AppModule } from "./app.module";
 import { apiEnv } from "./env";
-import { GlobalErrorFilter } from "./error.filter";
+import { configureApp } from "./configure-app";
 
 // Resolve the @scalar/api-reference standalone bundle once at startup.
 // We can't use require.resolve("@scalar/api-reference/package.json") because that
@@ -30,13 +31,13 @@ if (!_scalarBundleRel) {
 const scalarBundlePath = join(_scalarDir, _scalarBundleRel);
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { logger: ["log", "error", "warn"] });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: ["log", "error", "warn"] });
   app.enableCors({ origin: "*" });
+  configureApp(app, { maxBodyBytes: apiEnv.maxRequestBodyBytes });
   app.use("/docs/scalar.js", (_req: Request, res: Response) =>
     res.type("application/javascript").sendFile(scalarBundlePath)
   );
   app.use("/docs", apiReference({ url: "/openapi.json", cdn: "/docs/scalar.js" }));
-  app.useGlobalFilters(new GlobalErrorFilter());
   await app.listen(apiEnv.port);
 }
 

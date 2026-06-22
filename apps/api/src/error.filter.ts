@@ -12,6 +12,15 @@ export class GlobalErrorFilter implements ExceptionFilter {
       res.status(400).json({ error: "Validation failed", details: exception.issues });
       return;
     }
+    const bodyParserType = (exception as { type?: unknown })?.type;
+    if (bodyParserType === "entity.too.large") {
+      res.status(413).json({ error: "Request body too large" });
+      return;
+    }
+    if (bodyParserType === "entity.parse.failed" || exception instanceof SyntaxError) {
+      res.status(400).json({ error: "Malformed JSON body" });
+      return;
+    }
     if (exception instanceof HttpException) {
       res.status(exception.getStatus()).json({ error: exception.message });
       return;

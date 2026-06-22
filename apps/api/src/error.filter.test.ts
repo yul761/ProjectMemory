@@ -71,4 +71,33 @@ describe("GlobalErrorFilter", () => {
     filter.catch(new Error("database exploded"), host);
     expect(logger.error).toHaveBeenCalledTimes(1);
   });
+
+  it("maps an oversized-body error (entity.too.large) to 413", () => {
+    const { host, status, json } = makeHost();
+    filter.catch({ type: "entity.too.large", status: 413, message: "request entity too large" }, host);
+    expect(status).toHaveBeenCalledWith(413);
+    expect(json).toHaveBeenCalledWith({ error: "Request body too large" });
+  });
+
+  it("maps a malformed-JSON body-parser error (entity.parse.failed) to 400", () => {
+    const { host, status, json } = makeHost();
+    filter.catch({ type: "entity.parse.failed", status: 400, message: "Unexpected token" }, host);
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ error: "Malformed JSON body" });
+  });
+
+  it("maps a body-parser SyntaxError to 400", () => {
+    const { host, status, json } = makeHost();
+    const err = Object.assign(new SyntaxError("Unexpected token } in JSON"), { type: "entity.parse.failed", status: 400 });
+    filter.catch(err, host);
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ error: "Malformed JSON body" });
+  });
+
+  it("does not leak internals for an oversized error (no raw message echoed)", () => {
+    const { host, json } = makeHost();
+    filter.catch({ type: "entity.too.large", status: 413, message: "request entity too large; limit 1048576" }, host);
+    const payload = json.mock.calls[0][0] as { error: string };
+    expect(payload.error).toBe("Request body too large");
+  });
 });
