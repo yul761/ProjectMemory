@@ -1,8 +1,9 @@
 # StateCore quickstart example
 
-`quickstart.sh` walks the core memory loop against the frozen `/v1` API:
-create a scope → ingest a document + a stream event → trigger a digest →
-retrieve grounded evidence → read the stable state.
+`quickstart.sh` walks the core memory loop: create a scope → ingest a document +
+a stream event → trigger a digest → retrieve grounded evidence (all via the frozen
+`/v1` API) → then read the stable state via the internal `/memory/stable-state`
+read-model endpoint (not part of the frozen `/v1` contract).
 
 ## Prerequisites (cold start)
 

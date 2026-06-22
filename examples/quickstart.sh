@@ -38,7 +38,8 @@ say "retrieve grounded evidence"
 curl -fsS "${H_AUTH[@]}" "${H_JSON[@]}" -X POST "${URL}/v1/memory/retrieve" \
   -d "{\"scopeId\":\"${SCOPE_ID}\",\"query\":\"what storage did we choose?\",\"limit\":10}" | jq .
 
-say "current stable state"
-curl -fsS "${H_AUTH[@]}" "${URL}/v1/memory/stable-state?scopeId=${SCOPE_ID}" | jq .
+say "current stable state (internal read model — not part of the frozen /v1 contract)"
+# stable-state is registered only at /memory/stable-state, not under /v1
+curl -fsS "${H_AUTH[@]}" "${URL}/memory/stable-state?scopeId=${SCOPE_ID}" | jq .
 
 say "done"

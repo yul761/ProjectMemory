@@ -107,11 +107,13 @@ Reference documentation: `docs/api.md`
 | `POST` | `/v1/memory/retrieve` | Retrieve grounded evidence for a query |
 | `POST` | `/v1/memory/digest` | Trigger a State Layer digest job |
 | `GET` | `/v1/scopes` | List scopes |
-| `GET` | `/v1/memory/stable-state` | Current stable-state snapshot |
-| `GET` | `/v1/memory/working-state` | Current working-memory snapshot |
-| `GET` | `/v1/memory/layer-status` | Aggregated layer health |
+| `GET` | `/memory/stable-state` | Current stable-state snapshot ¹ |
+| `GET` | `/memory/working-state` | Current working-memory snapshot ¹ |
+| `GET` | `/memory/layer-status` | Aggregated layer health ¹ |
 
 > **API stability:** the `/v1` API is frozen as of v1.1.0 — see [STABILITY.md](STABILITY.md).
+
+¹ Internal read-model endpoints — registered only at `/memory/...`, not under `/v1`, and not part of the frozen `/v1` contract.
 
 ## Architecture
 
