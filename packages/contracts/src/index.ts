@@ -113,7 +113,7 @@ export const DigestRebuildInput = z.object({
 // Debug surface contracts
 export const RetrieveInput = z.object({
   scopeId: z.string().uuid(),
-  query: z.string().min(1),
+  query: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(100).optional()
 });
 
