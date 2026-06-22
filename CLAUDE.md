@@ -61,10 +61,9 @@ Options:
 
 Script: `scripts/ingest-docs.ts`
 
-## Known scopes (as of 2026-05)
-- `dems-product` — DEMS product design docs (capability gates, redaction V1)
-- `project:dems-ui` — DEMS UI project context
-- `project:dems` — DEMS backend project context
+## Scopes
+Scopes are per-user and dynamic — do not hardcode a list here. List the current
+user's scopes via `GET /scopes` (auth header `x-user-id`).
 
 ## Architecture quick-ref
 - `apps/api` — NestJS HTTP server, port 3002

@@ -2,6 +2,10 @@
 
 The canonical product direction now lives in [`docs/vision-and-roadmap.md`](docs/vision-and-roadmap.md).
 
+StateCore is an open-source runtime core; a commercial product stack (hosted
+version, GPT-API layer, app) is built on top via the frozen `/v1` API — see the
+"Layered Model" section in `docs/vision-and-roadmap.md`.
+
 ## Current Priority Order
 
 1. Stabilize the low-drift digest core.

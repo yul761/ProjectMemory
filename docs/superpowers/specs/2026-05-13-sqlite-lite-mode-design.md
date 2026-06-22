@@ -1,7 +1,7 @@
 # SQLite Lite Mode Design
 
 **Date:** 2026-05-13
-**Status:** Approved
+**Status:** Shelved — out of terminal scope (production path is Postgres + pgvector); see core-readiness W4 (2026-06-21).
 
 ## Problem
 
