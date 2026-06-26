@@ -2343,6 +2343,7 @@ describe("runDigestControlPipeline", () => {
     });
     const forgottenKey = computeFactKey("People", "Call the supplier about Q3");
     let llmCalled = false;
+    let capturedPrompt = "";
     const result = await runDigestControlPipeline({
       scope: { id: "s", userId: "u", name: "Demo", goal: "ship Q3 features", stage: "build", createdAt: new Date() },
       lastDigest: {
@@ -2365,8 +2366,9 @@ describe("runDigestControlPipeline", () => {
         })
       ],
       llm: {
-        chat: async () => {
+        chat: async (messages: { role: string; content: string }[]) => {
           llmCalled = true;
+          capturedPrompt = messages.map((m) => m.content).join("\n");
           return JSON.stringify({
             summary: "Goal: ship Q3 features. Q3 planning is underway with the new supplier.",
             changes: ["Started Q3 supplier planning"],
@@ -2376,7 +2378,11 @@ describe("runDigestControlPipeline", () => {
       },
       prompts: {
         digestStage2SystemPrompt: "system",
-        digestStage2UserPrompt: "{{scopeName}}"
+        // Include {{protectedState}} so the serialized DigestState (which contains the profile
+        // relationships) is rendered into the user prompt. This makes the capturedPrompt assertion
+        // meaningful: if prune (A) did NOT run, the forgotten fact would appear in the serialized
+        // state and therefore in the prompt sent to the LLM.
+        digestStage2UserPrompt: "{{scopeName}} {{lastDigest}} {{protectedState}} {{deltaCandidates}} {{documents}}"
       },
       config: {
         eventBudgetTotal: 10,
@@ -2400,6 +2406,10 @@ describe("runDigestControlPipeline", () => {
     expect(result.state.profile?.relationships ?? []).not.toContain("Call the supplier about Q3");
     // Unrelated fact in a different facet is retained
     expect(result.state.profile?.style ?? []).toContain("Prefers async comms");
+    // Confirm prune (A) ran: the forgotten fact must NOT appear in the prompt sent to the LLM.
+    // This guards the prune-before-generate invariant: the forgotten fact was stripped from the
+    // state BEFORE it was formatted into the generation prompt, not only after.
+    expect(capturedPrompt).not.toContain("Call the supplier about Q3");
   });
 });
 
