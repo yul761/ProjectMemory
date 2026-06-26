@@ -2240,5 +2240,12 @@ export async function runDigestControlPipeline(input: {
     protectedState: state
   });
 
+  // Defensive second prune: applyProfileFactsFromDigest (and any future post-merge mutation)
+  // runs after the first prune and could in principle reintroduce a forgotten fact. Pruning
+  // again here guarantees result.state is clean regardless of post-merge additions.
+  if (input.forgottenFactKeys && input.forgottenFactKeys.size > 0) {
+    pruneForgottenFacts(state, input.forgottenFactKeys);
+  }
+
   return { digest, state, selection, deltas, metrics, consistency };
 }

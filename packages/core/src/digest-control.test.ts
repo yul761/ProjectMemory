@@ -2332,6 +2332,75 @@ describe("runDigestControlPipeline", () => {
     });
     expect(result.state.profile?.relationships ?? []).toContain("Call the supplier about Q3");
   });
+
+  it("prunes a forgotten profile fact on the MAIN generating path (generationMs > 0)", async () => {
+    const lastDigestCreatedAt = new Date("2026-03-19T00:00:10Z");
+    const prevState = normalizeDigestState({
+      stableFacts: { decisions: [], goal: "ship Q3 features" },
+      workingNotes: {},
+      todos: [],
+      profile: { relationships: ["Call the supplier about Q3"], style: ["Prefers async comms"] }
+    });
+    const forgottenKey = computeFactKey("People", "Call the supplier about Q3");
+    let llmCalled = false;
+    const result = await runDigestControlPipeline({
+      scope: { id: "s", userId: "u", name: "Demo", goal: "ship Q3 features", stage: "build", createdAt: new Date() },
+      lastDigest: {
+        id: "d1",
+        scopeId: "s",
+        summary: "Goal: ship Q3 features.",
+        changes: "",
+        nextSteps: ["Review supplier contract"],
+        createdAt: lastDigestCreatedAt
+      },
+      prevState,
+      recentEvents: [
+        event({
+          id: "evt-new",
+          scopeId: "s",
+          userId: "u",
+          type: "stream",
+          content: "Status: Q3 planning is now underway with the new supplier.",
+          createdAt: new Date("2026-03-19T00:01:00Z") // newer than lastDigest → forces main path
+        })
+      ],
+      llm: {
+        chat: async () => {
+          llmCalled = true;
+          return JSON.stringify({
+            summary: "Goal: ship Q3 features. Q3 planning is underway with the new supplier.",
+            changes: ["Started Q3 supplier planning"],
+            nextSteps: ["Review supplier contract details"]
+          });
+        }
+      },
+      prompts: {
+        digestStage2SystemPrompt: "system",
+        digestStage2UserPrompt: "{{scopeName}}"
+      },
+      config: {
+        eventBudgetTotal: 10,
+        eventBudgetDocs: 5,
+        eventBudgetStream: 5,
+        noveltyThreshold: 0.5,
+        maxRetries: 1,
+        useLlmClassifier: false,
+        debug: false
+      },
+      forgottenFactKeys: new Set([forgottenKey])
+    });
+
+    // Confirm the main generating path was taken (not the no-change early-return).
+    // generationMs can be 0 on fast machines (same-millisecond timer); use llmCalled
+    // and the absence of the no-new-events rationale token as the reliable signal.
+    expect(llmCalled).toBe(true);
+    expect(result.selection.rationale).not.toContain("no_new_events_since_last_digest");
+
+    // Confirm the forgotten fact was pruned from the returned state
+    expect(result.state.profile?.relationships ?? []).not.toContain("Call the supplier about Q3");
+    // Unrelated fact in a different facet is retained
+    expect(result.state.profile?.style ?? []).toContain("Prefers async comms");
+  });
 });
 
 describe("factRegistry", () => {
