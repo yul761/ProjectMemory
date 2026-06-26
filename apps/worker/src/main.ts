@@ -253,6 +253,12 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
 
   const prevDigestState = (lastStateRow?.state as unknown as DigestState) ?? null;
 
+  const forgottenRows = await prisma.forgottenFact.findMany({
+    where: { scopeId: data.scopeId },
+    select: { factKey: true }
+  });
+  const forgottenFactKeys = new Set(forgottenRows.map((f) => f.factKey));
+
   const result = await runDigestControlPipeline({
     scope,
     lastDigest: lastDigestRow ? toCoreDigest(lastDigestRow) : null,
@@ -273,7 +279,8 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
       maxRetries: workerEnv.digestMaxRetries,
       useLlmClassifier: workerEnv.digestUseLlmClassifier,
       debug: workerEnv.digestDebug
-    }
+    },
+    forgottenFactKeys
   });
 
   const driftMetrics = computeDriftMetrics(prevDigestState, result.state);
