@@ -238,7 +238,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
 
   const since = new Date(Date.now() - workerEnv.maxDaysLookback * 24 * 60 * 60 * 1000);
   const streamEventQuery = {
-    where: { scopeId: data.scopeId, createdAt: { gte: since }, type: "stream" as const },
+    where: { scopeId: data.scopeId, createdAt: { gte: since }, type: "stream" as const, suppressedAt: null },
     orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
     take: lastDigestRow ? workerEnv.maxRecentEvents : workerEnv.digestFirstRunMaxEvents
   };
@@ -246,7 +246,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     ...streamEventQuery
   });
   const recentDocumentEvents = await prisma.memoryEvent.findMany({
-    where: { scopeId: data.scopeId, createdAt: { gte: since }, type: "document" },
+    where: { scopeId: data.scopeId, createdAt: { gte: since }, type: "document", suppressedAt: null },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }]
   });
   const recentEvents = [...recentStreamEvents, ...recentDocumentEvents];

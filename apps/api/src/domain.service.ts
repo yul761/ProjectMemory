@@ -95,7 +95,7 @@ export class DomainService {
         }),
       listRecent: async (scopeId: string, limit: number, cursor?: string | null) => {
         const items = await prisma.memoryEvent.findMany({
-          where: { scopeId },
+          where: { scopeId, suppressedAt: null },
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           take: limit + 1,
           ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
@@ -106,13 +106,13 @@ export class DomainService {
       findByIds: (ids: string[]) =>
         ids.length
           ? prisma.memoryEvent.findMany({
-              where: { id: { in: ids } },
+              where: { id: { in: ids }, suppressedAt: null },
               orderBy: [{ createdAt: "desc" }, { id: "desc" }]
             })
           : Promise.resolve([]),
       listByLookback: (scopeId: string, since: Date, limit: number) =>
         prisma.memoryEvent.findMany({
-          where: { scopeId, createdAt: { gte: since } },
+          where: { scopeId, createdAt: { gte: since }, suppressedAt: null },
           orderBy: { createdAt: "desc" },
           take: limit
         }),
