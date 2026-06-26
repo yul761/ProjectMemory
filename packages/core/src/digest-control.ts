@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Digest, MemoryEvent, ProjectScope } from "./index";
+import { pruneForgottenFacts } from "./memory-facts";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2117,6 +2118,7 @@ export async function runDigestControlPipeline(input: {
     digestClassifyUserPrompt?: string;
   };
   config: DigestControlConfig;
+  forgottenFactKeys?: ReadonlySet<string>;
 }): Promise<{
   digest: DigestOutput;
   state: DigestState;
@@ -2131,6 +2133,9 @@ export async function runDigestControlPipeline(input: {
     const hasNewEvents = input.recentEvents.some((event) => event.createdAt.getTime() > input.lastDigest!.createdAt.getTime());
     if (!hasNewEvents) {
       const state = normalizeDigestState(input.prevState ?? deriveStateFromDigest(input.lastDigest));
+      if (input.forgottenFactKeys && input.forgottenFactKeys.size > 0) {
+        pruneForgottenFacts(state, input.forgottenFactKeys);
+      }
       const digest: DigestOutput = {
         summary: input.lastDigest.summary,
         changes: [],
@@ -2200,6 +2205,10 @@ export async function runDigestControlPipeline(input: {
     documents: selection.documents
   });
   metrics.mergeMs = Date.now() - tMerge;
+
+  if (input.forgottenFactKeys && input.forgottenFactKeys.size > 0) {
+    pruneForgottenFacts(state, input.forgottenFactKeys);
+  }
 
   const tGenerate = Date.now();
   const digest = await generateDigestStage2({

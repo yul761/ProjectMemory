@@ -14,6 +14,7 @@ import {
 } from "./digest-control";
 import type { MemoryEvent } from "./index";
 import { compileStateLayerView, formatStateLayerView } from "./working-memory.compiler";
+import { computeFactKey } from "./memory-facts";
 
 function event(partial: Partial<MemoryEvent> & Pick<MemoryEvent, "id" | "scopeId" | "userId" | "content" | "type">): MemoryEvent {
   return {
@@ -2291,6 +2292,45 @@ describe("runDigestControlPipeline", () => {
     });
     expect(result.selection.rationale).toContain("no_new_events_since_last_digest");
     expect(result.metrics.generationMs).toBe(0);
+  });
+
+  it("prunes a forgotten profile fact from the returned state", async () => {
+    const prevState = normalizeDigestState({
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      profile: { relationships: ["Call the supplier about Q3"], style: ["Prefers meetings after 2pm"] }
+    });
+    const forgottenKey = computeFactKey("People", "Call the supplier about Q3");
+    const result = await runDigestControlPipeline({
+      scope: { id: "s", userId: "u", name: "Demo", goal: "g", stage: "build", createdAt: new Date() },
+      lastDigest: { id: "d1", scopeId: "s", summary: "x", changes: "", nextSteps: [], createdAt: new Date("2026-03-19T00:00:10Z") },
+      prevState,
+      recentEvents: [],
+      llm: { chat: async () => { throw new Error("llm should not be called"); } },
+      prompts: { digestStage2SystemPrompt: "system", digestStage2UserPrompt: "{{scopeName}}" },
+      config: { eventBudgetTotal: 10, eventBudgetDocs: 5, eventBudgetStream: 5, noveltyThreshold: 0.5, maxRetries: 1, useLlmClassifier: false, debug: false },
+      forgottenFactKeys: new Set([forgottenKey])
+    });
+    expect(result.state.profile?.relationships ?? []).not.toContain("Call the supplier about Q3");
+    expect(result.state.profile?.style ?? []).toContain("Prefers meetings after 2pm"); // unrelated fact kept
+  });
+
+  it("without forgottenFactKeys the state is unchanged (backward compatible)", async () => {
+    const prevState = normalizeDigestState({
+      stableFacts: { decisions: [] }, workingNotes: {}, todos: [],
+      profile: { relationships: ["Call the supplier about Q3"] }
+    });
+    const result = await runDigestControlPipeline({
+      scope: { id: "s", userId: "u", name: "Demo", goal: "g", stage: "build", createdAt: new Date() },
+      lastDigest: { id: "d1", scopeId: "s", summary: "x", changes: "", nextSteps: [], createdAt: new Date("2026-03-19T00:00:10Z") },
+      prevState, recentEvents: [],
+      llm: { chat: async () => { throw new Error("llm should not be called"); } },
+      prompts: { digestStage2SystemPrompt: "system", digestStage2UserPrompt: "{{scopeName}}" },
+      config: { eventBudgetTotal: 10, eventBudgetDocs: 5, eventBudgetStream: 5, noveltyThreshold: 0.5, maxRetries: 1, useLlmClassifier: false, debug: false }
+      // no forgottenFactKeys
+    });
+    expect(result.state.profile?.relationships ?? []).toContain("Call the supplier about Q3");
   });
 });
 
