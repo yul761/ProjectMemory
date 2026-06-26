@@ -175,6 +175,11 @@ export const MemoryFactsOutput = z.object({
   )
 });
 
+export const ForgetFactInput = z.object({
+  scopeId: z.string().uuid(),
+  factKey: z.string().min(1)
+});
+
 export const AnswerInput = z.object({
   scopeId: z.string().uuid(),
   question: z.string().min(1)
