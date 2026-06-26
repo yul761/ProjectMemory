@@ -13,14 +13,20 @@ describe("buildOpenApiDocument", () => {
     expect(typeof doc.info).toBe("object");
   });
 
-  it("documents exactly the 13 /v1 operations", () => {
+  it("documents exactly the 15 /v1 operations", () => {
     const opCount = Object.values(paths).reduce(
       (n, methods) => n + Object.keys(methods).length,
       0
     );
-    expect(opCount).toBe(13);
-    // every documented path is under /v1
+    expect(opCount).toBe(15);
     expect(Object.keys(paths).every((p) => p.startsWith("/v1/"))).toBe(true);
+  });
+
+  it("emits scopeId as a required query parameter on GET /v1/memory/facts", () => {
+    const op = paths["/v1/memory/facts"].get as { parameters?: Array<{ name: string; in: string; required?: boolean }> };
+    const scopeId = op.parameters?.find((p) => p.name === "scopeId" && p.in === "query");
+    expect(scopeId).toBeDefined();
+    expect(scopeId?.required).toBe(true);
   });
 
   it("declares the x-user-id apiKey security scheme, applied globally", () => {

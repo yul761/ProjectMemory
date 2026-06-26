@@ -120,6 +120,60 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
       "type": "object",
     },
   },
+  "GET /memory/facts": {
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "group": {
+                "type": "string",
+              },
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "createdAt": {
+                      "type": [
+                        "string",
+                        "null",
+                      ],
+                    },
+                    "factKey": {
+                      "type": "string",
+                    },
+                    "text": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "factKey",
+                    "text",
+                    "createdAt",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+            },
+            "required": [
+              "group",
+              "items",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "groups",
+      ],
+      "type": "object",
+    },
+  },
   "GET /reminders": {
     "response": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -429,6 +483,40 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
         "content",
         "createdAt",
         "updatedAt",
+      ],
+      "type": "object",
+    },
+  },
+  "POST /memory/facts/forget": {
+    "request": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "factKey": {
+          "minLength": 1,
+          "type": "string",
+        },
+        "scopeId": {
+          "format": "uuid",
+          "type": "string",
+        },
+      },
+      "required": [
+        "scopeId",
+        "factKey",
+      ],
+      "type": "object",
+    },
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "ok",
       ],
       "type": "object",
     },

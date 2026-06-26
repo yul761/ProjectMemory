@@ -74,12 +74,25 @@ export function buildOpenApiDocument(): JsonObject {
       }
     };
 
-    const params = [...v1Path.matchAll(/\{([A-Za-z0-9_]+)\}/g)].map((m) => ({
+    const params: JsonObject[] = [...v1Path.matchAll(/\{([A-Za-z0-9_]+)\}/g)].map((m) => ({
       name: m[1],
       in: "path",
       required: true,
       schema: { type: "string" }
     }));
+
+    if ("query" in io && io.query) {
+      const shape = (io.query as { shape: Record<string, ZodTypeAny> }).shape;
+      for (const [name, fieldSchema] of Object.entries(shape)) {
+        params.push({
+          name,
+          in: "query",
+          required: !(fieldSchema as { isOptional: () => boolean }).isOptional(),
+          schema: jsonSchema(fieldSchema)
+        });
+      }
+    }
+
     if (params.length) op.parameters = params;
 
     if ("request" in io && io.request) {

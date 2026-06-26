@@ -464,6 +464,181 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
         ],
       },
     },
+    "/v1/memory/facts": {
+      "get": {
+        "operationId": "get_memory_facts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "groups": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "group": {
+                            "type": "string",
+                          },
+                          "items": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "createdAt": {
+                                  "nullable": true,
+                                  "type": "string",
+                                },
+                                "factKey": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "factKey",
+                                "text",
+                                "createdAt",
+                              ],
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
+                        },
+                        "required": [
+                          "group",
+                          "items",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "groups",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/facts/forget": {
+      "post": {
+        "operationId": "post_memory_facts_forget",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "factKey": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "scopeId": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "scopeId",
+                  "factKey",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                    },
+                  },
+                  "required": [
+                    "ok",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
     "/v1/memory/retrieve": {
       "post": {
         "operationId": "post_memory_retrieve",

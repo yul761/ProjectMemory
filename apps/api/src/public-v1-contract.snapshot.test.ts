@@ -11,16 +11,18 @@ const toJsonSchema = zodToJsonSchema as unknown as (
 ) => unknown;
 
 describe("public /v1 contract surface (frozen)", () => {
-  it("has exactly the 13 designated endpoints", () => {
+  it("has exactly the 15 designated endpoints", () => {
     expect(Object.keys(PublicV1Contracts).sort()).toEqual(
       [
         "GET /health",
+        "GET /memory/facts",
         "GET /reminders",
         "GET /scopes",
         "GET /state",
         "POST /memory/answer",
         "POST /memory/digest",
         "POST /memory/events",
+        "POST /memory/facts/forget",
         "POST /memory/retrieve",
         "POST /memory/runtime/turn",
         "POST /reminders",

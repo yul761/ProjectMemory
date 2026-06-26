@@ -180,6 +180,9 @@ export const ForgetFactInput = z.object({
   factKey: z.string().min(1)
 });
 
+export const ScopeIdQuery = z.object({ scopeId: z.string().uuid() });
+export const MemoryForgetOutput = z.object({ ok: z.boolean() });
+
 export const AnswerInput = z.object({
   scopeId: z.string().uuid(),
   question: z.string().min(1)
@@ -672,6 +675,8 @@ export const PublicV1Contracts = {
   "POST /memory/answer": { request: AnswerInput, response: AnswerOutput.pick({ answer: true }) },
   "POST /memory/digest": { request: DigestRequestInput, response: DigestEnqueueOutput },
   "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput.pick({ answer: true, answerMode: true, writeTier: true, digestTriggered: true }) },
+  "GET /memory/facts": { query: ScopeIdQuery, response: MemoryFactsOutput },
+  "POST /memory/facts/forget": { request: ForgetFactInput, response: MemoryForgetOutput },
   "POST /reminders": { request: ReminderCreateInput, response: ReminderOutput },
   "GET /reminders": { response: ReminderListOutput },
   "POST /reminders/:id/cancel": { response: ReminderCancelOutput },
