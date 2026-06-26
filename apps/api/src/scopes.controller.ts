@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, NotFoundException, Param, Patch, Post, Req } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Inject, NotFoundException, Param, Patch, Post, Req } from "@nestjs/common";
 import { ScopeActivationOutput, ScopeCreateInput, ScopeListOutput, ScopeOutput, StateOutput } from "@statecore/contracts";
 import { prisma } from "@statecore/db";
 import { DomainService } from "./domain.service";
@@ -66,6 +66,24 @@ export class ScopesController {
     });
     if (updated.count === 0) throw new NotFoundException("Scope not found");
 
+    return { ok: true };
+  }
+
+  @Delete(["/scopes/:id", "/v1/scopes/:id"])
+  async deleteScope(@Param("id") id: string, @Req() req: RequestWithUser) {
+    const scope = await this.domain.projectService.getScope(req.userId, id);
+    if (!scope) throw new NotFoundException("Scope not found");
+    await prisma.$transaction(async (tx) => {
+      await tx.digestStateSnapshot.deleteMany({ where: { scopeId: id } });
+      await tx.digest.deleteMany({ where: { scopeId: id } });
+      await tx.memoryEvent.deleteMany({ where: { scopeId: id } });
+      await tx.workingMemorySnapshot.deleteMany({ where: { scopeId: id } });
+      await tx.reminder.deleteMany({ where: { scopeId: id } });
+      await tx.digestJobLog.deleteMany({ where: { scopeId: id } });
+      await tx.forgottenFact.deleteMany({ where: { scopeId: id } });
+      await tx.userState.updateMany({ where: { activeProjectId: id }, data: { activeProjectId: null } });
+      await tx.projectScope.delete({ where: { id } });
+    });
     return { ok: true };
   }
 
