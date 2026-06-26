@@ -3,7 +3,8 @@ import {
   computeFactKey,
   factToGroup,
   flattenScopeFacts,
-  groupFactsForDisplay
+  groupFactsForDisplay,
+  pruneForgottenFacts
 } from "./memory-facts";
 import type { DigestState } from "./digest-control";
 
@@ -97,5 +98,57 @@ describe("groupFactsForDisplay", () => {
     const groups = groupFactsForDisplay(facts);
     expect(groups.map((g) => g.group)).toEqual(["People", "Preferences"]);
     expect(groups[0].items[0]).toEqual({ factKey: "b", text: "Call the supplier", createdAt: null });
+  });
+});
+
+describe("pruneForgottenFacts", () => {
+  function baseState(): DigestState {
+    return {
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      factRegistry: [
+        { id: "f1", content: "Launching Remi in July", type: "profile", confidence: 0.85, addedAt: "2026-06-20T00:00:00.000Z", evidenceId: "ev1", evidenceType: "event", facet: "goals" },
+        { id: "f2", content: "internal decision", type: "decision", confidence: 0.7, addedAt: "2026-06-20T00:00:00.000Z", evidenceId: "ev2", evidenceType: "event" }
+      ],
+      profile: {
+        identity: ["Name is Yuchen"],
+        relationships: ["Call the supplier about Q3"],
+        style: ["Prefers meetings after 2pm"]
+      }
+    };
+  }
+
+  it("removes a bare profile-facet value whose key is forgotten", () => {
+    const state = baseState();
+    const key = computeFactKey("People", "Call the supplier about Q3"); // relationships → People
+    pruneForgottenFacts(state, new Set([key]));
+    expect(state.profile!.relationships).toEqual([]);
+    expect(state.profile!.style).toEqual(["Prefers meetings after 2pm"]); // untouched
+  });
+
+  it("removes a profile-type factRegistry entry whose key is forgotten", () => {
+    const state = baseState();
+    const key = computeFactKey("Projects", "Launching Remi in July"); // goals → Projects
+    pruneForgottenFacts(state, new Set([key]));
+    expect(state.factRegistry!.find((e) => e.id === "f1")).toBeUndefined();
+    expect(state.factRegistry!.find((e) => e.id === "f2")).toBeDefined(); // non-profile decision kept
+  });
+
+  it("never prunes identity (factToGroup → null) and is a no-op for an empty set", () => {
+    const state = baseState();
+    const idKey = computeFactKey("identity", "Name is Yuchen");
+    pruneForgottenFacts(state, new Set([idKey])); // identity isn't a display group → no match
+    expect(state.profile!.identity).toEqual(["Name is Yuchen"]);
+    const before = JSON.stringify(baseState());
+    const s2 = baseState();
+    pruneForgottenFacts(s2, new Set());
+    expect(JSON.stringify(s2)).toEqual(before); // empty set = no change
+  });
+
+  it("leaves non-matching content untouched", () => {
+    const state = baseState();
+    pruneForgottenFacts(state, new Set([computeFactKey("People", "someone else")]));
+    expect(state.profile!.relationships).toEqual(["Call the supplier about Q3"]);
   });
 });

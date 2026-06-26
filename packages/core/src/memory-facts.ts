@@ -83,3 +83,28 @@ export function groupFactsForDisplay(
       .map((f) => ({ factKey: f.factKey, text: f.text, createdAt: f.createdAt }))
   })).filter((g) => g.items.length > 0);
 }
+
+export function pruneForgottenFacts(state: DigestState, forgottenFactKeys: ReadonlySet<string>): void {
+  if (forgottenFactKeys.size === 0) return;
+
+  // Bare profile-facet strings.
+  const profile = state.profile;
+  if (profile) {
+    for (const [facet, values] of Object.entries(profile)) {
+      const group = factToGroup(facet);
+      if (!group || !Array.isArray(values)) continue;
+      (profile as Record<string, string[]>)[facet] = values.filter(
+        (v) => !forgottenFactKeys.has(computeFactKey(group, v))
+      );
+    }
+  }
+
+  // Profile-type factRegistry entries (those with a facet mapping to a display group).
+  if (Array.isArray(state.factRegistry)) {
+    state.factRegistry = state.factRegistry.filter((entry) => {
+      const group = entry.facet ? factToGroup(entry.facet) : null;
+      if (!group) return true; // not a displayable profile fact → keep
+      return !forgottenFactKeys.has(computeFactKey(group, entry.content));
+    });
+  }
+}
