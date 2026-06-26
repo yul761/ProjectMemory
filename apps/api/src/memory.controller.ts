@@ -16,6 +16,7 @@ import {
   MemoryEventListOutput,
   MemoryEventInput,
   MemoryEventOutput,
+  MemoryFactsOutput,
   RetrieveOutput,
   RuntimeTurnInput,
   RuntimeTurnOutput,
@@ -45,6 +46,7 @@ import { z } from "zod";
 import { prisma } from "@statecore/db";
 import { digestQueue, workingMemoryQueue, embedQueue, classifyQueue } from "./queue";
 import { DomainService } from "./domain.service";
+import { MemoryFactsService } from "./memory-facts.service";
 import { parseOutput } from "./output";
 import type { RequestWithUser } from "./types";
 import { apiEnv } from "./env";
@@ -80,7 +82,10 @@ export class MemoryController {
   private answerLlm: ChatModel | null = null;
   private runtimeLlm: ChatModel | null = null;
 
-  constructor(@Inject(DomainService) private readonly domain: DomainService) {
+  constructor(
+    @Inject(DomainService) private readonly domain: DomainService,
+    @Inject(MemoryFactsService) private readonly memoryFacts: MemoryFactsService
+  ) {
     if (apiEnv.featureLlm) {
       this.answerLlm = createModelProvider({
         provider: apiEnv.modelProvider,
@@ -436,6 +441,15 @@ export class MemoryController {
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) throw new NotFoundException("Scope not found");
     return buildRelationshipContext(scopeId, prisma);
+  }
+
+  @Get(["/memory/facts", "/v1/memory/facts"])
+  async listFacts(@Req() req: RequestWithUser, @Query("scopeId") scopeId?: string) {
+    if (!scopeId) throw new BadRequestException("scopeId required");
+    const scope = await this.domain.projectService.getScope(req.userId, scopeId);
+    if (!scope) throw new NotFoundException("Scope not found");
+    const groups = await this.memoryFacts.getFacts(scopeId);
+    return parseOutput(MemoryFactsOutput, { groups });
   }
 
   @Get("/memory/events")

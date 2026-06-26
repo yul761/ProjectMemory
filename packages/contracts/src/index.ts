@@ -160,6 +160,21 @@ export const RetrieveOutput = z.object({
   }).optional()
 });
 
+export const MemoryFactsOutput = z.object({
+  groups: z.array(
+    z.object({
+      group: z.string(),
+      items: z.array(
+        z.object({
+          factKey: z.string(),
+          text: z.string(),
+          createdAt: z.string().nullable()
+        })
+      )
+    })
+  )
+});
+
 export const AnswerInput = z.object({
   scopeId: z.string().uuid(),
   question: z.string().min(1)
