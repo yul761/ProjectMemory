@@ -54,6 +54,16 @@ const forgottenFactKeys = new Set(forgotten.map(f => f.factKey));
 - 原始事件短暂残留随窗口自愈（已接受）。
 - 既有的 evidence 事件压制（forget 时）保留——对有证据事实额外关掉强化与原始事件渠道。
 
+## 已知接受的边界：no-change 路径的 summary 结转
+
+digest 在**无新事件**（no-change）时走早返回路径：**state 会被剪枝**（保证 `result.state` 干净），但 **summary 不重新生成**——直接结转上一版 `lastDigest.summary`。所以若旧 summary 文案里提到了刚被遗忘的事实，它会在该 no-change 轮被原样重发。
+
+**显式接受此边界**（与 spec 已接受的"原始事件短暂残留随窗口自愈"同性质）：
+- 结构化 state（profile + factRegistry）**已彻底剪除**——记忆屏列表、以及任何读 state 的路径都干净。
+- summary 只在**下一个生成型（有新事件）digest** 重生成时从已剪枝 state 产出 → 自愈。活跃用户（持续对话）下一轮 digest 即为生成型，很快自愈。
+- 不为此 gate worker「无新事件不写 digest」——那是行为变更、风险大于它修的短暂残留。
+- 防御性：主路径在最终 return 前再剪一次 `result.state`，确保 `applyProfileFactsFromDigest` 等 merge 后变更也不会重引入被遗忘事实。
+
 ## 边界 / 不做
 
 - **不引入 provenance**、不改 `DigestState.profile` 结构（仍 `string[]`）、不迁移旧快照。
