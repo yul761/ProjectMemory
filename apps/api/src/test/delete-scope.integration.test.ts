@@ -52,6 +52,25 @@ describe("DELETE /v1/scopes/:id", () => {
       }
     });
 
+    // Seed a Digest + DigestStateSnapshot to exercise the FK-ordering cascade
+    // (DigestStateSnapshot.digestId → Digest.id, no cascade, so handler must delete
+    //  DigestStateSnapshot BEFORE Digest; swapping that order would break the real DB)
+    const digest = await prisma.digest.create({
+      data: {
+        scopeId,
+        summary: "test summary",
+        changes: "test changes",
+        nextSteps: []
+      }
+    });
+    await prisma.digestStateSnapshot.create({
+      data: {
+        scopeId,
+        digestId: digest.id,
+        state: {}
+      }
+    });
+
     // DELETE the scope
     const deleteRes = await request(app.getHttpServer())
       .delete(`/v1/scopes/${scopeId}`)
@@ -66,6 +85,12 @@ describe("DELETE /v1/scopes/:id", () => {
 
     const forgottenFactCount = await prisma.forgottenFact.count({ where: { scopeId } });
     expect(forgottenFactCount).toBe(0);
+
+    const digestCount = await prisma.digest.count({ where: { scopeId } });
+    expect(digestCount).toBe(0);
+
+    const digestStateSnapshotCount = await prisma.digestStateSnapshot.count({ where: { scopeId } });
+    expect(digestStateSnapshotCount).toBe(0);
 
     const scope = await prisma.projectScope.findUnique({ where: { id: scopeId } });
     expect(scope).toBeNull();
