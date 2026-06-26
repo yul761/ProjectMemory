@@ -92,6 +92,7 @@ model MemoryEvent {
   classifiedType        String?
   classifiedImportance  Float?
   expiresAt             DateTime?
+  suppressedAt          DateTime?
 
   user      User         @relation(fields: [userId], references: [id])
   scope     ProjectScope @relation(fields: [scopeId], references: [id])
@@ -181,4 +182,16 @@ model MemoryEventEmbedding {
   model     String
   createdAt DateTime    @default(now())
   event     MemoryEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model ForgottenFact {
+  id              String   @id @default(uuid())
+  userId          String
+  scopeId         String
+  factKey         String
+  contentSnapshot String
+  forgottenAt     DateTime @default(now())
+
+  @@unique([scopeId, factKey])
+  @@index([userId, scopeId])
 }
