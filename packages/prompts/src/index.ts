@@ -5,7 +5,14 @@ Rules:
 - summary must be <= 120 words.
 - changes must be <= 3 bullets.
 - nextSteps must be 1-3 concrete actionable tasks.
-- profileFacts: array of {facet, value} pairs. Extract ONLY from document bodies (resumes, profiles, bios). Use facet "identity" for durable personal facts: 工作经历, 教育, 技能, 联系方式 lines. Each value must be a self-contained fact line (e.g. "工作经历: 字节跳动 后端工程师 2019-2022"). Omit profileFacts entirely if no documents contain personal profile data. Do not invent.
+- profileFacts: array of {facet, value} pairs extracted from the conversation (Delta candidates) AND any documents. Aggressively capture durable things the user reveals about themselves. Allowed facets:
+  - "style": preferences, tastes, communication style (e.g. "喜欢 teal 色", "偏好简洁的回答", "口味偏辣").
+  - "goals": things the user wants to achieve (e.g. "想减肥", "7 月上线 Remi").
+  - "relationships": important people in the user's life (e.g. "妈妈住在上海", "同事 Alex 负责后端").
+  - "followUps": commitments or things to remember/do (e.g. "周四 2 点看牙医", "给供应商打电话问 Q3").
+  - "ongoing": projects or activities in progress (e.g. "在做盲盒生意", "在学西班牙语").
+  - "identity": durable personal facts from documents (resume/bio): 工作经历, 教育, 技能, 联系方式.
+  Each value is a self-contained fact line in the user's own language. Prefer the user's own statements over the assistant's. Extract whenever the user reveals such info; omit profileFacts only when the conversation reveals none. Do not invent facts not present in the evidence.
 - Do not invent facts not present in the provided evidence.`;
 
 export const digestStage2UserPrompt = `Context:
@@ -27,7 +34,7 @@ Latest documents:
 
 Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[], "profileFacts": [{"facet": string, "value": string}]}
 goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).
-profileFacts: only include when Latest documents contain personal identity data (resume, bio). Use facet "identity".`;
+profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, identity). Capture durable user-revealed facts; omit only if none are present.`;
 
 export const digestClassifySystemPrompt = `Classify memory events for digest selection.
 Return strict JSON array where each item has:
