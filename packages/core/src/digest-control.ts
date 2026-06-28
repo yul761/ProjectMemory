@@ -1170,10 +1170,10 @@ export function applyProfileFactsFromDigest(
     const value = pf.value.trim();
     if (!value || !DISPLAY_FACETS.has(facet)) continue;
 
-    // identity is document-authority; conversational facets prefer a document ref if one
-    // exists this window, else the stream-event ref.
+    // identity is document-authority; conversational facets prefer the stream-event ref
+    // (it carries the actual conversation turn); fall back to a doc ref if no stream ref.
     const evidence: DigestEvidenceRef | null =
-      facet === "identity" ? docEvidence : (docEvidence ?? streamEvidence);
+      facet === "identity" ? docEvidence : (streamEvidence ?? docEvidence);
     const authority = evidence?.sourceType === "document" ? 0.85 : 0.6;
     const cap = PROFILE_FACET_CAPS[facet] ?? 8;
 
@@ -1193,7 +1193,13 @@ export function applyProfileFactsFromDigest(
 
     if (facetFacts.length >= cap) {
       if (facet === "identity") continue; // identity is high-value; don't evict to add
-      facetFacts.splice(0, 1); // volatile facets: evict oldest (index 0)
+      const [evicted] = facetFacts.splice(0, 1); // volatile facets: evict oldest (index 0)
+      if (evicted && state.factRegistry) {
+        const ri = state.factRegistry.findIndex(
+          (e) => e.type === "profile" && e.facet === facet && !e.supersededBy && sameFactCjkAware(e.content, evicted, 0.6)
+        );
+        if (ri !== -1) state.factRegistry.splice(ri, 1);
+      }
     }
 
     facetFacts.push(value);

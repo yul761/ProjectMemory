@@ -121,6 +121,7 @@ describe("applyProfileFactsFromDigest — conversational facets", () => {
       applyProfileFactsFromDigest(state, [{ facet: "style", value: `pref-${i}` }], [], streamEvidence, make, now);
     }
     expect(state.profile?.style?.length).toBeLessThanOrEqual(6);
+    expect(flattenScopeFacts(state).filter((f) => f.group === "Preferences").length).toBeLessThanOrEqual(6);
   });
 
   it("still applies identity from documents (regression)", () => {
