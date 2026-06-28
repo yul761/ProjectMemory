@@ -146,7 +146,7 @@ export const RetrieveOutput = z.object({
     reranked: z.boolean(),
     candidateCount: z.number().int().min(0),
     returnedCount: z.number().int().min(0),
-    embeddingCandidateLimit: z.number().int().min(1).optional(),
+    embeddingCandidateLimit: z.number().int().min(0).optional(),
     matches: z.array(z.object({
       id: z.string().uuid(),
       sourceType: MemoryType,
