@@ -1144,60 +1144,61 @@ function mergeProfileFacets(
   }
 }
 
-function applyProfileFactsFromDigest(
+const DISPLAY_FACETS = new Set(["identity", "style", "goals", "relationships", "followUps", "ongoing"]);
+const PROFILE_FACET_CAPS: Record<string, number> = {
+  identity: 15, relationships: 10, ongoing: 8, goals: 8, followUps: 10, style: 6
+};
+
+export function applyProfileFactsFromDigest(
   state: DigestState,
   profileFacts: { facet: string; value: string }[],
   documents: MemoryEvent[],
+  streamEvidence: DigestEvidenceRef | null,
   makeId: () => string,
   makeNow: () => string = createDefaultNowFactory()
 ): void {
-  if (!profileFacts.some((pf) => pf.facet === "identity")) return;
+  if (profileFacts.length === 0) return;
   if (!state.profile) state.profile = {};
-  const IDENTITY_CAP = 15;
 
-  // Use the last document as evidence (document authority 0.85)
   const latestDoc = documents.length > 0 ? documents[documents.length - 1] : null;
   const docEvidence: DigestEvidenceRef | null = latestDoc
     ? { id: latestDoc.id, sourceType: "document", key: latestDoc.key ?? undefined }
     : null;
 
   for (const pf of profileFacts) {
-    if (pf.facet !== "identity") continue; // Stage 1: only identity
+    const facet = pf.facet.trim();
     const value = pf.value.trim();
-    if (!value) continue;
+    if (!value || !DISPLAY_FACETS.has(facet)) continue;
 
-    if (!state.profile.identity) state.profile.identity = [];
-    const identityFacts: string[] = state.profile.identity;
+    // identity is document-authority; conversational facets prefer a document ref if one
+    // exists this window, else the stream-event ref.
+    const evidence: DigestEvidenceRef | null =
+      facet === "identity" ? docEvidence : (docEvidence ?? streamEvidence);
+    const authority = evidence?.sourceType === "document" ? 0.85 : 0.6;
+    const cap = PROFILE_FACET_CAPS[facet] ?? 8;
 
-    // Dedup: CJK-aware Jaccard >= 0.6 → document supersedes existing (document > stream authority).
-    // sameFactCjkAware guards against the over-merge case where shared CJK bigrams mask
-    // divergent ASCII content (e.g. 我决定用PostgreSQL vs 我决定用MySQL).
-    const existingIdx = identityFacts.findIndex(
-      (fact) => sameFactCjkAware(fact, value, 0.6)
-    );
+    const profileMap = state.profile as Record<string, string[]>;
+    if (!profileMap[facet]) profileMap[facet] = [];
+    const facetFacts = profileMap[facet];
 
+    const existingIdx = facetFacts.findIndex((fact) => sameFactCjkAware(fact, value, 0.6));
     if (existingIdx !== -1) {
-      const existing = identityFacts[existingIdx];
-      // Document supersedes existing (even write-protected stream entries).
-      // Pass identity overrides so the replacement entry retains facet, document-authority
-      // confidence, and correct type — without these, write-protection is silently lost.
-      if (docEvidence) {
-        supersedeFact(state, existing, value, docEvidence, makeId, {
-          facet: "identity",
-          confidence: 0.85,
-          type: "profile"
-        }, makeNow);
+      const existing = facetFacts[existingIdx];
+      if (evidence) {
+        supersedeFact(state, existing, value, evidence, makeId, { facet, confidence: authority, type: "profile" }, makeNow);
       }
-      identityFacts[existingIdx] = value;
+      facetFacts[existingIdx] = value;
       continue;
     }
 
-    // Cap: document facts are high-value; if at cap, don't add (avoid evicting protected entries)
-    if (identityFacts.length >= IDENTITY_CAP) continue;
+    if (facetFacts.length >= cap) {
+      if (facet === "identity") continue; // identity is high-value; don't evict to add
+      facetFacts.splice(0, 1); // volatile facets: evict oldest (index 0)
+    }
 
-    identityFacts.push(value);
-    if (docEvidence) {
-      promoteToFactRegistry(state, value, "profile", 0.85, docEvidence, makeId, "identity", makeNow);
+    facetFacts.push(value);
+    if (evidence) {
+      promoteToFactRegistry(state, value, "profile", authority, evidence, makeId, facet, makeNow);
     }
   }
 }
@@ -2226,7 +2227,12 @@ export async function runDigestControlPipeline(input: {
 
   // Apply profile facts extracted by LLM from documents into stable state
   if (digest.profileFacts && digest.profileFacts.length > 0) {
-    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, createDefaultIdFactory(), createDefaultNowFactory());
+    const streamEvents = deltas.map((d) => d.event).filter(Boolean);
+    const latestStream = streamEvents.length > 0 ? streamEvents[streamEvents.length - 1] : null;
+    const streamEvidence: DigestEvidenceRef | null = latestStream
+      ? { id: latestStream.id, sourceType: "event" }
+      : null;
+    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory());
   }
 
   const resolvedGoal = input.scope.goal?.trim() || undefined;
