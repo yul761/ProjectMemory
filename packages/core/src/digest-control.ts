@@ -1227,8 +1227,11 @@ export function applyProfileFactsFromDigest(
 /**
  * Deterministically appends a user-supplied note to `state.profile.notes`.
  *
- * - Returns `false` (no-op) when an effectively-identical note already exists
- *   (`sameFactCjkAware(existing, text, 0.6)`).
+ * - Returns `false` (no-op) when an exactly-identical (normalized) note already exists.
+ *   Explicit notes use EXACT normalized match (trim + collapse whitespace + lowercase)
+ *   rather than fuzzy Jaccard dedup. The fuzzy tokenizer strips short numeric tokens
+ *   (< 3 digits), so "API v1 key…" and "API v2 key…" would otherwise collapse to the
+ *   same token set and be silently merged — losing user data.
  * - Enforces the `notes` cap (30); evicts the oldest entry (index 0) plus its
  *   factRegistry record when the cap is reached.
  * - Promotes the note to the factRegistry as a `profile/notes` entry with
@@ -1244,9 +1247,14 @@ export function addNoteFact(
   const value = text.trim();
   if (!value) return false;
 
-  // Idempotency: no-op if an effectively-identical note already exists.
+  // Normalize helper: trim, collapse internal whitespace, lowercase.
+  const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+
+  // Idempotency: no-op if an exactly-identical (normalized) note already exists.
+  // Explicit notes must use exact match — fuzzy dedup would silently merge notes
+  // differing only by short numeric tokens (e.g. "API v1 key…" vs "API v2 key…").
   const existingNotes = state.profile?.notes ?? [];
-  if (existingNotes.some((note) => sameFactCjkAware(note, value, 0.6))) return false;
+  if (existingNotes.some((note) => norm(note) === norm(value))) return false;
 
   // Lazy-init profile and notes array.
   if (!state.profile) state.profile = {};
@@ -1259,8 +1267,10 @@ export function addNoteFact(
   if (notes.length >= cap) {
     const [evicted] = notes.splice(0, 1);
     if (evicted && state.factRegistry) {
+      // Use exact match here — the evicted note was stored verbatim and its
+      // registry entry was added with exact-match semantics.
       const ri = state.factRegistry.findIndex(
-        (e) => e.type === "profile" && e.facet === "notes" && !e.supersededBy && sameFactCjkAware(e.content, evicted, 0.6)
+        (e) => e.type === "profile" && e.facet === "notes" && !e.supersededBy && norm(e.content) === norm(evicted)
       );
       if (ri !== -1) state.factRegistry.splice(ri, 1);
     }
@@ -1269,8 +1279,27 @@ export function addNoteFact(
   notes.push(value);
 
   // Promote to factRegistry so flattenScopeFacts surfaces createdAt + evidenceId.
-  const evidence: DigestEvidenceRef = { id: makeId(), sourceType: "event" as const };
-  promoteToFactRegistry(state, value, "profile", 0.9, evidence, makeId, "notes", makeNow);
+  // Notes use exact-match dedup for the registry guard: the shared promoteToFactRegistry
+  // helper calls isInFactRegistry which uses fuzzy Jaccard, which would prevent distinct
+  // notes like "note-1" from being registered if a fuzzy-similar "note-0" already exists.
+  // Instead, push directly with a facet-scoped exact-match guard.
+  if (!state.factRegistry) state.factRegistry = [];
+  const alreadyRegistered = state.factRegistry.some(
+    (e) => !e.supersededBy && e.facet === "notes" && norm(e.content) === norm(value)
+  );
+  if (!alreadyRegistered) {
+    const evidenceId = makeId();
+    state.factRegistry.push({
+      id: makeId(),
+      content: value,
+      type: "profile" as const,
+      confidence: 0.9,
+      addedAt: makeNow(),
+      evidenceId,
+      evidenceType: "event" as const,
+      facet: "notes"
+    });
+  }
 
   return true;
 }

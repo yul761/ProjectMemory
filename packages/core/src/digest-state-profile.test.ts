@@ -190,5 +190,34 @@ describe("addNoteFact", () => {
     const again = addNoteFact(s, "API keys rotate every 90 days", ids(), () => "t2");
     expect(again).toBe(false);
     expect(flattenScopeFacts(s).filter((f) => f.group === "Notes")).toHaveLength(1);
+    expect(s.factRegistry!.filter((e) => e.facet === "notes")).toHaveLength(1);
+  });
+
+  it("enforces the cap of 30 with oldest-eviction and removes the evicted note's registry entry", () => {
+    const s = emptyState();
+    const make = ids();
+    for (let i = 0; i <= 30; i++) {
+      addNoteFact(s, `note-${i}`, make, () => `t${i}`);
+    }
+    expect(s.profile!.notes).toHaveLength(30);
+    expect(s.profile!.notes).not.toContain("note-0");
+    expect(s.profile!.notes![0]).toBe("note-1");
+    const notesEntries = s.factRegistry!.filter((e) => e.facet === "notes");
+    expect(notesEntries).toHaveLength(30);
+    expect(notesEntries.every((e) => e.content !== "note-0")).toBe(true);
+  });
+
+  it("keeps near-but-not-equal notes as distinct entries (exact-match dedup fix)", () => {
+    // Before the fix, fuzzy tokenisation stripped the 1-2 digit version numbers,
+    // so "API v1 key…" and "API v2 key…" collapsed to the same token set and the
+    // second note was silently dropped. Exact-match dedup preserves both.
+    const s = emptyState();
+    const make = ids();
+    const r1 = addNoteFact(s, "API v1 key rotates every 90 days", make, () => "t1");
+    const r2 = addNoteFact(s, "API v2 key rotates every 90 days", make, () => "t2");
+    expect(r1).toBe(true);
+    expect(r2).toBe(true);
+    expect(s.profile!.notes).toHaveLength(2);
+    expect(s.factRegistry!.filter((e) => e.facet === "notes")).toHaveLength(2);
   });
 });
