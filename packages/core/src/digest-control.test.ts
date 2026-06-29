@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { digestStage2SystemPrompt, digestStage2UserPrompt } from "../../prompts/src/index";
 import {
   consistencyCheck,
   detectDeltas,
@@ -4147,5 +4148,12 @@ describe("notes facet automatic capture — full pipeline integration", () => {
 
     expect(result.state.profile?.notes).toBeDefined();
     expect(result.state.profile?.notes).toContain("API keys rotate every 90 days");
+  });
+});
+
+describe("prompt-content regression guards", () => {
+  it("digest prompts enumerate the notes facet (regression guard)", () => {
+    expect(digestStage2SystemPrompt).toContain('"notes"');
+    expect(digestStage2UserPrompt.toLowerCase()).toContain("notes");
   });
 });

@@ -35,7 +35,7 @@ Latest documents:
 
 Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[], "profileFacts": [{"facet": string, "value": string}]}
 goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).
-profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, notes, identity). Capture durable user-revealed facts; omit only if none are present. Use `notes` for durable non-personal information worth remembering (be selective).`;
+profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, notes, identity). Capture durable user-revealed facts; omit only if none are present. Use \`notes\` for durable non-personal information worth remembering (be selective).`;
 
 export const digestClassifySystemPrompt = `Classify memory events for digest selection.
 Return strict JSON array where each item has:
