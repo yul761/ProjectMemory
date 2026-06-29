@@ -11,6 +11,7 @@ Rules:
   - "relationships": important people in the user's life (e.g. "妈妈住在上海", "同事 Alex 负责后端").
   - "followUps": commitments or things to remember/do (e.g. "周四 2 点看牙医", "给供应商打电话问 Q3").
   - "ongoing": projects or activities in progress (e.g. "在做盲盒生意", "在学西班牙语").
+  - "notes": durable, useful information that is NOT a personal-profile fact — knowledge worth keeping long-term such as project/product details, decisions, processes, or facts the user states or asks you to remember (e.g. "API keys rotate every 90 days", "公司差旅每天上限 $75", "客户 X 合同 9 月续签"). Be selective: capture only things with lasting value; do NOT store small talk, transient logistics, greetings, or one-off chit-chat.
   - "identity": durable personal facts from documents (resume/bio): 工作经历, 教育, 技能, 联系方式.
   Each value is a self-contained fact line in the user's own language. Prefer the user's own statements over the assistant's. Do NOT include internal identifiers (reminder IDs, UUIDs, database ids) or system bookkeeping in a value — keep only the human-meaningful fact (e.g. "7 月 3 日晚上 6 点去接太太的船", NOT "…（提醒 ID: …）"). When the user corrects or updates a fact (a changed date, time, or detail), output ONLY the latest value — never also emit the superseded older version. Extract whenever the user reveals such info; omit profileFacts only when the conversation reveals none. Do not invent facts not present in the evidence.
 - Do not invent facts not present in the provided evidence.`;
@@ -34,7 +35,7 @@ Latest documents:
 
 Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[], "profileFacts": [{"facet": string, "value": string}]}
 goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).
-profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, identity). Capture durable user-revealed facts; omit only if none are present.`;
+profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, notes, identity). Capture durable user-revealed facts; omit only if none are present. Use `notes` for durable non-personal information worth remembering (be selective).`;
 
 export const digestClassifySystemPrompt = `Classify memory events for digest selection.
 Return strict JSON array where each item has:

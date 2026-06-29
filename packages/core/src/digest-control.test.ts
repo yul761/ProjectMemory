@@ -14,7 +14,7 @@ import {
 } from "./digest-control";
 import type { MemoryEvent } from "./index";
 import { compileStateLayerView, formatStateLayerView } from "./working-memory.compiler";
-import { computeFactKey } from "./memory-facts";
+import { computeFactKey, flattenScopeFacts } from "./memory-facts";
 
 function event(partial: Partial<MemoryEvent> & Pick<MemoryEvent, "id" | "scopeId" | "userId" | "content" | "type">): MemoryEvent {
   return {
@@ -4083,5 +4083,69 @@ describe("Stage 4 — style_preference facet routing", () => {
       ]
     });
     expect(state.profile?.style).toBeUndefined();
+  });
+});
+
+describe("notes facet automatic capture — full pipeline integration", () => {
+  // Guard: mock LLM emitting profileFacts with facet=notes must flow through the full
+  // runDigestControlPipeline and surface under the "Notes" display group via flattenScopeFacts.
+  // This is the Stage 2 automatic-capture path; it would fail if applyProfileFactsFromDigest
+  // ever filtered out the notes facet or DISPLAY_FACETS stopped including "notes".
+
+  const mockLlmWithNote = {
+    chat: async (_messages: { role: "system" | "user"; content: string }[]) => {
+      return JSON.stringify({
+        summary: "User mentioned API key rotation policy.",
+        changes: ["Captured API key rotation note."],
+        nextSteps: ["No action required."],
+        profileFacts: [{ facet: "notes", value: "API keys rotate every 90 days" }]
+      });
+    }
+  };
+
+  const pipelineConfig = {
+    scope: { id: "sc-notes", userId: "u", name: "personal", goal: null, stage: "active" as const, createdAt: new Date() },
+    recentEvents: [
+      event({
+        id: "evt-notes-1",
+        scopeId: "sc-notes",
+        userId: "u",
+        type: "stream",
+        content: "Just so you know, API keys rotate every 90 days.",
+        createdAt: new Date("2026-06-29T10:00:00Z")
+      })
+    ],
+    llm: mockLlmWithNote,
+    prompts: {
+      digestStage2SystemPrompt: "Output JSON only.",
+      digestStage2UserPrompt: "{{scopeName}}"
+    },
+    config: {
+      eventBudgetTotal: 10,
+      eventBudgetDocs: 5,
+      eventBudgetStream: 5,
+      noveltyThreshold: 0.5,
+      maxRetries: 0,
+      useLlmClassifier: false,
+      debug: false
+    }
+  };
+
+  it("notes facet from LLM profileFacts surfaces under the Notes group via flattenScopeFacts", async () => {
+    const result = await runDigestControlPipeline({ ...pipelineConfig, prevState: undefined });
+
+    const notesFact = flattenScopeFacts(result.state).find(
+      (f) => f.group === "Notes" && f.text === "API keys rotate every 90 days"
+    );
+    expect(notesFact).toBeDefined();
+    expect(notesFact!.group).toBe("Notes");
+    expect(notesFact!.text).toBe("API keys rotate every 90 days");
+  });
+
+  it("notes facet is stored in state.profile.notes", async () => {
+    const result = await runDigestControlPipeline({ ...pipelineConfig, prevState: undefined });
+
+    expect(result.state.profile?.notes).toBeDefined();
+    expect(result.state.profile?.notes).toContain("API keys rotate every 90 days");
   });
 });
