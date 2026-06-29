@@ -62,6 +62,7 @@ export interface DigestState {
     goals?: string[];
     followUps?: string[];
     style?: string[];
+    notes?: string[];
   };
 }
 
@@ -310,7 +311,8 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
           ongoing: ((base as DigestState).profile!.ongoing ?? []).slice(0, 8),
           goals: ((base as DigestState).profile!.goals ?? []).slice(0, 8),
           followUps: ((base as DigestState).profile!.followUps ?? []).slice(0, 10),
-          style: ((base as DigestState).profile!.style ?? []).slice(0, 6)
+          style: ((base as DigestState).profile!.style ?? []).slice(0, 6),
+          notes: ((base as DigestState).profile!.notes ?? []).slice(0, 30)
         }
       : undefined
   };
@@ -1220,6 +1222,57 @@ export function applyProfileFactsFromDigest(
       promoteToFactRegistry(state, value, "profile", authority, evidence, makeId, facet, makeNow);
     }
   }
+}
+
+/**
+ * Deterministically appends a user-supplied note to `state.profile.notes`.
+ *
+ * - Returns `false` (no-op) when an effectively-identical note already exists
+ *   (`sameFactCjkAware(existing, text, 0.6)`).
+ * - Enforces the `notes` cap (30); evicts the oldest entry (index 0) plus its
+ *   factRegistry record when the cap is reached.
+ * - Promotes the note to the factRegistry as a `profile/notes` entry with
+ *   confidence 0.9 so it surfaces via `flattenScopeFacts` with its timestamp.
+ * - Returns `true` when the note was successfully added.
+ */
+export function addNoteFact(
+  state: DigestState,
+  text: string,
+  makeId: () => string,
+  makeNow: () => string = createDefaultNowFactory()
+): boolean {
+  const value = text.trim();
+  if (!value) return false;
+
+  // Idempotency: no-op if an effectively-identical note already exists.
+  const existingNotes = state.profile?.notes ?? [];
+  if (existingNotes.some((note) => sameFactCjkAware(note, value, 0.6))) return false;
+
+  // Lazy-init profile and notes array.
+  if (!state.profile) state.profile = {};
+  const profileMap = state.profile as Record<string, string[]>;
+  if (!profileMap.notes) profileMap.notes = [];
+  const notes = profileMap.notes;
+
+  // Cap enforcement: evict oldest entry (index 0) + its factRegistry record.
+  const cap = PROFILE_FACET_CAPS.notes ?? 30;
+  if (notes.length >= cap) {
+    const [evicted] = notes.splice(0, 1);
+    if (evicted && state.factRegistry) {
+      const ri = state.factRegistry.findIndex(
+        (e) => e.type === "profile" && e.facet === "notes" && !e.supersededBy && sameFactCjkAware(e.content, evicted, 0.6)
+      );
+      if (ri !== -1) state.factRegistry.splice(ri, 1);
+    }
+  }
+
+  notes.push(value);
+
+  // Promote to factRegistry so flattenScopeFacts surfaces createdAt + evidenceId.
+  const evidence: DigestEvidenceRef = { id: makeId(), sourceType: "event" as const };
+  promoteToFactRegistry(state, value, "profile", 0.9, evidence, makeId, "notes", makeNow);
+
+  return true;
 }
 
 function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEvidenceRef) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDigestState, applyProfileFactsFromDigest, type DigestState, type MemoryEvent } from "./digest-control";
+import { normalizeDigestState, applyProfileFactsFromDigest, addNoteFact, type DigestState, type MemoryEvent } from "./digest-control";
 import { flattenScopeFacts } from "./memory-facts";
 import { DigestState as DigestStateZod, StateLayerView as StateLayerViewZod } from "@statecore/contracts";
 
@@ -168,5 +168,27 @@ describe("applyProfileFactsFromDigest — conversational facets", () => {
     );
     const groups = Object.fromEntries(flattenScopeFacts(state).map((f) => [f.text, f.group]));
     expect(groups["API keys rotate every 90 days"]).toBe("Notes");
+  });
+});
+
+describe("addNoteFact", () => {
+  const ids = () => { let n = 0; return () => `id-${++n}`; };
+  function emptyState(): DigestState {
+    return { stableFacts: { decisions: [] }, workingNotes: {}, todos: [], factRegistry: [], profile: {} };
+  }
+  it("adds a note that surfaces under Notes with the given timestamp", () => {
+    const s = emptyState();
+    const added = addNoteFact(s, "API keys rotate every 90 days", ids(), () => "2026-06-29T00:00:00.000Z");
+    expect(added).toBe(true);
+    const fact = flattenScopeFacts(s).find((f) => f.group === "Notes");
+    expect(fact?.text).toBe("API keys rotate every 90 days");
+    expect(fact?.createdAt).toBe("2026-06-29T00:00:00.000Z");
+  });
+  it("is idempotent on an effectively-identical note", () => {
+    const s = emptyState();
+    addNoteFact(s, "API keys rotate every 90 days", ids(), () => "t1");
+    const again = addNoteFact(s, "API keys rotate every 90 days", ids(), () => "t2");
+    expect(again).toBe(false);
+    expect(flattenScopeFacts(s).filter((f) => f.group === "Notes")).toHaveLength(1);
   });
 });
