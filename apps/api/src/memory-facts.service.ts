@@ -1,7 +1,8 @@
 import { Injectable, Optional } from "@nestjs/common";
-import { flattenScopeFacts, groupFactsForDisplay, type DisplayFact } from "@statecore/core";
+import { flattenScopeFacts, groupFactsForDisplay, addNoteFact, type DisplayFact } from "@statecore/core";
 import type { DigestState } from "@statecore/core";
 import { prisma as defaultPrisma } from "@statecore/db";
+import { randomUUID } from "node:crypto";
 
 @Injectable()
 export class MemoryFactsService {
@@ -28,6 +29,42 @@ export class MemoryFactsService {
         data: { suppressedAt: new Date() }
       });
     }
+    return { ok: true };
+  }
+
+  async addNote(userId: string, scopeId: string, text: string): Promise<{ ok: true }> {
+    const snap = await this.prisma.digestStateSnapshot.findFirst({
+      where: { scopeId },
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (snap) {
+      const state = snap.state as unknown as DigestState;
+      if (addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString())) {
+        await this.prisma.digestStateSnapshot.update({
+          where: { id: snap.id },
+          data: { state: state as any }
+        });
+      }
+    } else {
+      const state: DigestState = {
+        stableFacts: { decisions: [] },
+        workingNotes: {},
+        todos: [],
+        factRegistry: [],
+        profile: {}
+      };
+      addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString());
+      await this.prisma.$transaction(async (tx: any) => {
+        const digest = await tx.digest.create({
+          data: { scopeId, summary: "Notes", changes: "", nextSteps: [] }
+        });
+        await tx.digestStateSnapshot.create({
+          data: { scopeId, digestId: digest.id, state: state as any, consistency: null }
+        });
+      });
+    }
+
     return { ok: true };
   }
 

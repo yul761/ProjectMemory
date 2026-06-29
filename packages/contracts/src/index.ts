@@ -180,6 +180,11 @@ export const ForgetFactInput = z.object({
   factKey: z.string().min(1)
 });
 
+export const AddNoteInput = z.object({
+  scopeId: z.string().uuid(),
+  text: z.string().min(1).max(500)
+});
+
 export const ScopeIdQuery = z.object({ scopeId: z.string().uuid() });
 export const MemoryForgetOutput = z.object({ ok: z.boolean() });
 

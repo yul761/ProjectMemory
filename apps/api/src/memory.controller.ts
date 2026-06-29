@@ -17,6 +17,7 @@ import {
   MemoryEventInput,
   MemoryEventOutput,
   ForgetFactInput,
+  AddNoteInput,
   MemoryFactsOutput,
   RetrieveOutput,
   RuntimeTurnInput,
@@ -459,6 +460,14 @@ export class MemoryController {
     const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
     if (!scope) throw new NotFoundException("Scope not found");
     return this.memoryFacts.forgetFact(req.userId, input.scopeId, input.factKey);
+  }
+
+  @Post(["/memory/notes", "/v1/memory/notes"])
+  async addNote(@Req() req: RequestWithUser, @Body() body: unknown) {
+    const input = AddNoteInput.parse(body);
+    const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
+    if (!scope) throw new NotFoundException("Scope not found");
+    return this.memoryFacts.addNote(req.userId, input.scopeId, input.text);
   }
 
   @Get("/memory/events")
