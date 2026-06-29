@@ -114,6 +114,30 @@ describe("applyProfileFactsFromDigest — conversational facets", () => {
     expect(state.profile?.style).toHaveLength(1);
   });
 
+  it("preserves a fact's original createdAt when the same fact is re-extracted by a later digest (no 'just now' re-stamping)", () => {
+    const state = emptyState();
+    const make = ids();
+    const t1 = "2026-06-28T00:00:00.000Z";
+    const t2 = "2026-06-29T12:00:00.000Z";
+    applyProfileFactsFromDigest(state, [{ facet: "style", value: "喜欢 teal 色" }], [], streamEvidence, make, () => t1);
+    // A later digest run re-extracts the identical fact; its timestamp must NOT move.
+    applyProfileFactsFromDigest(state, [{ facet: "style", value: "喜欢 teal 色" }], [], streamEvidence, make, () => t2);
+    const fact = flattenScopeFacts(state).find((f) => f.text === "喜欢 teal 色");
+    expect(fact?.createdAt).toBe(t1);
+  });
+
+  it("re-stamps createdAt when an existing fact's content actually changes (correction)", () => {
+    const state = emptyState();
+    const make = ids();
+    const t1 = "2026-06-28T00:00:00.000Z";
+    const t2 = "2026-06-29T12:00:00.000Z";
+    applyProfileFactsFromDigest(state, [{ facet: "followUps", value: "周四 2 点看牙医" }], [], streamEvidence, make, () => t1);
+    applyProfileFactsFromDigest(state, [{ facet: "followUps", value: "周四 3 点看牙医" }], [], streamEvidence, make, () => t2);
+    const fact = flattenScopeFacts(state).find((f) => f.group === "Schedule");
+    expect(fact?.text).toBe("周四 3 点看牙医");
+    expect(fact?.createdAt).toBe(t2);
+  });
+
   it("enforces the per-facet cap (style = 6)", () => {
     const state = emptyState();
     const make = ids();

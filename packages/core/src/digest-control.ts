@@ -1184,10 +1184,23 @@ export function applyProfileFactsFromDigest(
     const existingIdx = facetFacts.findIndex((fact) => sameFactCjkAware(fact, value, 0.6));
     if (existingIdx !== -1) {
       const existing = facetFacts[existingIdx];
+      const contentChanged = existing.trim() !== value.trim();
+      // supersedeFact re-stamps the registry entry's addedAt to "now", so it must only run
+      // when something real changes: the content was corrected, or the evidence authority
+      // increased (e.g. a stream-sourced fact later confirmed by a document). A plain
+      // re-extraction of the same fact each digest run must NOT re-stamp it — otherwise every
+      // stable fact reads as "just now" in the Memory list. (Evidence id changes every run,
+      // so compare authority, not id.)
       if (evidence) {
-        supersedeFact(state, existing, value, evidence, makeId, { facet, confidence: authority, type: "profile" }, makeNow);
+        const activeEntry = (state.factRegistry ?? []).find(
+          (e) => !e.supersededBy && e.type === "profile" && sameFactCjkAware(e.content, existing, 0.6)
+        );
+        const authorityIncreased = activeEntry !== undefined && authority > activeEntry.confidence;
+        if (contentChanged || authorityIncreased) {
+          supersedeFact(state, existing, value, evidence, makeId, { facet, confidence: authority, type: "profile" }, makeNow);
+        }
       }
-      facetFacts[existingIdx] = value;
+      if (contentChanged) facetFacts[existingIdx] = value;
       continue;
     }
 
