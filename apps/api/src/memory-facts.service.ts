@@ -24,7 +24,7 @@ export class MemoryFactsService {
     });
 
     if (match?.evidenceId) {
-      await this.prisma.memoryEvent.update({
+      await this.prisma.memoryEvent.updateMany({
         where: { id: match.evidenceId },
         data: { suppressedAt: new Date() }
       });
