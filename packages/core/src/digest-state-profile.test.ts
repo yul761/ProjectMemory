@@ -158,4 +158,15 @@ describe("applyProfileFactsFromDigest — conversational facets", () => {
     );
     expect(state.profile?.identity).toContain("工作经历: 字节跳动 后端 2019-2022");
   });
+
+  it("surfaces a notes facet under the Notes group", () => {
+    const state = emptyState();
+    applyProfileFactsFromDigest(
+      state,
+      [{ facet: "notes", value: "API keys rotate every 90 days" }],
+      [], streamEvidence, ids(), now
+    );
+    const groups = Object.fromEntries(flattenScopeFacts(state).map((f) => [f.text, f.group]));
+    expect(groups["API keys rotate every 90 days"]).toBe("Notes");
+  });
 });

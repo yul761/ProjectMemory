@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { getActiveFactRegistry, type DigestState } from "./digest-control";
 
-export type DisplayGroup = "Schedule" | "People" | "Preferences" | "Projects";
+export type DisplayGroup = "Schedule" | "People" | "Preferences" | "Projects" | "Notes";
 
 export type DisplayFact = {
   factKey: string;
@@ -16,11 +16,12 @@ const FACET_TO_GROUP: Record<string, DisplayGroup> = {
   relationships: "People",
   style: "Preferences",
   goals: "Projects",
-  ongoing: "Projects"
+  ongoing: "Projects",
+  notes: "Notes"
   // identity: intentionally omitted (never shown)
 };
 
-const GROUP_ORDER: DisplayGroup[] = ["Schedule", "People", "Preferences", "Projects"];
+const GROUP_ORDER: DisplayGroup[] = ["Schedule", "People", "Preferences", "Projects", "Notes"];
 
 function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");

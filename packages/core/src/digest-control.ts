@@ -1144,9 +1144,9 @@ function mergeProfileFacets(
   }
 }
 
-const DISPLAY_FACETS = new Set(["identity", "style", "goals", "relationships", "followUps", "ongoing"]);
+const DISPLAY_FACETS = new Set(["identity", "style", "goals", "relationships", "followUps", "ongoing", "notes"]);
 const PROFILE_FACET_CAPS: Record<string, number> = {
-  identity: 15, relationships: 10, ongoing: 8, goals: 8, followUps: 10, style: 6
+  identity: 15, relationships: 10, ongoing: 8, goals: 8, followUps: 10, style: 6, notes: 30
 };
 
 export function applyProfileFactsFromDigest(
