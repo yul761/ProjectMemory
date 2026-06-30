@@ -28,7 +28,7 @@ describe("computeFactKey", () => {
 describe("factToGroup", () => {
   it("maps engine facets to display groups", () => {
     expect(factToGroup("relationships")).toBe("People");
-    expect(factToGroup("style")).toBe("Preferences");
+    expect(factToGroup("style")).toBe("Style");
     expect(factToGroup("goals")).toBe("Projects");
     expect(factToGroup("ongoing")).toBe("Projects");
     expect(factToGroup("followUps")).toBe("Schedule");
@@ -92,11 +92,11 @@ describe("flattenScopeFacts", () => {
 describe("groupFactsForDisplay", () => {
   it("orders groups and omits empty ones", () => {
     const facts = [
-      { factKey: "a", text: "Prefers meetings after 2pm", group: "Preferences" as const, createdAt: null },
+      { factKey: "a", text: "Prefers meetings after 2pm", group: "Style" as const, createdAt: null },
       { factKey: "b", text: "Call the supplier", group: "People" as const, createdAt: null }
     ];
     const groups = groupFactsForDisplay(facts);
-    expect(groups.map((g) => g.group)).toEqual(["People", "Preferences"]);
+    expect(groups.map((g) => g.group)).toEqual(["People", "Style"]);
     expect(groups[0].items[0]).toEqual({ factKey: "b", text: "Call the supplier", createdAt: null });
   });
 });

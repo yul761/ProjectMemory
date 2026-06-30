@@ -90,7 +90,7 @@ describe("applyProfileFactsFromDigest — conversational facets", () => {
     const groups = Object.fromEntries(
       flattenScopeFacts(state).map((f) => [f.text, f.group])
     );
-    expect(groups["喜欢 teal 色"]).toBe("Preferences");
+    expect(groups["喜欢 teal 色"]).toBe("Style");
     expect(groups["想减肥"]).toBe("Projects");
     expect(groups["妈妈住在上海"]).toBe("People");
     expect(groups["周四 2 点看牙医"]).toBe("Schedule");
@@ -145,7 +145,7 @@ describe("applyProfileFactsFromDigest — conversational facets", () => {
       applyProfileFactsFromDigest(state, [{ facet: "style", value: `pref-${i}` }], [], streamEvidence, make, now);
     }
     expect(state.profile?.style?.length).toBeLessThanOrEqual(6);
-    expect(flattenScopeFacts(state).filter((f) => f.group === "Preferences").length).toBeLessThanOrEqual(6);
+    expect(flattenScopeFacts(state).filter((f) => f.group === "Style").length).toBeLessThanOrEqual(6);
   });
 
   it("still applies identity from documents (regression)", () => {

@@ -4160,7 +4160,7 @@ describe("prompt-content regression guards", () => {
 
 describe("style facet 行事作风 automatic capture — full pipeline integration", () => {
   // Guard: mock LLM emitting profileFacts with facet=style (行事作风 value) must flow through
-  // the full runDigestControlPipeline and surface under the "Preferences" display group via
+  // the full runDigestControlPipeline and surface under the "Style" display group via
   // flattenScopeFacts. This is the Stage 2 automatic-capture path; it would fail if
   // applyProfileFactsFromDigest ever filtered out the style facet or DISPLAY_FACETS stopped
   // including "style".
@@ -4204,14 +4204,14 @@ describe("style facet 行事作风 automatic capture — full pipeline integrati
     }
   };
 
-  it("style facet (行事作风 value) from LLM profileFacts surfaces under the Preferences group via flattenScopeFacts", async () => {
+  it("style facet (行事作风 value) from LLM profileFacts surfaces under the Style group via flattenScopeFacts", async () => {
     const result = await runDigestControlPipeline({ ...pipelineConfig, prevState: undefined });
 
     const styleFact = flattenScopeFacts(result.state).find(
-      (f) => f.group === "Preferences" && f.text === "重要决定前喜欢先看数据"
+      (f) => f.group === "Style" && f.text === "重要决定前喜欢先看数据"
     );
     expect(styleFact).toBeDefined();
-    expect(styleFact!.group).toBe("Preferences");
+    expect(styleFact!.group).toBe("Style");
     expect(styleFact!.text).toBe("重要决定前喜欢先看数据");
   });
 });
