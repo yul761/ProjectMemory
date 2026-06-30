@@ -38,6 +38,31 @@ describe("/v1 dual-mount routing", () => {
     expect(viaV1.body.items).toHaveLength(1);
   });
 
+  it("serves GET /v1/memory/relationship-context/:scopeId for a known scope", async () => {
+    const created = await request(app.getHttpServer())
+      .post("/v1/scopes").set("x-user-id", USER).send({ name: "rc-scope" });
+    expect(created.status).toBe(201);
+    const scopeId = created.body.id;
+
+    const legacy = await request(app.getHttpServer())
+      .get(`/memory/relationship-context/${scopeId}`).set("x-user-id", USER);
+    expect(legacy.status).toBe(200);
+    expect(typeof legacy.body.durationDays).toBe("number");
+    expect(Array.isArray(legacy.body.activeGoals)).toBe(true);
+
+    const v1 = await request(app.getHttpServer())
+      .get(`/v1/memory/relationship-context/${scopeId}`).set("x-user-id", USER);
+    expect(v1.status).toBe(200);
+    expect(v1.body).toEqual(legacy.body);
+  });
+
+  it("returns 404 on GET /v1/memory/relationship-context/:scopeId for unknown scope", async () => {
+    const v1 = await request(app.getHttpServer())
+      .get("/v1/memory/relationship-context/00000000-0000-0000-0000-000000000000")
+      .set("x-user-id", USER);
+    expect(v1.status).toBe(404);
+  });
+
   it("does NOT mount excluded internal endpoints under /v1", async () => {
     // working-state is internal; legacy path exists, /v1 path must 404.
     const v1 = await request(app.getHttpServer())

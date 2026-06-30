@@ -435,7 +435,7 @@ export class MemoryController {
     return { queued: eventsWithoutEmbedding.length };
   }
 
-  @Get("/memory/relationship-context/:scopeId")
+  @Get(["/memory/relationship-context/:scopeId", "/v1/memory/relationship-context/:scopeId"])
   async getRelationshipContext(
     @Param("scopeId") scopeId: string,
     @Req() req: RequestWithUser
