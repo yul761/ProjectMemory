@@ -6,7 +6,7 @@ Rules:
 - changes must be <= 3 bullets.
 - nextSteps must be 1-3 concrete actionable tasks.
 - profileFacts: array of {facet, value} pairs extracted from the conversation (Delta candidates) AND any documents. Aggressively capture durable things the user reveals about themselves. Allowed facets:
-  - "style": preferences, tastes, communication style (e.g. "喜欢 teal 色", "偏好简洁的回答", "口味偏辣").
+  - "style": the user's tastes, communication preferences, AND their 行事作风 — how they like things handled: their working style, decision patterns, standards, and what they value (e.g. "喜欢 teal 色", "偏好简洁的回答、先给结论再给细节", "重要决定前喜欢先看数据", "不喜欢被反复追问，给空间", "做事追求效率、讨厌拖延"). Capture durable working traits, not one-off moods.
   - "goals": things the user wants to achieve (e.g. "想减肥", "7 月上线 Remi").
   - "relationships": important people in the user's life (e.g. "妈妈住在上海", "同事 Alex 负责后端").
   - "followUps": commitments or things to remember/do (e.g. "周四 2 点看牙医", "给供应商打电话问 Q3").
@@ -35,7 +35,7 @@ Latest documents:
 
 Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[], "profileFacts": [{"facet": string, "value": string}]}
 goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).
-profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, notes, identity). Capture durable user-revealed facts; omit only if none are present. Use \`notes\` for durable non-personal information worth remembering (be selective).`;
+profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, notes, identity). For style, capture both personal tastes/communication preferences and 行事作风 (working style, decision patterns, what they value). Capture durable user-revealed facts; omit only if none are present. Use \`notes\` for durable non-personal information worth remembering (be selective).`;
 
 export const digestClassifySystemPrompt = `Classify memory events for digest selection.
 Return strict JSON array where each item has:

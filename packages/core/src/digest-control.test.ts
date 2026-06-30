@@ -4157,3 +4157,72 @@ describe("prompt-content regression guards", () => {
     expect(digestStage2UserPrompt.toLowerCase()).toContain("notes");
   });
 });
+
+describe("style facet 行事作风 automatic capture — full pipeline integration", () => {
+  // Guard: mock LLM emitting profileFacts with facet=style (行事作风 value) must flow through
+  // the full runDigestControlPipeline and surface under the "Preferences" display group via
+  // flattenScopeFacts. This is the Stage 2 automatic-capture path; it would fail if
+  // applyProfileFactsFromDigest ever filtered out the style facet or DISPLAY_FACETS stopped
+  // including "style".
+
+  const mockLlmWithStyle = {
+    chat: async (_messages: { role: "system" | "user"; content: string }[]) => {
+      return JSON.stringify({
+        summary: "User mentioned their decision-making preference.",
+        changes: ["Captured working style note."],
+        nextSteps: ["No action required."],
+        profileFacts: [{ facet: "style", value: "重要决定前喜欢先看数据" }]
+      });
+    }
+  };
+
+  const pipelineConfig = {
+    scope: { id: "sc-style", userId: "u", name: "personal", goal: null, stage: "active" as const, createdAt: new Date() },
+    recentEvents: [
+      event({
+        id: "evt-style-1",
+        scopeId: "sc-style",
+        userId: "u",
+        type: "stream",
+        content: "I always check the data before making important decisions.",
+        createdAt: new Date("2026-06-29T10:00:00Z")
+      })
+    ],
+    llm: mockLlmWithStyle,
+    prompts: {
+      digestStage2SystemPrompt: "Output JSON only.",
+      digestStage2UserPrompt: "{{scopeName}}"
+    },
+    config: {
+      eventBudgetTotal: 10,
+      eventBudgetDocs: 5,
+      eventBudgetStream: 5,
+      noveltyThreshold: 0.5,
+      maxRetries: 0,
+      useLlmClassifier: false,
+      debug: false
+    }
+  };
+
+  it("style facet (行事作风 value) from LLM profileFacts surfaces under the Preferences group via flattenScopeFacts", async () => {
+    const result = await runDigestControlPipeline({ ...pipelineConfig, prevState: undefined });
+
+    const styleFact = flattenScopeFacts(result.state).find(
+      (f) => f.group === "Preferences" && f.text === "重要决定前喜欢先看数据"
+    );
+    expect(styleFact).toBeDefined();
+    expect(styleFact!.group).toBe("Preferences");
+    expect(styleFact!.text).toBe("重要决定前喜欢先看数据");
+  });
+});
+
+describe("prompt-content regression guards — 行事作风 style broadening", () => {
+  it("digestStage2SystemPrompt contains 行事作风 and mentions working style / decision patterns in the style bullet", () => {
+    expect(digestStage2SystemPrompt).toContain("行事作风");
+    expect(digestStage2SystemPrompt).toContain("decision patterns");
+  });
+
+  it("digestStage2UserPrompt mentions 行事作风 for the style facet", () => {
+    expect(digestStage2UserPrompt).toContain("行事作风");
+  });
+});
