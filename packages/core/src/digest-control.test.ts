@@ -2412,6 +2412,63 @@ describe("runDigestControlPipeline", () => {
     // state BEFORE it was formatted into the generation prompt, not only after.
     expect(capturedPrompt).not.toContain("Call the supplier about Q3");
   });
+
+  it("runDigestControlPipeline consolidates a facet that reached >= 4 items this run", async () => {
+    // prevState.profile.style already has 3 items; stage2 adds a 4th → triggers consolidation.
+    const prevState: DigestState = {
+      stableFacts: { decisions: [] }, workingNotes: {}, todos: [], factRegistry: [],
+      profile: { style: ["偏好简洁", "喜欢先给结论", "喜欢 teal 色"] }
+    };
+    const llm = {
+      chat: async (messages: { role: "system" | "user"; content: string }[]) => {
+        const sys = messages[0]?.content ?? "";
+        if (/mergedFrom/.test(sys)) {
+          // consolidation call → merge all 4 into 2
+          return '[{"text":"偏好简洁、先给结论","mergedFrom":[0,1,3]},{"text":"喜欢 teal 色","mergedFrom":[2]}]';
+        }
+        // stage2 call → a valid digest that adds one style fact
+        return JSON.stringify({
+          summary: "s",
+          changes: [],
+          nextSteps: ["继续优化"],
+          profileFacts: [{ facet: "style", value: "回答要精简准确" }]
+        });
+      }
+    };
+    const result = await runDigestControlPipeline({
+      scope: { id: "sc", userId: "u", name: "personal", goal: null, stage: "build", createdAt: new Date() },
+      lastDigest: null,
+      prevState,
+      recentEvents: [
+        event({
+          id: "evt-style-1",
+          scopeId: "sc",
+          userId: "u",
+          type: "stream",
+          content: "User prefers concise answers.",
+          createdAt: new Date("2026-06-20T11:00:00Z")
+        })
+      ],
+      llm,
+      prompts: {
+        digestStage2SystemPrompt: "stage2 sys",
+        digestStage2UserPrompt: "stage2 {{protectedState}}",
+        consolidateFacetSystemPrompt: "consolidate … mergedFrom … JSON … merge … do not invent",
+        consolidateFacetUserPrompt: "u {{facet}} {{facetDescription}} {{items}} {{siblings}}"
+      },
+      config: {
+        eventBudgetTotal: 10,
+        eventBudgetDocs: 5,
+        eventBudgetStream: 5,
+        noveltyThreshold: 0.5,
+        maxRetries: 0,
+        useLlmClassifier: false,
+        debug: false
+      }
+    });
+    // style went 3 → (add 1 = 4) → consolidated to 2
+    expect(result.state.profile?.style).toEqual(["偏好简洁、先给结论", "喜欢 teal 色"]);
+  });
 });
 
 describe("factRegistry", () => {

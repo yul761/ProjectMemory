@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Digest, MemoryEvent, ProjectScope } from "./index";
 import { pruneForgottenFacts } from "./memory-facts";
-import { stripInternalIds } from "./facet-consolidation";
+import { stripInternalIds, consolidateChangedFacets } from "./facet-consolidation";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -2219,6 +2219,8 @@ export async function runDigestControlPipeline(input: {
     digestStage2UserPrompt: string;
     digestClassifySystemPrompt?: string;
     digestClassifyUserPrompt?: string;
+    consolidateFacetSystemPrompt?: string;
+    consolidateFacetUserPrompt?: string;
   };
   config: DigestControlConfig;
   forgottenFactKeys?: ReadonlySet<string>;
@@ -2335,6 +2337,28 @@ export async function runDigestControlPipeline(input: {
       ? { id: latestStream.id, sourceType: "event" }
       : null;
     applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory());
+  }
+
+  // Consolidate the facets this run just wrote to (dedupe paraphrase, tighten, drop
+  // cross-facet dupes). Only when the caller supplied the consolidation prompts and the
+  // run produced profile facts. Fail-open inside consolidateChangedFacets.
+  if (
+    input.prompts.consolidateFacetSystemPrompt &&
+    input.prompts.consolidateFacetUserPrompt &&
+    digest.profileFacts && digest.profileFacts.length > 0
+  ) {
+    const changedFacets = [...new Set(digest.profileFacts.map((pf) => pf.facet.trim()))];
+    await consolidateChangedFacets({
+      state,
+      changedFacets,
+      llm: input.llm,
+      prompts: {
+        systemPrompt: input.prompts.consolidateFacetSystemPrompt,
+        userPromptTemplate: input.prompts.consolidateFacetUserPrompt
+      },
+      makeId: createDefaultIdFactory(),
+      makeNow: createDefaultNowFactory()
+    });
   }
 
   const resolvedGoal = input.scope.goal?.trim() || undefined;

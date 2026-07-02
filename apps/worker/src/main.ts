@@ -16,7 +16,9 @@ import {
   digestClassifySystemPrompt,
   digestClassifyUserPrompt,
   digestStage2SystemPrompt,
-  digestStage2UserPrompt
+  digestStage2UserPrompt,
+  consolidateFacetSystemPrompt,
+  consolidateFacetUserPrompt
 } from "@statecore/prompts";
 import { workerEnv } from "./env";
 import { withDigestLock, DigestAlreadyRunningError, type LockRedis } from "./digest-lock";
@@ -269,7 +271,9 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
       digestStage2SystemPrompt,
       digestStage2UserPrompt,
       digestClassifySystemPrompt,
-      digestClassifyUserPrompt
+      digestClassifyUserPrompt,
+      consolidateFacetSystemPrompt,
+      consolidateFacetUserPrompt
     },
     config: {
       eventBudgetTotal: workerEnv.digestEventBudgetTotal,
@@ -433,7 +437,9 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
         digestStage2SystemPrompt,
         digestStage2UserPrompt,
         digestClassifySystemPrompt,
-        digestClassifyUserPrompt
+        digestClassifyUserPrompt,
+        consolidateFacetSystemPrompt,
+        consolidateFacetUserPrompt
       },
       config: {
         eventBudgetTotal: workerEnv.digestEventBudgetTotal,
