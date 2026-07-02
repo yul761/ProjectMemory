@@ -100,3 +100,27 @@ Recent turns:
 {{recentTurns}}
 
 Respond to the user in plain text.`;
+
+export const consolidateFacetSystemPrompt = [
+  "You tidy one facet of a user's long-term memory. You are given the facet's current items (a numbered list) and, for context, the items already stored in the OTHER facets.",
+  'Return a consolidated list as STRICT JSON: an array of objects {"text": string, "mergedFrom": number[]}.',
+  "Rules:",
+  "1. Merge paraphrase-duplicates (items that state the same fact in different words) into ONE concise item; list every source index in mergedFrom.",
+  "2. Shorten verbose or run-on items to a single clear line; keep only the human-meaningful fact.",
+  "3. If an item duplicates content that clearly belongs to ANOTHER facet (shown to you), DROP it — do not emit it and do not list its index. Never move it; the other facet keeps it.",
+  "4. Strip meta-commentary, parentheticals, and any internal IDs/UUIDs.",
+  "5. Do NOT invent facts. Every output item's text must be supported by the input items it lists in mergedFrom, and every mergedFrom index must be a 0-based position in the given items list.",
+  "Output ONLY the JSON array, no prose.",
+].join("\n");
+
+export const consolidateFacetUserPrompt = [
+  "Facet: {{facet}} — {{facetDescription}}",
+  "",
+  "Current items in this facet (0-based index):",
+  "{{items}}",
+  "",
+  "For context, items already stored in other facets (do not duplicate these here):",
+  "{{siblings}}",
+  "",
+  "Return the consolidated JSON array now.",
+].join("\n");
