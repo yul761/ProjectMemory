@@ -683,6 +683,7 @@ export * from "./digest-control";
 export * from "./drift-metrics";
 export * from "./assistant-runtime";
 export * from "./memory-facts";
+export * from "./facet-consolidation";
 export { getDomainConfig, KNOWN_TEMPLATES } from "./domain-configs/index";
 export type { DomainConfig, EntityTypeConfig } from "./domain-configs/types";
 export type { RelationshipContext } from "./relationship-context";
