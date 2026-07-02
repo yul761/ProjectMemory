@@ -126,19 +126,24 @@ async function main() {
   // eslint-disable-next-line no-console
   console.log("consolidated facets:", changed);
 
-  // Persist a fresh snapshot. DigestStateSnapshot.digestId is @unique → must create a
-  // companion Digest row; createDigestWithSnapshot does both in one transaction.
-  const lastDigest = await prisma.digest.findFirst({ where: { scopeId: scope.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
-  await createDigestWithSnapshot(prisma, {
-    scopeId: scope.id,
-    summary: lastDigest?.summary ?? "(consolidation)",
-    changes: "- profile facets consolidated",
-    nextSteps: lastDigest?.nextSteps ?? [],
-    state,
-    consistency: { ok: true, errors: [], warnings: ["facet_consolidation"] }
-  });
-  // eslint-disable-next-line no-console
-  console.log("snapshot written");
+  if (changed.length > 0) {
+    // Persist a fresh snapshot. DigestStateSnapshot.digestId is @unique → must create a
+    // companion Digest row; createDigestWithSnapshot does both in one transaction.
+    const lastDigest = await prisma.digest.findFirst({ where: { scopeId: scope.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+    await createDigestWithSnapshot(prisma, {
+      scopeId: scope.id,
+      summary: lastDigest?.summary ?? "(consolidation)",
+      changes: "- profile facets consolidated",
+      nextSteps: lastDigest?.nextSteps ?? [],
+      state,
+      consistency: { ok: true, errors: [], warnings: ["facet_consolidation"] }
+    });
+    // eslint-disable-next-line no-console
+    console.log("snapshot written");
+  } else {
+    // eslint-disable-next-line no-console
+    console.log("no changes — snapshot not written");
+  }
   process.exit(0);
 }
 
