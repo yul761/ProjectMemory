@@ -21,6 +21,7 @@ describe("stripInternalIds", () => {
   });
 });
 
+import { applyFacetConsolidation, ConsolidationSchema, type ConsolidatedFact } from "./facet-consolidation";
 import { applyProfileFactsFromDigest, type DigestState } from "./digest-control";
 
 describe("applyProfileFactsFromDigest — ID sanitizing", () => {
@@ -38,5 +39,62 @@ describe("applyProfileFactsFromDigest — ID sanitizing", () => {
     );
     expect(state.profile?.followUps).toEqual(["去接太太的飞机"]);
     expect(JSON.stringify(state.factRegistry)).not.toMatch(/4b8f8e02/);
+  });
+});
+
+describe("applyFacetConsolidation", () => {
+  const ids = () => { let n = 0; return () => `new-${++n}`; };
+  const now = () => "2026-07-01T00:00:00.000Z";
+
+  function stateWith(facet: string, entries: Array<{ content: string; addedAt: string; confidence?: number }>): DigestState {
+    return {
+      stableFacts: { decisions: [] }, workingNotes: {}, todos: [],
+      profile: { [facet]: entries.map((e) => e.content) } as DigestState["profile"],
+      factRegistry: entries.map((e, i) => ({
+        id: `old-${i}`, content: e.content, type: "profile" as const,
+        confidence: e.confidence ?? 0.7, addedAt: e.addedAt,
+        evidenceId: `ev-${i}`, evidenceType: "event" as const, facet
+      }))
+    };
+  }
+
+  it("merges two paraphrases into one fact carrying the EARLIEST addedAt", () => {
+    const state = stateWith("identity", [
+      { content: "居住地：Richmond（你提到的居住地）", addedAt: "2026-06-28T00:00:00.000Z" },
+      { content: "住在 Richmond", addedAt: "2026-06-30T00:00:00.000Z" }
+    ]);
+    const result: ConsolidatedFact[] = [{ text: "住在 Richmond", mergedFrom: [0, 1] }];
+    const ok = applyFacetConsolidation(state, "identity", ["居住地：Richmond（你提到的居住地）", "住在 Richmond"], result, ids(), now);
+    expect(ok).toBe(true);
+    expect(state.profile?.identity).toEqual(["住在 Richmond"]);
+    const entries = (state.factRegistry ?? []).filter((e) => e.facet === "identity" && !e.supersededBy);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].addedAt).toBe("2026-06-28T00:00:00.000Z"); // earliest wins, NOT now()
+  });
+
+  it("drops an item that no output references (cross-facet dedupe)", () => {
+    const state = stateWith("notes", [
+      { content: "用量追踪：显示已用/剩余", addedAt: "2026-06-30T00:00:00.000Z" },
+      { content: "狗：Friday 与 Tully", addedAt: "2026-06-29T00:00:00.000Z" }
+    ]);
+    const result: ConsolidatedFact[] = [{ text: "用量追踪：显示已用/剩余", mergedFrom: [0] }];
+    const ok = applyFacetConsolidation(state, "notes", ["用量追踪：显示已用/剩余", "狗：Friday 与 Tully"], result, ids(), now);
+    expect(ok).toBe(true);
+    expect(state.profile?.notes).toEqual(["用量追踪：显示已用/剩余"]);
+    expect((state.factRegistry ?? []).some((e) => e.content.includes("狗"))).toBe(false);
+  });
+
+  it("fails open (no mutation) when an output has an out-of-range source index", () => {
+    const state = stateWith("style", [{ content: "喜欢 teal 色", addedAt: "2026-06-28T00:00:00.000Z" }]);
+    const before = JSON.parse(JSON.stringify(state));
+    const ok = applyFacetConsolidation(state, "style", ["喜欢 teal 色"], [{ text: "x", mergedFrom: [5] }], ids(), now);
+    expect(ok).toBe(false);
+    expect(state).toEqual(before);
+  });
+
+  it("schema rejects malformed shapes", () => {
+    expect(ConsolidationSchema.safeParse([{ text: "ok", mergedFrom: [0] }]).success).toBe(true);
+    expect(ConsolidationSchema.safeParse([{ text: "", mergedFrom: [0] }]).success).toBe(false);
+    expect(ConsolidationSchema.safeParse([{ text: "x" }]).success).toBe(false);
   });
 });

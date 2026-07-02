@@ -461,7 +461,7 @@ function asciiContentDiverges(a: string, b: string): boolean {
  * For English-only facts this is a no-op: tokenize() normalises ASCII internally, and
  * asciiContentDiverges returns false when both sets share at least one token.
  */
-function sameFactCjkAware(a: string, b: string, threshold: number): boolean {
+export function sameFactCjkAware(a: string, b: string, threshold: number): boolean {
   return jaccardSimilarity(a, b) >= threshold && !asciiContentDiverges(a, b);
 }
 
