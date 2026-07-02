@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Digest, MemoryEvent, ProjectScope } from "./index";
 import { pruneForgottenFacts } from "./memory-facts";
+import { stripInternalIds } from "./facet-consolidation";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1169,7 +1170,7 @@ export function applyProfileFactsFromDigest(
 
   for (const pf of profileFacts) {
     const facet = pf.facet.trim();
-    const value = pf.value.trim();
+    const value = stripInternalIds(pf.value.trim());
     if (!value || !DISPLAY_FACETS.has(facet)) continue;
 
     // identity is document-authority; conversational facets prefer the stream-event ref
