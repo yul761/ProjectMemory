@@ -7,7 +7,7 @@
 export function stripInternalIds(value: string): string {
   return value
     // full/half-width parenthetical containing an ID label + payload
-    .replace(/[（(]\s*[^（()）]*?(?:提醒\s*ID|reminder\s*id|\bID)\s*[:：][^（()）]*[)）]/gi, "")
+    .replace(/[（(]\s*[^（()）]*?(?:提醒\s*ID|reminder\s*id)\s*[:：][^（()）]*[)）]/gi, "")
     // any bare UUID left behind
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "")
     .replace(/\s{2,}/g, " ")
