@@ -137,10 +137,17 @@ describe("consolidateFacetLlm", () => {
     const out = await consolidateFacetLlm({ ...base, llm, maxRetries: 1 });
     expect(out).toEqual([{ text: "住在 Richmond", mergedFrom: [0] }]);
     expect(llm.calls).toHaveLength(2);
+    expect(llm.calls[1][1].content).toMatch(/not a valid JSON array/);
   });
 
   it("returns null (fail-open) when all attempts are unparseable", async () => {
     const llm = fakeLlm(["garbage", "still garbage"]);
     expect(await consolidateFacetLlm({ ...base, llm, maxRetries: 1 })).toBeNull();
+  });
+
+  it("renders (none) when there are no sibling facets", async () => {
+    const llm = fakeLlm(['[{"text":"住在 Richmond","mergedFrom":[0]}]']);
+    await consolidateFacetLlm({ ...base, siblings: {}, llm });
+    expect(llm.calls[0][1].content).toMatch(/\(none\)/);
   });
 });
