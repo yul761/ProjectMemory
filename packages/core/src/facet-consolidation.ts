@@ -63,6 +63,52 @@ export function applyFacetConsolidation(
   return true;
 }
 
+function parseJsonArray(raw: string): unknown {
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) return null;
+  try { return JSON.parse(match[0]); } catch { return null; }
+}
+
+function renderTemplate(template: string, vars: Record<string, string>): string {
+  let out = template;
+  for (const [k, v] of Object.entries(vars)) out = out.replaceAll(`{{${k}}}`, v);
+  return out;
+}
+
+export async function consolidateFacetLlm(input: {
+  facet: string;
+  description: string;
+  items: string[];
+  siblings: Record<string, string[]>;
+  llm: { chat: (m: { role: "system" | "user"; content: string }[]) => Promise<string> };
+  systemPrompt: string;
+  userPromptTemplate: string;
+  maxRetries?: number;
+}): Promise<ConsolidatedFact[] | null> {
+  const itemsBlock = input.items.map((t, i) => `${i}. ${t}`).join("\n");
+  const siblingsBlock = Object.entries(input.siblings)
+    .filter(([, v]) => v.length)
+    .map(([f, v]) => `${f}: ${v.join("; ")}`)
+    .join("\n") || "(none)";
+  const userPrompt = renderTemplate(input.userPromptTemplate, {
+    facet: input.facet, facetDescription: input.description, items: itemsBlock, siblings: siblingsBlock
+  });
+
+  const maxRetries = input.maxRetries ?? 1;
+  let fixInstruction = "";
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const raw = await input.llm.chat([
+      { role: "system", content: input.systemPrompt },
+      { role: "user", content: `${userPrompt}${fixInstruction}` }
+    ]);
+    const parsed = parseJsonArray(raw);
+    const validated = ConsolidationSchema.safeParse(parsed);
+    if (validated.success) return validated.data;
+    fixInstruction = "\n\nYour previous reply was not a valid JSON array of {\"text\",\"mergedFrom\"} objects. Reply with ONLY that JSON array.";
+  }
+  return null;
+}
+
 /**
  * Removes internal bookkeeping that the digest LLM sometimes leaks into a
  * user-facing profile fact: parentheticals like "（提醒 ID：<uuid>）" /

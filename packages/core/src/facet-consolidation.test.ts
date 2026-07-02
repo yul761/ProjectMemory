@@ -98,3 +98,49 @@ describe("applyFacetConsolidation", () => {
     expect(ConsolidationSchema.safeParse([{ text: "x" }]).success).toBe(false);
   });
 });
+
+import { consolidateFacetLlm } from "./facet-consolidation";
+
+// Inline prompt strings — core has NO dependency on @statecore/prompts, so tests
+// must not import from it. consolidateFacetLlm takes the prompts as parameters.
+const SYS = "Return ONLY JSON [{text, mergedFrom}]. Merge duplicates. Do not invent.";
+const USR = "Facet: {{facet}} — {{facetDescription}}\nItems:\n{{items}}\nOthers:\n{{siblings}}";
+
+function fakeLlm(responses: string[]) {
+  let i = 0;
+  const calls: { role: string; content: string }[][] = [];
+  return {
+    calls,
+    chat: async (m: { role: "system" | "user"; content: string }[]) => { calls.push(m); return responses[Math.min(i++, responses.length - 1)]; }
+  };
+}
+
+describe("consolidateFacetLlm", () => {
+  const base = {
+    facet: "identity", description: "personal facts",
+    items: ["住在 Richmond", "居住地：Richmond"],
+    siblings: { style: ["喜欢 teal 色"] },
+    systemPrompt: SYS, userPromptTemplate: USR
+  };
+
+  it("parses a valid JSON array response", async () => {
+    const llm = fakeLlm(['[{"text":"住在 Richmond","mergedFrom":[0,1]}]']);
+    const out = await consolidateFacetLlm({ ...base, llm });
+    expect(out).toEqual([{ text: "住在 Richmond", mergedFrom: [0, 1] }]);
+    // items + siblings were rendered into the user prompt
+    expect(llm.calls[0][1].content).toMatch(/住在 Richmond/);
+    expect(llm.calls[0][1].content).toMatch(/teal/);
+  });
+
+  it("retries once with a fix instruction then succeeds", async () => {
+    const llm = fakeLlm(["not json", '[{"text":"住在 Richmond","mergedFrom":[0]}]']);
+    const out = await consolidateFacetLlm({ ...base, llm, maxRetries: 1 });
+    expect(out).toEqual([{ text: "住在 Richmond", mergedFrom: [0] }]);
+    expect(llm.calls).toHaveLength(2);
+  });
+
+  it("returns null (fail-open) when all attempts are unparseable", async () => {
+    const llm = fakeLlm(["garbage", "still garbage"]);
+    expect(await consolidateFacetLlm({ ...base, llm, maxRetries: 1 })).toBeNull();
+  });
+});
