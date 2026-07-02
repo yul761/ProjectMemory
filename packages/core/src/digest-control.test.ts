@@ -2469,6 +2469,91 @@ describe("runDigestControlPipeline", () => {
     // style went 3 → (add 1 = 4) → consolidated to 2
     expect(result.state.profile?.style).toEqual(["偏好简洁、先给结论", "喜欢 teal 色"]);
   });
+
+  it("forgotten fact pruned BEFORE consolidation: re-extracted forgotten content must not survive as reworded merged text", async () => {
+    // This test verifies the ordering fix: pruneForgottenFacts must run AFTER
+    // applyProfileFactsFromDigest but BEFORE consolidateChangedFacets.
+    //
+    // Bug scenario (without fix):
+    //   prevState has 3 style items including "Prefers terse, blunt phrasing" (the forgotten one).
+    //   Stage2 re-extracts "Prefers terse, blunt phrasing" AND adds "Likes structured content"
+    //   → style reaches 4 items → triggers consolidation.
+    //   Consolidation merges the 4 items into 2, embedding "blunt" in the merged text.
+    //   Final prune cannot match the reworded text → "blunt" content survives. BUG.
+    //
+    // With fix: prune runs before consolidation, drops the forgotten item to 3 → consolidation
+    // skipped (3 < minItems=4) → no reworded text containing "blunt" exists.
+    const prevState: DigestState = {
+      stableFacts: { decisions: [] }, workingNotes: {}, todos: [], factRegistry: [],
+      profile: { style: ["Prefers terse, blunt phrasing", "Favors bullet lists", "Dislikes pleasantries"] }
+    };
+    // "blunt" is a distinctive substring that only appears in the forgotten fact.
+    const forgottenKey = computeFactKey("Style", "Prefers terse, blunt phrasing");
+
+    const llm = {
+      chat: async (messages: { role: "system" | "user"; content: string }[]) => {
+        const sys = messages[0]?.content ?? "";
+        if (/mergedFrom/.test(sys)) {
+          // consolidation call — merges 4 items into 2, leaking "blunt" into merged text
+          return '[{"text":"Terse blunt phrasing, structured content preferred","mergedFrom":[0,3]},{"text":"Bullets, avoids pleasantries","mergedFrom":[1,2]}]';
+        }
+        // stage2 call — re-extracts the forgotten fact AND adds one new style fact (→ 4 items)
+        return JSON.stringify({
+          summary: "s",
+          changes: [],
+          nextSteps: ["Continue"],
+          profileFacts: [
+            { facet: "style", value: "Prefers terse, blunt phrasing" },
+            { facet: "style", value: "Likes structured content" }
+          ]
+        });
+      }
+    };
+
+    const result = await runDigestControlPipeline({
+      scope: { id: "sc", userId: "u", name: "personal", goal: null, stage: "build", createdAt: new Date() },
+      lastDigest: null,
+      prevState,
+      recentEvents: [
+        event({
+          id: "evt-style-forgotten",
+          scopeId: "sc",
+          userId: "u",
+          type: "stream",
+          content: "User likes structured notes.",
+          createdAt: new Date("2026-06-20T11:00:00Z")
+        })
+      ],
+      llm,
+      prompts: {
+        digestStage2SystemPrompt: "stage2 sys",
+        digestStage2UserPrompt: "stage2 {{protectedState}}",
+        consolidateFacetSystemPrompt: "consolidate … mergedFrom … JSON … merge … do not invent",
+        consolidateFacetUserPrompt: "u {{facet}} {{facetDescription}} {{items}} {{siblings}}"
+      },
+      config: {
+        eventBudgetTotal: 10,
+        eventBudgetDocs: 5,
+        eventBudgetStream: 5,
+        noveltyThreshold: 0.5,
+        maxRetries: 0,
+        useLlmClassifier: false,
+        debug: false
+      },
+      forgottenFactKeys: new Set([forgottenKey])
+    });
+
+    // The forgotten fact's distinctive content ("blunt") must not appear in any style item.
+    // Without the ordering fix, the merged text "Terse blunt phrasing, structured content
+    // preferred" would be present here, causing this assertion to fail.
+    const styleItems = result.state.profile?.style ?? [];
+    expect(styleItems.every((item) => !item.includes("blunt"))).toBe(true);
+    // The forgotten fact itself must not appear verbatim either
+    expect(styleItems).not.toContain("Prefers terse, blunt phrasing");
+    // The factRegistry must not retain any entry with the forgotten content
+    const registryContents = (result.state.factRegistry ?? []).map((e) => e.content);
+    expect(registryContents.every((c) => !c.includes("blunt"))).toBe(true);
+  });
 });
 
 describe("factRegistry", () => {

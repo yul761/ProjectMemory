@@ -2339,6 +2339,15 @@ export async function runDigestControlPipeline(input: {
     applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory());
   }
 
+  // Prune forgotten facts BEFORE consolidation: consolidation rewrites/merges fact text,
+  // and the content-hash prune can only match exact text — so a re-extracted forgotten
+  // fact must be removed from the facet inputs before consolidation can reword it.
+  // Consolidation never invents text (output derives only from inputs), so pruning inputs
+  // here guarantees forgotten content cannot appear in the consolidated output.
+  if (input.forgottenFactKeys && input.forgottenFactKeys.size > 0) {
+    pruneForgottenFacts(state, input.forgottenFactKeys);
+  }
+
   // Consolidate the facets this run just wrote to (dedupe paraphrase, tighten, drop
   // cross-facet dupes). Only when the caller supplied the consolidation prompts and the
   // run produced profile facts. Fail-open inside consolidateChangedFacets.
