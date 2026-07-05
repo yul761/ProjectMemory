@@ -2126,6 +2126,28 @@ function formatDocuments(docs: MemoryEvent[]) {
   return docs.map((doc) => `- ${doc.key ?? doc.id}: ${doc.content}`).join("\n");
 }
 
+/**
+ * Negative instruction fed to the digest LLM: the user has explicitly forgotten these facts,
+ * so the model must not re-extract them even if the source events reword or re-bucket them.
+ *
+ * This is the SEMANTIC guard for forget. The deterministic hash-based pruneForgottenFacts is a
+ * verbatim (group|text) match, so any re-extraction with slightly different wording — or the same
+ * text under a different display group — dodges it and the fact resurfaces. The LLM can recognise
+ * "means the same thing" where the hash cannot, so we ask it to omit forgotten content at the
+ * source; the hash prune remains the backstop for exact carry-forwards.
+ */
+function formatForgottenFacts(contents?: readonly string[]): string {
+  const cleaned = [...new Set((contents ?? []).map((c) => c.trim()).filter(Boolean))];
+  if (cleaned.length === 0) return "";
+  const lines = cleaned.map((c) => `- ${c}`).join("\n");
+  return (
+    `\n\nFORGOTTEN BY THE USER — the user has explicitly deleted the following facts. Do NOT record, ` +
+    `restate, or re-derive any of them, and reject anything that means the same thing even if the ` +
+    `wording differs or it falls under a different category. Omit them entirely from the summary, ` +
+    `changes, and profileFacts:\n${lines}\n`
+  );
+}
+
 export async function generateDigestStage2(input: {
   scope: ProjectScope;
   lastDigest?: Digest | null;
@@ -2136,10 +2158,12 @@ export async function generateDigestStage2(input: {
   systemPrompt: string;
   userPromptTemplate: string;
   maxRetries: number;
+  forgottenFacts?: readonly string[];
 }): Promise<DigestOutput> {
   const lastDigestText = input.lastDigest
     ? `Summary: ${input.lastDigest.summary}\nChanges: ${input.lastDigest.changes}\nNext steps: ${input.lastDigest.nextSteps.join(", ")}`
     : "(none)";
+  const forgottenBlock = formatForgottenFacts(input.forgottenFacts);
 
   let fixInstruction = "";
   let lastErrors: string[] = [];
@@ -2157,7 +2181,7 @@ export async function generateDigestStage2(input: {
 
     const raw = await input.llm.chat([
       { role: "system", content: input.systemPrompt },
-      { role: "user", content: `${userPrompt}\n${fixInstruction}` }
+      { role: "user", content: `${userPrompt}${forgottenBlock}\n${fixInstruction}` }
     ]);
 
     const parsed = parseJson<DigestOutput>(raw);
@@ -2224,6 +2248,7 @@ export async function runDigestControlPipeline(input: {
   };
   config: DigestControlConfig;
   forgottenFactKeys?: ReadonlySet<string>;
+  forgottenFactContents?: readonly string[];
 }): Promise<{
   digest: DigestOutput;
   state: DigestState;
@@ -2325,7 +2350,8 @@ export async function runDigestControlPipeline(input: {
     llm: input.llm,
     systemPrompt: input.prompts.digestStage2SystemPrompt,
     userPromptTemplate: input.prompts.digestStage2UserPrompt,
-    maxRetries: input.config.maxRetries
+    maxRetries: input.config.maxRetries,
+    forgottenFacts: input.forgottenFactContents
   });
   metrics.generationMs = Date.now() - tGenerate;
 

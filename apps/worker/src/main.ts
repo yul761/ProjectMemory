@@ -257,9 +257,16 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
 
   const forgottenRows = await prisma.forgottenFact.findMany({
     where: { scopeId: data.scopeId },
-    select: { factKey: true }
+    orderBy: { forgottenAt: "desc" },
+    take: 100,
+    select: { factKey: true, contentSnapshot: true }
   });
   const forgottenFactKeys = new Set(forgottenRows.map((f) => f.factKey));
+  // Semantic guard: the verbatim content the user forgot, fed to the digest LLM so it omits
+  // re-worded / re-grouped restatements the hash-based prune (factKey) cannot catch.
+  const forgottenFactContents = forgottenRows
+    .map((f) => (f.contentSnapshot ?? "").trim())
+    .filter(Boolean);
 
   const result = await runDigestControlPipeline({
     scope,
@@ -284,7 +291,8 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
       useLlmClassifier: workerEnv.digestUseLlmClassifier,
       debug: workerEnv.digestDebug
     },
-    forgottenFactKeys
+    forgottenFactKeys,
+    forgottenFactContents
   });
 
   const driftMetrics = computeDriftMetrics(prevDigestState, result.state);

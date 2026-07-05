@@ -1788,6 +1788,59 @@ describe("generateDigestStage2", () => {
     expect(result.summary.trim().split(/\s+/).filter(Boolean).length).toBeLessThanOrEqual(120);
   });
 
+  it("injects forgotten facts as a negative instruction into the stage2 user prompt", async () => {
+    const seen: { role: string; content: string }[][] = [];
+    const llm = {
+      chat: async (messages: { role: "system" | "user"; content: string }[]) => {
+        seen.push(messages);
+        return JSON.stringify({ summary: "Ongoing work.", changes: [], nextSteps: ["continue"] });
+      }
+    };
+
+    await generateDigestStage2({
+      scope: { id: "s", userId: "u", name: "Demo", goal: "", stage: "idea", createdAt: new Date() },
+      lastDigest: null,
+      protectedState: { stableFacts: { decisions: [] }, workingNotes: {}, todos: [] },
+      deltaCandidates: [],
+      documents: [],
+      llm,
+      systemPrompt: "system",
+      userPromptTemplate: "{{scopeName}} {{lastDigest}} {{protectedState}} {{deltaCandidates}} {{documents}}",
+      maxRetries: 0,
+      forgottenFacts: ["去接太太的飞机 — 2026-07-03 20:00 PDT", "喜欢 teal 色"]
+    });
+
+    const userMsg = seen[0].find((m) => m.role === "user")!.content;
+    expect(userMsg).toContain("去接太太的飞机");
+    expect(userMsg).toContain("喜欢 teal 色");
+    expect(userMsg.toUpperCase()).toContain("FORGOTTEN");
+  });
+
+  it("adds no forgotten-facts section when none are supplied", async () => {
+    const seen: { role: string; content: string }[][] = [];
+    const llm = {
+      chat: async (messages: { role: "system" | "user"; content: string }[]) => {
+        seen.push(messages);
+        return JSON.stringify({ summary: "Ongoing work.", changes: [], nextSteps: ["continue"] });
+      }
+    };
+
+    await generateDigestStage2({
+      scope: { id: "s", userId: "u", name: "Demo", goal: "", stage: "idea", createdAt: new Date() },
+      lastDigest: null,
+      protectedState: { stableFacts: { decisions: [] }, workingNotes: {}, todos: [] },
+      deltaCandidates: [],
+      documents: [],
+      llm,
+      systemPrompt: "system",
+      userPromptTemplate: "{{scopeName}} {{lastDigest}} {{protectedState}} {{deltaCandidates}} {{documents}}",
+      maxRetries: 0
+    });
+
+    const userMsg = seen[0].find((m) => m.role === "user")!.content;
+    expect(userMsg.toUpperCase()).not.toContain("FORGOTTEN");
+  });
+
   it("uses narrative alone when state has no goal or constraints", async () => {
     const llm = {
       chat: async () => JSON.stringify({
