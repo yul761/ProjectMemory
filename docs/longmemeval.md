@@ -101,6 +101,65 @@ Things a reader will otherwise trip over:
 - These numbers are **not comparable to either project's published figures**,
   which use different answerers, judges and dataset variants.
 
+## Diagnosis: where StateCore actually loses
+
+The 200-question run answered **"I don't know" on 60 of 200 questions** while
+retrieval recall over the gold evidence was **1.00**. The evidence was in the
+context and the answerer did not use it. Two hypotheses were tested.
+
+### Rejected: context dilution
+
+The obvious reading is that ~290k characters of retrieved sessions buries the
+two turns that matter. If so, retrieving less should score better. It does not:
+
+| top-k | accuracy | "I don't know" | prompt | recall |
+|---|---|---|---|---|
+| 50 | **64.7%** (22/34) | 10/34 | 117k chars | 1.00 |
+| 15 | 52.9% (18/34) | 15/34 | 50k chars | 1.00 |
+
+*(34 knowledge-update questions, same seed, top-k the only variable.)*
+
+Cutting context made it **worse** on both measures. Recall stayed 1.00 in both
+arms — the ranking surfaces the right sessions either way — so the smaller
+context still contained the answer-bearing turns and still scored lower. Volume
+is not the problem.
+
+### What the failures actually look like
+
+> **Q** Do I go to the gym more frequently than I did previously? **(gold: yes)**
+> **StateCore** "I don't know. The only note I have is that by Aug 15 you were
+> going four times a week; I don't have an earlier frequency to compare against."
+> **mem0** "Yes. Previously you went Tue/Thu/Sat (3x/week). Now four times a
+> week, so more frequent."
+
+Both frequencies were in StateCore's context. The failure is not retrieval and
+not memory — it is that raw conversation transcript is a poor representation for
+questions that require *relating* two facts stated in different sessions. mem0
+answers it because its two extracted facts sit side by side, and the relation is
+explicit.
+
+### Where that leaves the state layer
+
+StateCore already owns the mechanism for this: the digest consolidates facts and
+resolves contradictions. In this run it simply produced very little.
+
+| state layer output | observed (200 questions) |
+|---|---|
+| digest summary | median **56 characters**, 150/200 under 100 |
+| fact registry | median **17 entries**, max 30 |
+| summary cap in code | 120 **words** — nowhere near reached |
+| profile facet caps | identity 15, goals 8, ongoing 8, relationships 10 |
+
+The digest lands around ten words against a 120-word allowance, so the ceiling
+is not the constraint — extraction is. `knowledge-update` is precisely the
+category the state layer exists to serve, and it tied with mem0 (23/34 each).
+
+This points at output strength inside the existing architecture rather than a
+different architecture: richer digests, a broader inclusion bar for the fact
+registry, and explicit representation of *updates* ("X changed from A to B").
+Those facts stay merged, contradiction-checked and write-protected, so
+auditability is unaffected — only the amount of usable state changes.
+
 ## Caveat: quote the configuration with the number
 
 A LongMemEval score is not a property of a memory system. The same StateCore
