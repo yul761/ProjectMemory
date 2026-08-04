@@ -8,6 +8,7 @@ import {
   normalizeDigestState,
   protectedStateMerge,
   runDigestControlPipeline,
+  boundProtectedState,
   selectEventsForDigest,
   type DigestState,
   type FactRegistryEntry,
@@ -47,6 +48,261 @@ describe("selectEventsForDigest", () => {
     expect(ids).not.toContain("d1");
     expect(ids).toContain("s1");
     expect(ids).not.toContain("s2");
+  });
+
+  it("bounds total selected content by the char budget, not just the event count", () => {
+    // Few events, each huge -- the count budget alone lets this through and the
+    // digest prompt then blows past the model's context limit.
+    const events: MemoryEvent[] = Array.from({ length: 6 }, (_, i) =>
+      event({
+        id: `s${i}`,
+        scopeId: "sc",
+        userId: "u",
+        type: "stream",
+        // Distinct content per event, or near-duplicate dedup removes them
+        // before the budget is ever reached.
+        content: `topic ${i} ${String.fromCharCode(97 + i).repeat(1000)}`,
+        createdAt: new Date(Date.now() - i * 1000)
+      })
+    );
+
+    const result = selectEventsForDigest({
+      recentEvents: events,
+      lastDigest: null,
+      eventBudgetTotal: 40,
+      eventBudgetDocs: 10,
+      eventBudgetStream: 30,
+      charBudgetTotal: 2500
+    });
+
+    const total = result.selectedEvents.reduce((sum, s) => sum + s.event.content.length, 0);
+    expect(total).toBeLessThanOrEqual(2500);
+    expect(result.selectedEvents.length).toBeLessThan(events.length);
+    expect(result.rationale.some((r) => r.startsWith("char_budget_applied"))).toBe(true);
+  });
+
+  it("truncates rather than drops a single event larger than the whole budget", () => {
+    const events: MemoryEvent[] = [
+      event({ id: "big", scopeId: "sc", userId: "u", type: "document", key: "doc:big", content: "y".repeat(50_000) })
+    ];
+
+    const result = selectEventsForDigest({
+      recentEvents: events,
+      lastDigest: null,
+      eventBudgetTotal: 40,
+      eventBudgetDocs: 10,
+      eventBudgetStream: 30,
+      charBudgetTotal: 1000
+    });
+
+    // Losing the only document entirely would leave the scope with no state at
+    // all, which is strictly worse than a truncated one.
+    expect(result.selectedEvents).toHaveLength(1);
+    expect(result.selectedEvents[0].event.content.length).toBeLessThanOrEqual(1000);
+    expect(result.selectedEvents[0].event.content).toContain("truncated");
+  });
+
+  it("leaves selection untouched when content fits the budget", () => {
+    const events: MemoryEvent[] = [
+      event({ id: "s1", scopeId: "sc", userId: "u", type: "stream", content: "short one" }),
+      event({ id: "s2", scopeId: "sc", userId: "u", type: "stream", content: "another short one" })
+    ];
+
+    const result = selectEventsForDigest({
+      recentEvents: events,
+      lastDigest: null,
+      eventBudgetTotal: 40,
+      eventBudgetDocs: 10,
+      eventBudgetStream: 30
+    });
+
+    expect(result.selectedEvents).toHaveLength(2);
+    expect(result.rationale.some((r) => r.startsWith("char_budget"))).toBe(false);
+  });
+});
+
+describe("generateDigestStage2 prompt size guard", () => {
+  it("clips an oversized protected state instead of sending it and failing", async () => {
+    // A state this large came from session-sized events fanning out across
+    // facets; unclipped it produced a 781k-token prompt against a 272k limit.
+    const hugeState: DigestState = {
+      stableFacts: {
+        goal: "ship the thing",
+        constraints: [],
+        decisions: Array.from({ length: 400 }, (_, i) => `decision ${i} ${"z".repeat(2000)}`)
+      },
+      workingNotes: {},
+      todos: []
+    };
+
+    let sentChars = 0;
+    const llm = {
+      chat: async (messages: { role: string; content: string }[]) => {
+        sentChars = messages.reduce((n, m) => n + m.content.length, 0);
+        return JSON.stringify({ summary: "ok", changes: [], nextSteps: ["review"] });
+      }
+    };
+
+    await generateDigestStage2({
+      scope: { id: "sc", name: "s", goal: null, stage: "idea" } as unknown as Parameters<typeof generateDigestStage2>[0]["scope"],
+      lastDigest: null,
+      protectedState: hugeState,
+      deltaCandidates: [],
+      documents: [],
+      llm,
+      systemPrompt: digestStage2SystemPrompt,
+      userPromptTemplate: digestStage2UserPrompt,
+      maxRetries: 0
+    });
+
+    const rawStateChars = JSON.stringify(hugeState, null, 2).length;
+    expect(rawStateChars).toBeGreaterThan(800_000);
+    // Guard must bring the call well under the model context limit.
+    expect(sentChars).toBeLessThan(400_000);
+  });
+
+  it("bounds the assembled prompt even when every input is oversized", async () => {
+    // Per-section caps alone let the total exceed a 128k-token context; this is
+    // the backstop that keeps the digest alive on smaller models.
+    const bigState: DigestState = {
+      stableFacts: {
+        goal: "g",
+        constraints: Array.from({ length: 500 }, (_, i) => `constraint ${i} ${"c".repeat(3000)}`),
+        decisions: Array.from({ length: 500 }, (_, i) => `decision ${i} ${"d".repeat(3000)}`)
+      },
+      workingNotes: { openQuestions: Array.from({ length: 500 }, (_, i) => `q${i} ${"q".repeat(3000)}`) },
+      todos: Array.from({ length: 500 }, (_, i) => `todo ${i} ${"t".repeat(3000)}`)
+    };
+    const bigDeltas = Array.from({ length: 400 }, (_, i) => ({
+      event: { id: `e${i}`, scopeId: "sc", userId: "u", type: "stream" as const,
+               source: "api" as const, content: `evt ${i} ${"e".repeat(3000)}`, createdAt: new Date() },
+      features: { kind: "status" as const, importanceScore: 0.5, noveltyScore: 0.5 },
+      reason: "novel"
+    })) as unknown as Parameters<typeof generateDigestStage2>[0]["deltaCandidates"];
+
+    let sent = 0;
+    await generateDigestStage2({
+      scope: { id: "sc", name: "s", goal: null, stage: "idea" } as unknown as Parameters<typeof generateDigestStage2>[0]["scope"],
+      lastDigest: null,
+      protectedState: bigState,
+      deltaCandidates: bigDeltas,
+      documents: [],
+      llm: {
+        chat: async (messages: { role: string; content: string }[]) => {
+          sent = messages.reduce((n, m) => n + m.content.length, 0);
+          return JSON.stringify({ summary: "ok", changes: [], nextSteps: ["review"] });
+        }
+      },
+      systemPrompt: digestStage2SystemPrompt,
+      userPromptTemplate: digestStage2UserPrompt,
+      maxRetries: 0
+    });
+
+    // ~4 chars/token: must stay well inside gpt-4o-mini's 128k-token window.
+    expect(sent).toBeLessThan(400_000);
+  });
+
+  it("keeps the bounded protected state parseable as JSON", async () => {
+    // Slicing serialized state at a character offset yields malformed JSON, and
+    // a model fed broken structure produces output that trips the consistency
+    // gate -- turning a size problem into a silent quality problem.
+    const hugeState: DigestState = {
+      stableFacts: {
+        goal: "ship",
+        constraints: Array.from({ length: 300 }, (_, i) => `constraint ${i} ${"c".repeat(2000)}`),
+        decisions: Array.from({ length: 300 }, (_, i) => `decision ${i} ${"d".repeat(2000)}`)
+      },
+      workingNotes: { openQuestions: Array.from({ length: 200 }, (_, i) => `q${i} ${"q".repeat(2000)}`) },
+      todos: Array.from({ length: 200 }, (_, i) => `todo ${i} ${"t".repeat(2000)}`)
+    };
+
+    const budget = 40_000;
+    const bounded = boundProtectedState(hugeState, budget);
+    const serialized = JSON.stringify(bounded, null, 2);
+
+    expect(JSON.stringify(hugeState).length).toBeGreaterThan(budget);
+    expect(() => JSON.parse(JSON.stringify(bounded))).not.toThrow();
+    expect(serialized.length).toBeLessThan(budget * 3);
+    // Content survives, just less of it.
+    expect(bounded.stableFacts.decisions.length).toBeGreaterThan(0);
+    expect(bounded.stableFacts.decisions.length).toBeLessThan(300);
+    expect(bounded.stableFacts.goal).toBe("ship");
+  });
+});
+
+describe("consistency failure degrades instead of destroying state", () => {
+  const contradictingLlm = {
+    chat: async () =>
+      JSON.stringify({
+        summary: "We decided to cancel the postgres migration entirely.",
+        changes: ["cancelled migration"],
+        nextSteps: ["Tell the team"]
+      })
+  };
+
+  const state: DigestState = {
+    stableFacts: { goal: "ship v1", constraints: [], decisions: ["We decide to use postgres"] },
+    workingNotes: {},
+    todos: []
+  };
+
+  const stage2 = (over: Partial<Parameters<typeof generateDigestStage2>[0]> = {}) =>
+    generateDigestStage2({
+      scope: { id: "sc", name: "s", goal: null, stage: "idea" } as unknown as Parameters<typeof generateDigestStage2>[0]["scope"],
+      lastDigest: null,
+      protectedState: state,
+      deltaCandidates: [],
+      documents: [],
+      llm: contradictingLlm,
+      systemPrompt: digestStage2SystemPrompt,
+      userPromptTemplate: digestStage2UserPrompt,
+      maxRetries: 0,
+      ...over
+    });
+
+  it("carries the previous digest forward rather than throwing", async () => {
+    const result = await stage2({
+      lastDigest: {
+        summary: "Shipping v1 on postgres.",
+        changes: "",
+        nextSteps: ["Finish migration"]
+      } as unknown as Parameters<typeof generateDigestStage2>[0]["lastDigest"]
+    });
+
+    // Losing every non-conflicting fact because one claim conflicted is the
+    // opposite of the continuity the gate exists to protect.
+    expect(result.summary).toBe("Shipping v1 on postgres.");
+    expect(result.degraded?.reason).toBe("consistency_failed");
+    expect(result.degraded?.errors).toContain("decision_contradiction");
+  });
+
+  it("falls back to protected state when there is no prior digest", async () => {
+    const result = await stage2();
+    expect(result.summary).toContain("ship v1");
+    expect(result.degraded?.reason).toBe("consistency_failed_no_prior_digest");
+  });
+
+  it("tells the retry which protected fact was contradicted", async () => {
+    const prompts: string[] = [];
+    await stage2({
+      maxRetries: 1,
+      llm: {
+        chat: async (messages: { role: string; content: string }[]) => {
+          prompts.push(messages[1].content);
+          return JSON.stringify({
+            summary: "We decided to cancel the postgres migration entirely.",
+            changes: ["cancelled migration"],
+            nextSteps: ["Tell the team"]
+          });
+        }
+      }
+    });
+
+    // The retry prompt must name the fact, not just the error code -- otherwise
+    // the model has nothing to correct and simply re-rolls.
+    const retryPrompt = prompts[1] ?? "";
+    expect(retryPrompt).toContain("postgres");
+    expect(retryPrompt).toContain("protected decision");
   });
 });
 

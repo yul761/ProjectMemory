@@ -286,6 +286,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
       eventBudgetTotal: workerEnv.digestEventBudgetTotal,
       eventBudgetDocs: workerEnv.digestEventBudgetDocs,
       eventBudgetStream: workerEnv.digestEventBudgetStream,
+      charBudgetTotal: workerEnv.digestCharBudgetTotal,
       noveltyThreshold: workerEnv.digestNoveltyThreshold,
       maxRetries: workerEnv.digestMaxRetries,
       useLlmClassifier: workerEnv.digestUseLlmClassifier,
@@ -453,6 +454,7 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
         eventBudgetTotal: workerEnv.digestEventBudgetTotal,
         eventBudgetDocs: workerEnv.digestEventBudgetDocs,
         eventBudgetStream: workerEnv.digestEventBudgetStream,
+        charBudgetTotal: workerEnv.digestCharBudgetTotal,
         noveltyThreshold: workerEnv.digestNoveltyThreshold,
         maxRetries: workerEnv.digestMaxRetries,
         useLlmClassifier: workerEnv.digestUseLlmClassifier,
@@ -604,7 +606,7 @@ new Worker(
     );
     return { ok: true };
   },
-  { connection, concurrency: 4 }
+  { connection, concurrency: Math.max(1, workerEnv.embedConcurrency) }
 ).on("completed", (job) => {
   logger.info({ jobId: job.id }, "Embed job completed");
 }).on("failed", (job, err) => {
@@ -623,7 +625,7 @@ new Worker(
     );
     return { ok: true };
   },
-  { connection, concurrency: 4 }
+  { connection, concurrency: Math.max(1, workerEnv.classifyConcurrency) }
 ).on("failed", (job, err) => {
   logger.warn({ jobId: job?.id, err }, "Classify job failed — event stored without classification");
 });

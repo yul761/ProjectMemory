@@ -374,7 +374,8 @@ export class MemoryController {
       type: input.type,
       source: input.source ?? "api",
       key: input.key ?? null,
-      content: input.content
+      content: input.content,
+      ...(input.occurredAt ? { occurredAt: new Date(input.occurredAt) } : {})
     });
     // Queue async embedding generation (best-effort, ingest must not fail if queue is unavailable)
     embedQueue.add("embed_event",       { eventId: event.id, scopeId: input.scopeId })

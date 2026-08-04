@@ -86,8 +86,9 @@ export class DomainService {
         key?: string | null;
         content: string;
         contentHash?: string | null;
+        createdAt?: Date;
       }) => prisma.memoryEvent.create({ data }),
-      upsertDocument: (data: { userId: string; scopeId: string; source: "telegram" | "cli" | "api" | "sdk"; key: string; content: string; contentHash?: string | null }) =>
+      upsertDocument: (data: { userId: string; scopeId: string; source: "telegram" | "cli" | "api" | "sdk"; key: string; content: string; contentHash?: string | null; createdAt?: Date }) =>
         prisma.memoryEvent.upsert({
           where: { scopeId_key: { scopeId: data.scopeId, key: data.key } },
           update: { content: data.content, contentHash: data.contentHash, updatedAt: new Date() },

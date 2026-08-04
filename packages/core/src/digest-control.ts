@@ -126,6 +126,8 @@ export interface DigestControlConfig {
   eventBudgetTotal: number;
   eventBudgetDocs: number;
   eventBudgetStream: number;
+  /** Size ceiling for selected event content; guards the model context limit. */
+  charBudgetTotal?: number;
   noveltyThreshold: number;
   maxRetries: number;
   useLlmClassifier: boolean;
@@ -137,12 +139,26 @@ export interface DigestOutput {
   changes: string[];
   nextSteps: string[];
   profileFacts?: { facet: string; value: string }[];
+  /**
+   * Present when the digest could not be generated cleanly and a fallback was
+   * carried forward. Memory stays continuous; callers can surface or alert on
+   * the degradation instead of it passing as a normal digest.
+   */
+  degraded?: { reason: string; errors: string[] };
 }
 
 export interface DigestConsistencyResult {
   ok: boolean;
   errors: string[];
   warnings: string[];
+  /**
+   * Human-readable detail for each error, in the same order as `errors`.
+   *
+   * The bare codes tell a retrying model *that* it contradicted something but
+   * not what, so the retry is a re-roll rather than a correction. These name the
+   * protected fact and the offending text so the fix instruction can be specific.
+   */
+  conflicts?: string[];
 }
 
 export const DigestOutputSchema = z.object({
@@ -605,12 +621,71 @@ function latestDocumentsByKey(events: MemoryEvent[]) {
   return [...map.values()];
 }
 
+/** ~4 chars/token, so this is roughly a 60k-token prompt budget for the events. */
+export const DEFAULT_DIGEST_CHAR_BUDGET = 240_000;
+
+/** Marker appended to an event whose content had to be cut to fit the budget. */
+const TRUNCATION_MARKER = "\n…[truncated for digest budget]";
+
+/**
+ * Second budget pass, by size rather than count.
+ *
+ * The count budget alone cannot bound the prompt: 40 events is tiny when they
+ * are chat turns and enormous when they are documents. Ingesting a folder of
+ * markdown (the documented `ingest:docs` path) produced a 366k-token prompt
+ * against a 272k-token model limit, and the digest job then failed outright —
+ * leaving the scope with no state at all. Truncating is strictly better than
+ * losing the whole digest, so oversized content is cut rather than dropped, and
+ * at least one event always survives.
+ */
+function applyCharBudget(
+  events: SelectedEvent[],
+  charBudget: number,
+  rationale: string[]
+): SelectedEvent[] {
+  if (charBudget <= 0) return events;
+  const total = events.reduce((sum, { event }) => sum + event.content.length, 0);
+  if (total <= charBudget) return events;
+
+  const kept: SelectedEvent[] = [];
+  let used = 0;
+  let truncated = 0;
+  for (const selected of events) {
+    const remaining = charBudget - used;
+    // Always keep the first event, even if it alone exceeds the budget.
+    if (remaining <= 0 && kept.length > 0) break;
+    const len = selected.event.content.length;
+    if (len <= remaining) {
+      kept.push(selected);
+      used += len;
+      continue;
+    }
+    const room = Math.max(0, remaining - TRUNCATION_MARKER.length);
+    kept.push({
+      ...selected,
+      event: {
+        ...selected.event,
+        content: selected.event.content.slice(0, Math.max(1, room)) + TRUNCATION_MARKER
+      }
+    });
+    truncated += 1;
+    break;
+  }
+
+  rationale.push(`char_budget_applied:${total}->${charBudget}`);
+  rationale.push(`char_budget_dropped:${events.length - kept.length}`);
+  if (truncated) rationale.push(`char_budget_truncated:${truncated}`);
+  return kept;
+}
+
 export function selectEventsForDigest(input: {
   lastDigest?: Digest | null;
   recentEvents: MemoryEvent[];
   eventBudgetTotal: number;
   eventBudgetDocs: number;
   eventBudgetStream: number;
+  /** Total characters of event content allowed into the digest prompt. */
+  charBudgetTotal?: number;
 }): SelectionResult {
   const rationale: string[] = [];
   const sorted = [...input.recentEvents].sort(compareEventDesc);
@@ -649,9 +724,13 @@ export function selectEventsForDigest(input: {
   const streamCandidates = [...durableStreamCandidates, ...contextualStreamCandidates];
 
   const docSelected = docs.map((event) => ({ event, features: makeFeatures(event), score: 1 }));
-  const merged = [...docSelected, ...streamCandidates]
-    .slice(0, input.eventBudgetTotal)
-    .map(({ event, features }) => ({ event, features }));
+  const merged = applyCharBudget(
+    [...docSelected, ...streamCandidates]
+      .slice(0, input.eventBudgetTotal)
+      .map(({ event, features }) => ({ event, features })),
+    input.charBudgetTotal ?? DEFAULT_DIGEST_CHAR_BUDGET,
+    rationale
+  );
 
   const mergedDurableCount = merged.filter(({ event }) => durableStreamIds.has(event.id)).length;
   rationale.push(`selected_docs:${docSelected.length}`);
@@ -1966,6 +2045,23 @@ function mentionsFact(text: string, fact: string, tokenCount = 3) {
   return keyTokens.every((token) => normalized.includes(token));
 }
 
+/**
+ * Name the protected fact and quote the line that appears to negate it, so a
+ * retry can correct that specific claim instead of regenerating blindly.
+ */
+function describeConflict(kind: string, fact: string, output: DigestOutput): string {
+  const lines = [output.summary, ...output.changes, ...output.nextSteps];
+  const keyTokens = tokenize(fact).slice(0, 3);
+  const offending = lines.find((line) => {
+    const lower = line.toLowerCase();
+    return keyTokens.length > 0 && keyTokens.every((token) => lower.includes(token));
+  });
+  const clip = (s: string) => (s.length > 200 ? s.slice(0, 200) + "…" : s);
+  return offending
+    ? `protected ${kind} "${clip(fact)}" appears negated by: "${clip(offending)}"`
+    : `protected ${kind} "${clip(fact)}" appears negated by the new digest`;
+}
+
 export function consistencyCheck(input: {
   output: DigestOutput;
   previousDigest?: Digest | null;
@@ -1973,11 +2069,16 @@ export function consistencyCheck(input: {
 }): DigestConsistencyResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const conflicts: string[] = [];
+  const note = (code: string, detail: string) => {
+    errors.push(code);
+    conflicts.push(detail);
+  };
 
   const parsed = DigestOutputSchema.safeParse(input.output);
   if (!parsed.success) {
     errors.push("invalid_output_schema");
-    return { ok: false, errors, warnings };
+    return { ok: false, errors, warnings, conflicts };
   }
 
   if (wordsCount(input.output.summary) > 120) {
@@ -2040,7 +2141,7 @@ export function consistencyCheck(input: {
     if (!keyTokens.length) continue;
     const mentionsConstraint = keyTokens.every((token) => summaryLower.includes(token));
     if (/\b(remove|drop|lift|no longer|ignore)\b/.test(summaryLower) && mentionsConstraint) {
-      errors.push("constraint_contradiction");
+      note("constraint_contradiction", describeConflict("constraint", constraint, input.output));
       break;
     }
   }
@@ -2048,7 +2149,7 @@ export function consistencyCheck(input: {
   const decisionNegation = /\b(revert|reverse|undo|cancel|drop|abandon|deprioritize|no longer|instead)\b/;
   for (const decision of stableDecisions) {
     if (mentionsFactWithNegation(combinedText, decision, decisionNegation)) {
-      errors.push("decision_contradiction");
+      note("decision_contradiction", describeConflict("decision", decision, input.output));
       break;
     }
   }
@@ -2056,7 +2157,7 @@ export function consistencyCheck(input: {
   const todoNegation = /\b(remove|delete|drop|cancel|skip|ignore|defer|deprioritize)\b/;
   for (const todo of stableTodos) {
     if (mentionsFactWithNegation(combinedText, normalizeTodoFactText(todo), todoNegation)) {
-      errors.push("todo_contradiction");
+      note("todo_contradiction", describeConflict("todo", todo, input.output));
       break;
     }
   }
@@ -2109,7 +2210,7 @@ export function consistencyCheck(input: {
     }
   }
 
-  return { ok: errors.length === 0, errors, warnings };
+  return { ok: errors.length === 0, errors, warnings, conflicts };
 }
 
 function formatProtectedState(state: DigestState) {
@@ -2124,6 +2225,106 @@ function formatDeltaCandidates(candidates: DeltaCandidate[]) {
 
 function formatDocuments(docs: MemoryEvent[]) {
   return docs.map((doc) => `- ${doc.key ?? doc.id}: ${doc.content}`).join("\n");
+}
+
+/**
+ * Per-section ceiling for the stage-2 prompt.
+ *
+ * Sized against the SMALLEST context we expect to run on (gpt-4o-mini, 128k
+ * tokens) rather than the largest: a budget tuned to a 272k-token model silently
+ * becomes an overflow the moment someone points StateCore at a smaller one, and
+ * the failure mode is a dead digest rather than a degraded one.
+ */
+const STAGE2_SECTION_CHAR_BUDGET = 60_000;
+
+/**
+ * Backstop on the fully assembled prompt. Per-section limits cannot bound the
+ * total on their own -- the sections are capped independently, and any part not
+ * routed through one of them (last digest, forgotten facts, fix instructions)
+ * is unbounded. This is the last point before the model sees the text.
+ * ~4 chars/token, so 320k chars is roughly 80k tokens: comfortable inside 128k.
+ */
+const STAGE2_TOTAL_CHAR_BUDGET = 320_000;
+
+/**
+ * Bounding `selectEventsForDigest` is not enough: the protected state is a full
+ * JSON dump that re-expands event content across facets, and the delta list
+ * carries raw content too, so either can outgrow the events they came from.
+ * This is the single point where the prompt is actually handed to the model, so
+ * it is the only place a size guard cannot be bypassed by an upstream path.
+ *
+ * A digest built from a clipped section is still a digest; blowing the context
+ * limit fails the whole job and leaves the scope with no state at all.
+ *
+ * Line-oriented sections are safe to cut at a character offset. The protected
+ * state is NOT — it is serialized JSON, and slicing it mid-structure hands the
+ * model malformed input, which in practice produces output that then trips the
+ * consistency gate. State is bounded structurally instead, before serializing.
+ */
+function clipSection(text: string, label: string, budget = STAGE2_SECTION_CHAR_BUDGET) {
+  if (text.length <= budget) return text;
+  // The marker stays in the prompt itself rather than going to a log: importing
+  // the logger here would make digest-control depend on ./index at runtime, and
+  // that import is deliberately type-only to avoid a cycle.
+  const cut = text.lastIndexOf("\n", budget);
+  return text.slice(0, cut > budget / 2 ? cut : budget)
+    + `\n…[${label} clipped: ${text.length} chars exceeded ${budget}]`;
+}
+
+/** Trim a string array until its combined length fits, keeping entries intact. */
+function boundStrings(values: string[] | undefined, budget: number): string[] | undefined {
+  if (!values?.length) return values;
+  const kept: string[] = [];
+  let used = 0;
+  for (const value of values) {
+    if (used + value.length > budget) break;
+    kept.push(value);
+    used += value.length;
+  }
+  // Never return an empty list where there was content: one entry beats none.
+  if (!kept.length) kept.push(values[0].slice(0, Math.max(1, budget)));
+  return kept;
+}
+
+/**
+ * Bound the protected state by dropping whole entries, so what reaches the model
+ * is always valid JSON. Provenance/confidence/evidence are derived bookkeeping
+ * and are dropped first — the facts themselves are what the digest reasons over.
+ */
+export function boundProtectedState(state: DigestState, budget = STAGE2_SECTION_CHAR_BUDGET): DigestState {
+  if (JSON.stringify(state).length <= budget) return state;
+
+  const share = Math.floor(budget / 4);
+  const bounded: DigestState = {
+    ...state,
+    stableFacts: {
+      goal: state.stableFacts.goal,
+      constraints: boundStrings(state.stableFacts.constraints, share),
+      decisions: boundStrings(state.stableFacts.decisions, share) ?? []
+    },
+    workingNotes: {
+      ...state.workingNotes,
+      openQuestions: boundStrings(state.workingNotes.openQuestions, share),
+      risks: boundStrings(state.workingNotes.risks, share)
+    },
+    todos: boundStrings(state.todos, share) ?? [],
+    volatileContext: boundStrings(state.volatileContext, share)
+  };
+  delete bounded.provenance;
+  delete bounded.confidence;
+  delete bounded.evidenceRefs;
+  if (bounded.factRegistry) {
+    const registry: FactRegistryEntry[] = [];
+    let used = 0;
+    for (const entry of bounded.factRegistry) {
+      const size = JSON.stringify(entry).length;
+      if (used + size > share) break;
+      registry.push(entry);
+      used += size;
+    }
+    bounded.factRegistry = registry;
+  }
+  return bounded;
 }
 
 /**
@@ -2174,14 +2375,20 @@ export async function generateDigestStage2(input: {
       scopeGoal: input.scope.goal ?? "(none)",
       scopeStage: input.scope.stage,
       lastDigest: lastDigestText,
-      protectedState: formatProtectedState(input.protectedState),
-      deltaCandidates: formatDeltaCandidates(input.deltaCandidates) || "(none)",
-      documents: formatDocuments(input.documents) || "(none)"
+      protectedState: formatProtectedState(boundProtectedState(input.protectedState)),
+      deltaCandidates: clipSection(formatDeltaCandidates(input.deltaCandidates), "deltaCandidates") || "(none)",
+      documents: clipSection(formatDocuments(input.documents), "documents") || "(none)"
     });
+
+    const assembled = clipSection(
+      `${userPrompt}${forgottenBlock}\n${fixInstruction}`,
+      "stage2 prompt",
+      STAGE2_TOTAL_CHAR_BUDGET
+    );
 
     const raw = await input.llm.chat([
       { role: "system", content: input.systemPrompt },
-      { role: "user", content: `${userPrompt}${forgottenBlock}\n${fixInstruction}` }
+      { role: "user", content: assembled }
     ]);
 
     const parsed = parseJson<DigestOutput>(raw);
@@ -2226,7 +2433,45 @@ export async function generateDigestStage2(input: {
     }
 
     lastErrors = check.errors;
-    fixInstruction = `Fix output. Previous errors: ${check.errors.join(", ")}. Ensure summary<=120 words, changes<=3, nextSteps actionable.`;
+    // Name what conflicted. "Previous errors: todo_contradiction" tells the model
+    // nothing it can act on, so the retry just re-rolls; quoting the protected
+    // fact and the offending line makes it a targeted correction.
+    const detail = (check.conflicts ?? []).filter(Boolean);
+    fixInstruction = detail.length
+      ? `Fix output. The new digest conflicts with state the user has already established:\n`
+        + detail.map((d) => `- ${d}`).join("\n")
+        + `\nKeep those facts intact unless the source events explicitly revoke them. `
+        + `Ensure summary<=120 words, changes<=3, nextSteps actionable.`
+      : `Fix output. Previous errors: ${check.errors.join(", ")}. Ensure summary<=120 words, changes<=3, nextSteps actionable.`;
+  }
+
+  // Retries exhausted. Throwing here loses the whole digest — including every
+  // fact that did NOT conflict — and leaves the scope with no state at all, which
+  // is the opposite of the continuity the consistency gate exists to protect.
+  // Carry the previous digest forward instead, flagged so the degradation is
+  // visible rather than silent. Only a scope with no prior digest has nothing to
+  // fall back to, and that case still fails loudly.
+  if (input.lastDigest) {
+    return {
+      summary: input.lastDigest.summary,
+      changes: [],
+      nextSteps: input.lastDigest.nextSteps?.length
+        ? input.lastDigest.nextSteps.slice(0, 3)
+        : ["Review recent events for changes."],
+      degraded: { reason: "consistency_failed", errors: lastErrors }
+    };
+  }
+
+  // First digest for the scope: fall back to the protected state that the merge
+  // already produced, so ingestion still yields usable memory instead of nothing.
+  const projected = buildProjectedSummary(input.protectedState, "");
+  if (projected) {
+    return {
+      summary: projected,
+      changes: [],
+      nextSteps: ["Review recent events for changes."],
+      degraded: { reason: "consistency_failed_no_prior_digest", errors: lastErrors }
+    };
   }
 
   throw new Error(`digest_consistency_failed:${lastErrors.join("|")}`);
@@ -2302,7 +2547,8 @@ export async function runDigestControlPipeline(input: {
     recentEvents: input.recentEvents,
     eventBudgetTotal: input.config.eventBudgetTotal,
     eventBudgetDocs: input.config.eventBudgetDocs,
-    eventBudgetStream: input.config.eventBudgetStream
+    eventBudgetStream: input.config.eventBudgetStream,
+    charBudgetTotal: input.config.charBudgetTotal
   });
   metrics.selectionMs = Date.now() - tSelect;
 

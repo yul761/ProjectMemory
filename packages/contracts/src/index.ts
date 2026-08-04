@@ -51,7 +51,11 @@ export const MemoryEventInput = z.object({
   type: MemoryType,
   source: MemorySource.optional(),
   key: z.string().min(1).optional(),
-  content: z.string().min(1)
+  content: z.string().min(1),
+  // When the event actually happened, if it differs from ingest time. Lets callers
+  // replay historical conversations without collapsing them onto "now" — which
+  // otherwise destroys any time-based reasoning over the resulting memory.
+  occurredAt: z.string().datetime({ offset: true }).optional()
 }).superRefine((input, ctx) => {
   if (input.type === "document" && !input.key) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "key is required for document events" });
