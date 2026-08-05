@@ -1,5 +1,16 @@
 # @statecore/api
 
+## 1.4.1
+
+### Patch Changes
+
+- `GET /v1/facet-pack` accepts a `scopeId`.
+
+  Ontology is resolved per scope — a scope's template selects it — so answering
+  only at the account level told a caller with a health scope and a personal scope
+  about neither. The response now also reports which layer decided: the scope's
+  `template`, an `account` override, or the `deployment-default`.
+
 ## 1.4.0
 
 ### Minor Changes

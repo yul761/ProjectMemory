@@ -44,6 +44,7 @@ import {
   getActiveFactRegistry,
   getDomainConfig,
   parseFacetPack,
+  resolveFacetPackForScope,
   logger,
   type DigestState,
   type FactRegistryEntry
@@ -533,15 +534,40 @@ export class MemoryController {
    * action until there is a second tenant with a real need for self-service.
    */
   @Get(["/facet-pack", "/v1/facet-pack"])
-  async facetPack(@Req() req: RequestWithUser) {
-    const row = await prisma.user.findUnique({
+  async facetPack(@Req() req: RequestWithUser, @Query("scopeId") scopeId?: string) {
+    // Ontology is resolved per scope: a scope's template selects it, and an
+    // account-level pack overrides. Without a scopeId this answers for the
+    // account, which is only the whole story for tenants running an override.
+    let template: string | null = null;
+    if (scopeId) {
+      const scope = await this.domain.projectService.getScope(req.userId, scopeId);
+      if (!scope) throw new NotFoundException("Scope not found");
+      template = (scope as { template?: string | null }).template ?? null;
+    }
+
+    const pack = await resolveFacetPackForScope(
+      {
+        findFacetPack: async (id: string) => {
+          const row = await prisma.user.findUnique({ where: { id }, select: { facetPack: true } });
+          return row?.facetPack ?? null;
+        }
+      },
+      req.userId,
+      scopeId ? template : undefined
+    );
+    const accountRow = await prisma.user.findUnique({
       where: { id: req.userId },
       select: { facetPack: true }
     });
-    const { pack, usedDefault } = parseFacetPack(row?.facetPack ?? null);
+    const { usedDefault } = parseFacetPack(accountRow?.facetPack ?? null);
+
     return {
       name: pack.name,
+      // True when the account has installed no pack of its own — the ontology
+      // then comes from the scope's template.
       isDefault: usedDefault,
+      source: usedDefault ? (scopeId ? "template" : "deployment-default") : "account",
+      template,
       facets: pack.facets.map((facet) => ({
         name: facet.name,
         cap: facet.cap,
