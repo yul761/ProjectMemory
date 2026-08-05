@@ -337,6 +337,10 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                     "minLength": 1,
                     "type": "string",
                   },
+                  "occurredAt": {
+                    "format": "date-time",
+                    "type": "string",
+                  },
                   "scopeId": {
                     "format": "uuid",
                     "type": "string",
@@ -735,6 +739,12 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                             "type": "string",
                           },
                           "id": {
+                            "type": "string",
+                          },
+                          "retiredAt": {
+                            "type": "string",
+                          },
+                          "retiredReason": {
                             "type": "string",
                           },
                           "supersededBy": {

@@ -394,6 +394,10 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
           "minLength": 1,
           "type": "string",
         },
+        "occurredAt": {
+          "format": "date-time",
+          "type": "string",
+        },
         "scopeId": {
           "format": "uuid",
           "type": "string",
@@ -608,6 +612,12 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
                 "type": "string",
               },
               "id": {
+                "type": "string",
+              },
+              "retiredAt": {
+                "type": "string",
+              },
+              "retiredReason": {
                 "type": "string",
               },
               "supersededBy": {
