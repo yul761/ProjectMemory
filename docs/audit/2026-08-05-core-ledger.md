@@ -212,15 +212,27 @@ if (writeProtected) {
 
 ---
 
-## 6. 未审计范围
+## 6. 审计范围与结果
 
-以下内容本次未检查，相关结论为空：
+原列为「未审计」的项目已全部覆盖。结论如下：
 
-- 检索层（`retrieve-*`）的排序与召回质量
-- event store 与 pgvector 索引
-- `assistant-runtime.ts`（1220 行）
-- working-memory 子系统
-- 防漂移机制的正确性（仅定位了取舍点，未验证保护逻辑本身）
+| 范围 | 结果 |
+|---|---|
+| 防漂移机制 | ❌ **不成立，已修**。写保护只存在于 stage 1，stage 2（每次 digest 都跑）零检查；矛盾检查因 token 排序问题从未触发；`checkContradiction` 看不见 profile 事实。 |
+| 检索层 | ✅ 无静默丢弃。每处 `slice` 要么是调用方请求的 `limit`，要么已在 `retrieval` 元数据中报数。 |
+| `assistant-runtime.ts` | ⚠️ 一处已修：grounding evidence 只展示 5 条却不报总数，现补 `eventSnippetsTotal`。答案 prompt 含完整 `recall.events`，故 `eventIds` 无虚报。 |
+| working-memory 子系统 | ✅ 无持久损失。`maxItemsPerField`（默认 10）与 fast-layer 的 180/220 字符截断都发生在**短期层**；其来源事件同时进入 digest 路径，`shouldUseForWorkingMemory` 不影响 digest。 |
+| event store / data GC | ✅ 不毁审计链。GC 删旧 digest 与其快照，但**永远保留每个 scope 的最新 digest**，而事实历史活在最新状态里。 |
+
+仍未检查：pgvector 索引本身的召回质量（属于检索效果，非信息完整性）。
+
+### 一个由此确认的依赖关系
+
+旧快照会被 GC（默认 90 天），所以**事实历史必须活在当前状态中**——这正是
+`normalizeFactRegistry` 修复所做的。修复前历史在每次加载时被删、旧快照又被回收，
+是双重不可恢复。
+
+`Digest.selectionLog` 随 digest 一同受 90 天保留期约束；事实溯源链不受此限。
 
 ---
 
