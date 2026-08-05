@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Digest, MemoryEvent, ProjectScope } from "./index";
 import { pruneForgottenFacts } from "./memory-facts";
 import { stripInternalIds, consolidateChangedFacets } from "./facet-consolidation";
+import { recordDrop, type DropRecord } from "./drop-log";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1165,7 +1166,8 @@ function mergeProfileFacets(
   events: MemoryEvent[],
   prevFactRegistryIds: Set<string>,
   makeId: () => string,
-  makeNow: () => string = createDefaultNowFactory()
+  makeNow: () => string = createDefaultNowFactory(),
+  dropLog?: DropRecord[]
 ): void {
   // Lazy-init guard: only initialise profile if at least one event is routable
   if (!events.some((e) => e.classifiedType != null && e.classifiedType in PROFILE_FACET_ROUTING)) return;
@@ -1208,11 +1210,22 @@ function mergeProfileFacets(
       if (writeProtected) {
         // Evict first unprotected entry; if all protected, discard incoming
         const unprotectedIdx = facetFacts.findIndex((fact) => !isProtectedInFacet(facet, fact));
-        if (unprotectedIdx === -1) continue;
-        facetFacts.splice(unprotectedIdx, 1);
+        if (unprotectedIdx === -1) {
+          // The "no drift" guarantee is being paid for with the "no forgetting"
+          // guarantee here: the incoming fact loses to the protected ones.
+          if (dropLog) recordDrop(dropLog, "cap_rejected_incoming", { facet, value: incomingValue, cap });
+          continue;
+        }
+        const [evictedProtectedPath] = facetFacts.splice(unprotectedIdx, 1);
+        if (evictedProtectedPath && dropLog) {
+          recordDrop(dropLog, "cap_evicted", { facet, value: evictedProtectedPath, cap });
+        }
       } else {
         // Volatile: evict first (index 0 = weakest/oldest)
-        facetFacts.splice(0, 1);
+        const [evictedVolatile] = facetFacts.splice(0, 1);
+        if (evictedVolatile && dropLog) {
+          recordDrop(dropLog, "cap_evicted", { facet, value: evictedVolatile, cap });
+        }
       }
     }
 
@@ -1237,7 +1250,8 @@ export function applyProfileFactsFromDigest(
   documents: MemoryEvent[],
   streamEvidence: DigestEvidenceRef | null,
   makeId: () => string,
-  makeNow: () => string = createDefaultNowFactory()
+  makeNow: () => string = createDefaultNowFactory(),
+  dropLog?: DropRecord[]
 ): void {
   if (profileFacts.length === 0) return;
   if (!state.profile) state.profile = {};
@@ -1250,7 +1264,11 @@ export function applyProfileFactsFromDigest(
   for (const pf of profileFacts) {
     const facet = pf.facet.trim();
     const value = stripInternalIds(pf.value.trim());
-    if (!value || !DISPLAY_FACETS.has(facet)) continue;
+    if (!value) continue;
+    if (!DISPLAY_FACETS.has(facet)) {
+      if (dropLog) recordDrop(dropLog, "facet_not_registered", { facet, value });
+      continue;
+    }
 
     // identity is document-authority; conversational facets prefer the stream-event ref
     // (it carries the actual conversation turn); fall back to a doc ref if no stream ref.
@@ -1287,8 +1305,13 @@ export function applyProfileFactsFromDigest(
     }
 
     if (facetFacts.length >= cap) {
-      if (facet === "identity") continue; // identity is high-value; don't evict to add
+      if (facet === "identity") {
+        // identity is high-value; don't evict to add
+        if (dropLog) recordDrop(dropLog, "cap_rejected_incoming", { facet, value, cap });
+        continue;
+      }
       const [evicted] = facetFacts.splice(0, 1); // volatile facets: evict oldest (index 0)
+      if (evicted && dropLog) recordDrop(dropLog, "cap_evicted", { facet, value: evicted, cap });
       if (evicted && state.factRegistry) {
         const ri = state.factRegistry.findIndex(
           (e) => e.type === "profile" && e.facet === facet && !e.supersededBy && sameFactCjkAware(e.content, evicted, 0.6)

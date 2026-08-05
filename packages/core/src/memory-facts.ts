@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { getActiveFactRegistry, type DigestState } from "./digest-control";
+import { recordDrop, type DropRecord } from "./drop-log";
 
 export type DisplayGroup = "Schedule" | "People" | "Style" | "Projects" | "Notes";
 
@@ -38,14 +39,17 @@ export function factToGroup(facet: string): DisplayGroup | null {
   return FACET_TO_GROUP[facet] ?? null;
 }
 
-export function flattenScopeFacts(state: DigestState): DisplayFact[] {
+export function flattenScopeFacts(state: DigestState, dropLog?: DropRecord[]): DisplayFact[] {
   const byKey = new Map<string, DisplayFact>();
 
   // 1) Profile-class factRegistry entries (richer: have evidenceId + addedAt).
   for (const entry of getActiveFactRegistry(state)) {
     if (entry.type !== "profile") continue;
     const group = entry.facet ? factToGroup(entry.facet) : null;
-    if (!group) continue;
+    if (!group) {
+      if (dropLog) recordDrop(dropLog, "no_display_group", { facet: entry.facet, value: entry.content });
+      continue;
+    }
     const factKey = computeFactKey(group, entry.content);
     if (!byKey.has(factKey)) {
       byKey.set(factKey, {
