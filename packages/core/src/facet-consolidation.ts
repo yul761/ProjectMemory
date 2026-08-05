@@ -33,6 +33,10 @@ export function applyFacetConsolidation(
     registry.find((e) => !e.supersededBy && e.type === "profile" && e.facet === facet
       && (e.content.trim() === source.trim() || sameFactCjkAware(e.content, source, 0.6)));
 
+  // Sources consumed by each output, so the originals can be linked to their
+  // replacement rather than deleted.
+  const supersededByNewId = new Map<string, string>();
+
   // Build the replacement entries BEFORE mutating the registry.
   const newEntries: FactRegistryEntry[] = result.map((out) => {
     const sources = out.mergedFrom
@@ -44,8 +48,10 @@ export function applyFacetConsolidation(
       ? withEntries.reduce((a, b) => (a.addedAt <= b.addedAt ? a : b))
       : undefined;
     const confidence = withEntries.length ? Math.max(...withEntries.map((e) => e.confidence)) : 0.7;
+    const newId = makeId();
+    for (const source of withEntries) supersededByNewId.set(source.id, newId);
     return {
-      id: makeId(),
+      id: newId,
       content: out.text,
       type: "profile" as const,
       confidence,
@@ -56,8 +62,25 @@ export function applyFacetConsolidation(
     };
   });
 
-  // Remove all current non-superseded entries for this facet, then append the rebuilt set.
-  state.factRegistry = registry.filter((e) => !(!e.supersededBy && e.type === "profile" && e.facet === facet));
+  // Link the originals to their replacement instead of deleting them.
+  //
+  // This used to filter every active entry for the facet straight out of the
+  // registry, which broke the audit chain on the most common path there is:
+  // consolidation runs on every digest that touched a facet, where capacity
+  // eviction only fires once a facet fills up. A consolidated fact could not be
+  // traced back to the statements it was merged from.
+  for (const e of registry) {
+    if (e.supersededBy || e.retiredAt || e.type !== "profile" || e.facet !== facet) continue;
+    const replacement = supersededByNewId.get(e.id);
+    if (replacement) {
+      e.supersededBy = replacement;
+    } else {
+      // Active before, claimed by no output: consolidation decided to drop it.
+      e.retiredAt = makeNow();
+      e.retiredReason = "consolidation_dropped";
+    }
+  }
+  state.factRegistry = registry;
   state.factRegistry.push(...newEntries);
 
   const profileMap = (state.profile ?? (state.profile = {})) as Record<string, string[]>;

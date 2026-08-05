@@ -2584,7 +2584,16 @@ export async function runDigestControlPipeline(input: {
   const dropLog: DropRecord[] = [];
 
   if (input.lastDigest) {
-    const hasNewEvents = input.recentEvents.some((event) => event.createdAt.getTime() > input.lastDigest!.createdAt.getTime());
+    // A document upsert rewrites content and stamps updatedAt but keeps the
+    // original createdAt. Checking createdAt alone meant re-uploading a corrected
+    // document never re-ran the digest: the state went on serving facts extracted
+    // from the superseded version, and for a write-protected facet like identity
+    // no later conversation could correct it either.
+    const lastDigestAt = input.lastDigest.createdAt.getTime();
+    const hasNewEvents = input.recentEvents.some((event) => {
+      const changedAt = Math.max(event.createdAt.getTime(), event.updatedAt?.getTime() ?? 0);
+      return changedAt > lastDigestAt;
+    });
     if (!hasNewEvents) {
       const state = normalizeDigestState(input.prevState ?? deriveStateFromDigest(input.lastDigest));
       if (input.forgottenFactKeys && input.forgottenFactKeys.size > 0) {

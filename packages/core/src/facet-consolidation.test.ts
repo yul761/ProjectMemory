@@ -22,6 +22,7 @@ describe("stripInternalIds", () => {
 });
 
 import { applyFacetConsolidation, ConsolidationSchema, type ConsolidatedFact } from "./facet-consolidation";
+import { getActiveFactRegistry } from "./digest-control";
 import { applyProfileFactsFromDigest, type DigestState } from "./digest-control";
 
 describe("applyProfileFactsFromDigest — ID sanitizing", () => {
@@ -81,7 +82,15 @@ describe("applyFacetConsolidation", () => {
     const ok = applyFacetConsolidation(state, "notes", ["用量追踪：显示已用/剩余", "狗：Friday 与 Tully"], result, ids(), now);
     expect(ok).toBe(true);
     expect(state.profile?.notes).toEqual(["用量追踪：显示已用/剩余"]);
-    expect((state.factRegistry ?? []).some((e) => e.content.includes("狗"))).toBe(false);
+
+    // Behaviour change (2026-08-05): the dropped fact is retired, not deleted.
+    // Consolidation runs on every digest that touched a facet, so deleting the
+    // record here broke the audit chain on the most common path there is.
+    const dropped = (state.factRegistry ?? []).find((e) => e.content.includes("狗"));
+    expect(dropped).toBeDefined();
+    expect(dropped!.retiredReason).toBe("consolidation_dropped");
+    // It is gone from the active set, which is what the display path reads.
+    expect(getActiveFactRegistry(state).some((e) => e.content.includes("狗"))).toBe(false);
   });
 
   it("fails open (no mutation) when an output has an out-of-range source index", () => {
