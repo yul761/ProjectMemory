@@ -89,6 +89,16 @@ export interface MemoryEvent {
   createdAt: Date;
   updatedAt?: Date | null;
   classifiedType?: string | null;
+  /**
+   * Caller-declared: this event must not lose a budget competition.
+   *
+   * The engine does not decide what matters — it has no way to know that one
+   * document is a resume and another is a meeting note. Without this signal the
+   * only tiebreaker is recency, which is exactly backwards for durable inputs:
+   * the resume uploaded once and never touched again is always the oldest, and
+   * so always the first to be dropped.
+   */
+  pinned?: boolean;
 }
 
 export interface Digest {
@@ -132,6 +142,7 @@ export interface MemoryRepo {
     content: string;
     contentHash?: string | null;
     createdAt?: Date;
+    pinned?: boolean;
   }) => Promise<MemoryEvent>;
   upsertDocument: (data: {
     userId: string;
@@ -141,6 +152,7 @@ export interface MemoryRepo {
     content: string;
     contentHash?: string | null;
     createdAt?: Date;
+    pinned?: boolean;
   }) => Promise<MemoryEvent>;
   listRecent: (scopeId: string, limit: number, cursor?: string | null) => Promise<{ items: MemoryEvent[]; nextCursor: string | null }>;
   listByLookback: (scopeId: string, since: Date, limit: number) => Promise<MemoryEvent[]>;
@@ -226,6 +238,7 @@ export class MemoryService {
     key?: string | null;
     content: string;
     occurredAt?: Date;
+    pinned?: boolean;
   }) {
     if (input.type === "document" && input.key) {
       const contentHash = createHash("sha256").update(input.content).digest("hex");
@@ -236,7 +249,8 @@ export class MemoryService {
         key: input.key,
         content: input.content,
         contentHash,
-        ...(input.occurredAt ? { createdAt: input.occurredAt } : {})
+        ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
+        ...(input.pinned !== undefined ? { pinned: input.pinned } : {})
       });
     }
     return this.memories.create({
@@ -246,7 +260,8 @@ export class MemoryService {
       source: input.source,
       key: input.key,
       content: input.content,
-      ...(input.occurredAt ? { createdAt: input.occurredAt } : {})
+      ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
+      ...(input.pinned !== undefined ? { pinned: input.pinned } : {})
     });
   }
 

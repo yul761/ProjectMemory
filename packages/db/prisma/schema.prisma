@@ -93,6 +93,10 @@ model MemoryEvent {
   classifiedImportance  Float?
   expiresAt             DateTime?
   suppressedAt          DateTime?
+  // Caller-declared "must not lose a budget competition". The engine cannot tell
+  // a resume from a meeting note, and its only other tiebreaker is recency —
+  // which drops durable inputs first.
+  pinned                Boolean      @default(false)
 
   user      User         @relation(fields: [userId], references: [id])
   scope     ProjectScope @relation(fields: [scopeId], references: [id])

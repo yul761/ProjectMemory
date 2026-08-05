@@ -661,10 +661,25 @@ function applyCharBudget(
   const total = events.reduce((sum, { event }) => sum + event.content.length, 0);
   if (total <= charBudget) return events;
 
+  // The budget binds, so something loses. Caller-pinned events go first: without
+  // this the only tiebreaker is recency, and a durable input (a resume uploaded
+  // once) is always the oldest and therefore always the first to be dropped.
+  // Stable partition — relative order within each group is untouched.
+  const pinned = events.filter(({ event }) => event.pinned);
+  const ordered = pinned.length > 0 ? [...pinned, ...events.filter(({ event }) => !event.pinned)] : events;
+
+  const pinnedChars = pinned.reduce((sum, { event }) => sum + event.content.length, 0);
+  if (pinnedChars > charBudget) {
+    // Pinned content alone overflows. Something the caller explicitly marked as
+    // must-keep is going to be lost, and that must not be inferred from a
+    // missing id later.
+    rationale.push(`pinned_budget_exceeded:${pinnedChars}->${charBudget}`);
+  }
+
   const kept: SelectedEvent[] = [];
   let used = 0;
   let truncated = 0;
-  for (const selected of events) {
+  for (const selected of ordered) {
     const remaining = charBudget - used;
     // Always keep the first event, even if it alone exceeds the budget.
     if (remaining <= 0 && kept.length > 0) break;

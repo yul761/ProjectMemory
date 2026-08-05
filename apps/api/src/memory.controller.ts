@@ -440,7 +440,8 @@ export class MemoryController {
       source: input.source ?? "api",
       key: input.key ?? null,
       content: input.content,
-      ...(input.occurredAt ? { occurredAt: new Date(input.occurredAt) } : {})
+      ...(input.occurredAt ? { occurredAt: new Date(input.occurredAt) } : {}),
+      ...(input.pinned !== undefined ? { pinned: input.pinned } : {})
     });
     // Queue async embedding generation (best-effort, ingest must not fail if queue is unavailable)
     embedQueue.add("embed_event",       { eventId: event.id, scopeId: input.scopeId })
@@ -456,7 +457,8 @@ export class MemoryController {
       key: event.key ?? null,
       content: event.content,
       createdAt: event.createdAt.toISOString(),
-      updatedAt: event.updatedAt ? event.updatedAt.toISOString() : null
+      updatedAt: event.updatedAt ? event.updatedAt.toISOString() : null,
+      pinned: event.pinned ?? false
     });
   }
 

@@ -398,6 +398,9 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
           "format": "date-time",
           "type": "string",
         },
+        "pinned": {
+          "type": "boolean",
+        },
         "scopeId": {
           "format": "uuid",
           "type": "string",
@@ -445,6 +448,9 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
             "string",
             "null",
           ],
+        },
+        "pinned": {
+          "type": "boolean",
         },
         "scopeId": {
           "format": "uuid",

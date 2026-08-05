@@ -341,6 +341,9 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                     "format": "date-time",
                     "type": "string",
                   },
+                  "pinned": {
+                    "type": "boolean",
+                  },
                   "scopeId": {
                     "format": "uuid",
                     "type": "string",
@@ -393,6 +396,9 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                     "key": {
                       "nullable": true,
                       "type": "string",
+                    },
+                    "pinned": {
+                      "type": "boolean",
                     },
                     "scopeId": {
                       "format": "uuid",

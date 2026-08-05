@@ -55,7 +55,11 @@ export const MemoryEventInput = z.object({
   // When the event actually happened, if it differs from ingest time. Lets callers
   // replay historical conversations without collapsing them onto "now" — which
   // otherwise destroys any time-based reasoning over the resulting memory.
-  occurredAt: z.string().datetime({ offset: true }).optional()
+  occurredAt: z.string().datetime({ offset: true }).optional(),
+  // "Must not lose a budget competition." The engine cannot tell a resume from a
+  // meeting note; without this its only tiebreaker is recency, which drops
+  // durable inputs first because they are by definition the oldest.
+  pinned: z.boolean().optional()
 }).superRefine((input, ctx) => {
   if (input.type === "document" && !input.key) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "key is required for document events" });
@@ -71,7 +75,8 @@ export const MemoryEventOutput = z.object({
   key: z.string().nullable(),
   content: z.string(),
   createdAt: z.string(),
-  updatedAt: z.string().nullable()
+  updatedAt: z.string().nullable(),
+  pinned: z.boolean().optional()
 });
 
 export const MemoryEventListOutput = z.object({

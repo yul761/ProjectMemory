@@ -87,11 +87,20 @@ export class DomainService {
         content: string;
         contentHash?: string | null;
         createdAt?: Date;
+        pinned?: boolean;
       }) => prisma.memoryEvent.create({ data }),
-      upsertDocument: (data: { userId: string; scopeId: string; source: "telegram" | "cli" | "api" | "sdk"; key: string; content: string; contentHash?: string | null; createdAt?: Date }) =>
+      upsertDocument: (data: { userId: string; scopeId: string; source: "telegram" | "cli" | "api" | "sdk"; key: string; content: string; contentHash?: string | null; createdAt?: Date; pinned?: boolean }) =>
         prisma.memoryEvent.upsert({
           where: { scopeId_key: { scopeId: data.scopeId, key: data.key } },
-          update: { content: data.content, contentHash: data.contentHash, updatedAt: new Date() },
+          // `pinned` must be in the update branch too: re-uploading a document is
+          // the normal way to change its pin state, and leaving it out would make
+          // the flag settable only on first ingest.
+          update: {
+            content: data.content,
+            contentHash: data.contentHash,
+            updatedAt: new Date(),
+            ...(data.pinned !== undefined ? { pinned: data.pinned } : {})
+          },
           create: { ...data, type: "document" }
         }),
       listRecent: async (scopeId: string, limit: number, cursor?: string | null) => {
