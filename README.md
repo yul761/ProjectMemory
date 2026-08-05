@@ -162,15 +162,11 @@ Benchmark methodology: `docs/benchmarking.md`
 
 ### LongMemEval
 
-On [LongMemEval](https://github.com/xiaowu0162/LongMemEval) (200-question
-stratified sample, official evaluator) StateCore scores **65.5% ±6.6**, against
-**61.0% ±6.8** for mem0 OSS run on the same host with the same answerer and
-judges — a difference that is *not* statistically significant on total score.
-
-The per-category split is the interesting part: StateCore leads
-temporal-reasoning by 47 points, mem0 leads single-session fact recall by 44,
-and the two cancel. Full numbers, configuration and reproduction notes:
-`docs/longmemeval.md`.
+A comparison against mem0 OSS on
+[LongMemEval](https://github.com/xiaowu0162/LongMemEval) is **being re-run**: a
+defect in the benchmark harness truncated retrieved sessions before the answerer
+saw them, which understated StateCore and barely affected mem0. Details and the
+withdrawn figures: `docs/longmemeval.md`.
 
 ## Documentation
 

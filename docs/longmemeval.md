@@ -1,5 +1,28 @@
 # LongMemEval: StateCore vs mem0 OSS
 
+> **⚠️ These numbers are withdrawn. A harness defect invalidated them, and the
+> benchmark is being re-run.**
+>
+> The runner truncated every retrieved item to 2000 characters before building
+> the answerer prompt. That cap was written when one retrieved item was one chat
+> message; the final configuration retrieves whole **sessions**, whose median
+> length is ~9,800 characters — so roughly **80% of every retrieved session was
+> discarded before the answerer ever saw it**, frequently including the turn that
+> answered the question.
+>
+> The bias is one-sided. StateCore returns conversation sessions and was heavily
+> truncated; mem0 returns short extracted facts and was barely affected. **The
+> comparison below therefore understates StateCore and is not a fair test.**
+>
+> Measured on 34 `knowledge-update` questions, removing the cap moved StateCore
+> from **64.7% to 91.2%** (+26.5 points), and "I don't know" answers from 10/34 to
+> 2/34. The full 200-question comparison is being re-run for both systems under
+> the fixed harness; this page will be replaced with those results.
+>
+> Everything below is retained for the record, not for citation.
+
+---
+
 An external, comparative benchmark, as opposed to the synthetic latency and
 consistency suite in [`benchmarking.md`](./benchmarking.md).
 
@@ -101,7 +124,23 @@ Things a reader will otherwise trip over:
 - These numbers are **not comparable to either project's published figures**,
   which use different answerers, judges and dataset variants.
 
-## Diagnosis: where StateCore actually loses
+## Diagnosis — superseded
+
+> **Everything in this section was chasing the truncation defect above.** The
+> "I don't know" answers, the failed dilution hypothesis and the failed
+> extract-then-answer hypothesis all have one cause: the answerer was shown ~20%
+> of each retrieved session. Removing the cap fixed all three symptoms at once.
+>
+> Retained because the *shape* of the mistake is instructive. Retrieval recall
+> read 1.00 throughout, which was true — the retrieval layer did return the
+> evidence — and that was taken as proof the evidence had reached the model.
+> **No metric covered the answerer's actual input**, so three rounds of
+> diagnosis went downstream of a gap nothing was watching. A recall metric that
+> stops at the retrieval boundary cannot tell you the model saw anything.
+>
+> In particular, the conclusion drawn below — that the state layer should
+> produce richer digests and admit more facts — **is not supported**. It was
+> inferred from failures the harness caused.
 
 The 200-question run answered **"I don't know" on 60 of 200 questions** while
 retrieval recall over the gold evidence was **1.00**. The evidence was in the
