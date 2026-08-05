@@ -97,7 +97,7 @@ describe("DigestState DB serialization round-trip", () => {
     expect(Array.isArray(result.volatileContext)).toBe(true);
   });
 
-  it("filters superseded factRegistry entries during round-trip", () => {
+  it("keeps superseded factRegistry entries through a round-trip", () => {
     const state: DigestState = {
       stableFacts: { decisions: ["use TensorRT"] },
       workingNotes: {},
@@ -125,7 +125,14 @@ describe("DigestState DB serialization round-trip", () => {
       ]
     };
     const result = simulateDbRoundTrip(state);
-    expect(result.factRegistry).toHaveLength(1);
-    expect(result.factRegistry![0].id).toBe("fact-new");
+
+    // Behaviour change (2026-08-05): the round-trip used to drop superseded
+    // entries. That deleted a fact's history every time the state was loaded, so
+    // the provenance API could answer "what did you believe before" only until
+    // the next digest ran. History is now retained (bounded elsewhere), and
+    // callers filter with getActiveFactRegistry when they want current beliefs.
+    expect(result.factRegistry).toHaveLength(2);
+    expect(result.factRegistry!.map((e) => e.id)).toEqual(["fact-old", "fact-new"]);
+    expect(result.factRegistry!.find((e) => e.id === "fact-old")!.supersededBy).toBe("fact-new");
   });
 });

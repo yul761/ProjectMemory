@@ -325,11 +325,42 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
     },
     transitionSummary: normalizeTransitionSummary((base as { transitionSummary?: Record<string, number> }).transitionSummary),
     recentChanges: normalizeRecentChanges(base.recentChanges),
-    factRegistry: ((base as DigestState).factRegistry ?? [])
-      .filter((entry) => !entry.supersededBy)
-      .slice(-100),
+    factRegistry: normalizeFactRegistry((base as DigestState).factRegistry),
     profile: normalizeProfile((base as DigestState).profile)
   };
+}
+
+/**
+ * How many inactive (superseded or retired) entries the registry keeps.
+ *
+ * Active entries are never dropped here — normalisation is a load path, and the
+ * caps that bound them are enforced where facts are written. Only history is
+ * bounded, because it grows with every correction and the whole state is stored
+ * as one JSON document.
+ */
+const FACT_REGISTRY_HISTORY_LIMIT = 500;
+
+/**
+ * Keeps every active fact and a bounded, most-recent slice of the history.
+ *
+ * This used to be `.filter(e => !e.supersededBy).slice(-100)`, which deleted the
+ * entire supersession history every time a previous state was loaded. The effect
+ * was that a fact's chain existed only until the next digest ran: the provenance
+ * API could answer "what did you believe before" for a few minutes and then
+ * never again. A cap of 100 also silently discarded active facts once a scope
+ * accumulated enough of them.
+ */
+function normalizeFactRegistry(registry?: FactRegistryEntry[]): FactRegistryEntry[] {
+  const entries = registry ?? [];
+  const active = entries.filter((entry) => !entry.supersededBy && !entry.retiredAt);
+  const history = entries.filter((entry) => entry.supersededBy || entry.retiredAt);
+  const keptHistory =
+    history.length > FACT_REGISTRY_HISTORY_LIMIT
+      ? history.slice(-FACT_REGISTRY_HISTORY_LIMIT)
+      : history;
+  // Preserve the original relative order so a chain reads oldest-first.
+  const kept = new Set([...active, ...keptHistory]);
+  return entries.filter((entry) => kept.has(entry));
 }
 
 /**
