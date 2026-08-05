@@ -1520,6 +1520,7 @@ export function protectedStateMerge(input: {
   documents: MemoryEvent[];
   idFactory?: () => string;
   nowFactory?: () => string;
+  dropLog?: DropRecord[];
 }): DigestState {
   const makeId = input.idFactory ?? createDefaultIdFactory();
   const makeNow = input.nowFactory ?? createDefaultNowFactory();
@@ -1802,7 +1803,7 @@ export function protectedStateMerge(input: {
 
   // Profile facet routing: personal_detail stream events → profile.identity (Stage 1)
   const streamEventsForProfile = input.deltaCandidates.map((d) => d.event);
-  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds, makeId, makeNow);
+  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds, makeId, makeNow, input.dropLog);
 
   next.stableFacts.decisions = [...new Set(next.stableFacts.decisions)];
   next.stableFacts.constraints = [...new Set(next.stableFacts.constraints ?? [])];
@@ -2524,8 +2525,11 @@ export async function runDigestControlPipeline(input: {
   deltas: DeltaCandidate[];
   metrics: Record<string, number>;
   consistency: DigestConsistencyResult;
+  /** Every piece of information this run discarded, and why. */
+  dropLog: DropRecord[];
 }> {
   const metrics: Record<string, number> = {};
+  const dropLog: DropRecord[] = [];
 
   if (input.lastDigest) {
     const hasNewEvents = input.recentEvents.some((event) => event.createdAt.getTime() > input.lastDigest!.createdAt.getTime());
@@ -2559,7 +2563,8 @@ export async function runDigestControlPipeline(input: {
         },
         deltas: [],
         metrics,
-        consistency
+        consistency,
+        dropLog
       };
     }
   }
@@ -2601,7 +2606,8 @@ export async function runDigestControlPipeline(input: {
   const state = protectedStateMerge({
     prevState: input.prevState ?? deriveStateFromDigest(input.lastDigest),
     deltaCandidates: deltas,
-    documents: selection.documents
+    documents: selection.documents,
+    dropLog
   });
   metrics.mergeMs = Date.now() - tMerge;
 
@@ -2631,7 +2637,7 @@ export async function runDigestControlPipeline(input: {
     const streamEvidence: DigestEvidenceRef | null = latestStream
       ? { id: latestStream.id, sourceType: "event" }
       : null;
-    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory());
+    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory(), dropLog);
   }
 
   // Prune forgotten facts BEFORE consolidation: consolidation rewrites/merges fact text,
@@ -2661,7 +2667,8 @@ export async function runDigestControlPipeline(input: {
         userPromptTemplate: input.prompts.consolidateFacetUserPrompt
       },
       makeId: createDefaultIdFactory(),
-      makeNow: createDefaultNowFactory()
+      makeNow: createDefaultNowFactory(),
+      dropLog
     });
   }
 
@@ -2683,5 +2690,5 @@ export async function runDigestControlPipeline(input: {
     pruneForgottenFacts(state, input.forgottenFactKeys);
   }
 
-  return { digest, state, selection, deltas, metrics, consistency };
+  return { digest, state, selection, deltas, metrics, consistency, dropLog };
 }

@@ -128,4 +128,39 @@ describe("createDigestWithSnapshot", () => {
 
     expect(result).toEqual({ id: "digest-uuid-1" });
   });
+
+  it("persists selectionLog so the run's discards stay queryable", async () => {
+    const { prisma, digestCreateArgs } = makePrismaStub();
+    const selectionLog = {
+      rationale: ["selected_docs:2", "dedup_near:evt-9"],
+      drops: [{ reason: "cap_evicted", detail: { facet: "notes", cap: 30 } }]
+    };
+
+    await createDigestWithSnapshot(prisma, {
+      scopeId: "scope-1",
+      summary: "s",
+      changes: "- c",
+      nextSteps: [],
+      state: {},
+      consistency: {},
+      selectionLog
+    });
+
+    expect(digestCreateArgs[0].data.selectionLog).toEqual(selectionLog);
+  });
+
+  it("omits selectionLog when the caller supplies none, so old rows stay distinguishable from empty ones", async () => {
+    const { prisma, digestCreateArgs } = makePrismaStub();
+
+    await createDigestWithSnapshot(prisma, {
+      scopeId: "scope-1",
+      summary: "s",
+      changes: "- c",
+      nextSteps: [],
+      state: {},
+      consistency: {}
+    });
+
+    expect(digestCreateArgs[0].data).not.toHaveProperty("selectionLog");
+  });
 });

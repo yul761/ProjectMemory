@@ -19,6 +19,8 @@ export interface CreateDigestWithSnapshotInput {
   nextSteps: unknown;
   state: unknown;
   consistency: unknown;
+  /** `{ rationale, drops }` — what the selection stage kept and what it discarded. */
+  selectionLog?: unknown;
   rebuildGroupId?: string;
 }
 
@@ -33,6 +35,7 @@ export async function createDigestWithSnapshot(
         summary: input.summary,
         changes: input.changes,
         nextSteps: input.nextSteps,
+        ...(input.selectionLog !== undefined ? { selectionLog: input.selectionLog } : {}),
         ...(input.rebuildGroupId ? { rebuildGroupId: input.rebuildGroupId } : {})
       } as any
     });

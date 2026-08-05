@@ -304,7 +304,8 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     changes: result.digest.changes.map((c) => `- ${c}`).join("\n"),
     nextSteps: result.digest.nextSteps,
     state: result.state,
-    consistency: result.consistency
+    consistency: result.consistency,
+    selectionLog: { rationale: result.selection.rationale, drops: result.dropLog }
   });
 
   logger.info({

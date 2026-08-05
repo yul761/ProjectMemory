@@ -110,6 +110,10 @@ model Digest {
   summary        String
   changes        String
   nextSteps      Json
+  // What the selection stage kept, and what it discarded and why. Nullable:
+  // digests written before this column existed have no log, which is distinct
+  // from "this run discarded nothing".
+  selectionLog   Json?
   rebuildGroupId String?
   createdAt      DateTime @default(now())
 
