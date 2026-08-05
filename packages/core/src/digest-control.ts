@@ -58,15 +58,13 @@ export interface DigestState {
   transitionSummary?: Record<string, number>;
   recentChanges?: DigestStateChange[];
   factRegistry?: FactRegistryEntry[];
-  profile?: {
-    identity?: string[];
-    relationships?: string[];
-    ongoing?: string[];
-    goals?: string[];
-    followUps?: string[];
-    style?: string[];
-    notes?: string[];
-  };
+  /**
+   * Facet name → fact lines. The keys come from the active facet pack, not from
+   * this type: the engine stores and protects facts without knowing what the
+   * facets mean. Existing data (an object keyed by the historical seven facets)
+   * satisfies this shape as-is, so no migration is required.
+   */
+  profile?: Record<string, string[]>;
 }
 
 export interface FactRegistryEntry {
@@ -323,18 +321,25 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
     factRegistry: ((base as DigestState).factRegistry ?? [])
       .filter((entry) => !entry.supersededBy)
       .slice(-100),
-    profile: (base as DigestState).profile
-      ? {
-          identity: ((base as DigestState).profile!.identity ?? []).slice(0, 15),
-          relationships: ((base as DigestState).profile!.relationships ?? []).slice(0, 10),
-          ongoing: ((base as DigestState).profile!.ongoing ?? []).slice(0, 8),
-          goals: ((base as DigestState).profile!.goals ?? []).slice(0, 8),
-          followUps: ((base as DigestState).profile!.followUps ?? []).slice(0, 10),
-          style: ((base as DigestState).profile!.style ?? []).slice(0, 6),
-          notes: ((base as DigestState).profile!.notes ?? []).slice(0, 30)
-        }
-      : undefined
+    profile: normalizeProfile((base as DigestState).profile)
   };
+}
+
+/**
+ * Trims each facet to the active pack's cap.
+ *
+ * This used to enumerate the seven personal facets with their caps inline — a
+ * sixth copy of the ontology — which also meant any facet outside that list was
+ * dropped here even after passing every other gate. It now keeps whatever the
+ * state carries and only enforces capacity.
+ */
+function normalizeProfile(profile?: Record<string, string[]>): Record<string, string[]> | undefined {
+  if (!profile) return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [facet, values] of Object.entries(profile)) {
+    out[facet] = (values ?? []).slice(0, getFacetCap(facet));
+  }
+  return out;
 }
 
 function normalizeTransitionSummary(summary?: Record<string, number> | null) {
@@ -1152,7 +1157,7 @@ function supersedeFact(
 //   stream events cannot override protected entries; cap eviction skips protected.
 // writeProtected=false (VOLATILE): append/dedup via CJK-aware Jaccard; evictable at cap;
 //   no factRegistry entry.
-const PROFILE_FACET_ROUTING: Record<string, { facet: keyof NonNullable<DigestState["profile"]>; cap: number; writeProtected: boolean }> = {
+const PROFILE_FACET_ROUTING: Record<string, { facet: string; cap: number; writeProtected: boolean }> = {
   personal_detail: { facet: "identity", cap: 15, writeProtected: true },
   goal: { facet: "goals", cap: 8, writeProtected: true },
   life_decision: { facet: "goals", cap: 8, writeProtected: true },
