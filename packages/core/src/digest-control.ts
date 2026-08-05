@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { Digest, MemoryEvent, ProjectScope } from "./index";
 import { pruneForgottenFacts } from "./memory-facts";
 import { stripInternalIds, consolidateChangedFacets } from "./facet-consolidation";
+import { recordDrop, type DropRecord } from "./drop-log";
+import { isRegisteredFacet, getFacetCap, isWriteProtectedFacet } from "./facet-registry";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -56,15 +58,13 @@ export interface DigestState {
   transitionSummary?: Record<string, number>;
   recentChanges?: DigestStateChange[];
   factRegistry?: FactRegistryEntry[];
-  profile?: {
-    identity?: string[];
-    relationships?: string[];
-    ongoing?: string[];
-    goals?: string[];
-    followUps?: string[];
-    style?: string[];
-    notes?: string[];
-  };
+  /**
+   * Facet name → fact lines. The keys come from the active facet pack, not from
+   * this type: the engine stores and protects facts without knowing what the
+   * facets mean. Existing data (an object keyed by the historical seven facets)
+   * satisfies this shape as-is, so no migration is required.
+   */
+  profile?: Record<string, string[]>;
 }
 
 export interface FactRegistryEntry {
@@ -77,6 +77,13 @@ export interface FactRegistryEntry {
   evidenceType: "event" | "document";
   supersededBy?: string;
   facet?: string;
+  /**
+   * Set when the fact left the active set without being replaced by a newer
+   * version — capacity eviction, or an explicit forget. Distinct from
+   * `supersededBy`, which points at the fact that took its place.
+   */
+  retiredAt?: string;
+  retiredReason?: string;
 }
 
 export interface DigestEvidenceRef {
@@ -321,18 +328,25 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
     factRegistry: ((base as DigestState).factRegistry ?? [])
       .filter((entry) => !entry.supersededBy)
       .slice(-100),
-    profile: (base as DigestState).profile
-      ? {
-          identity: ((base as DigestState).profile!.identity ?? []).slice(0, 15),
-          relationships: ((base as DigestState).profile!.relationships ?? []).slice(0, 10),
-          ongoing: ((base as DigestState).profile!.ongoing ?? []).slice(0, 8),
-          goals: ((base as DigestState).profile!.goals ?? []).slice(0, 8),
-          followUps: ((base as DigestState).profile!.followUps ?? []).slice(0, 10),
-          style: ((base as DigestState).profile!.style ?? []).slice(0, 6),
-          notes: ((base as DigestState).profile!.notes ?? []).slice(0, 30)
-        }
-      : undefined
+    profile: normalizeProfile((base as DigestState).profile)
   };
+}
+
+/**
+ * Trims each facet to the active pack's cap.
+ *
+ * This used to enumerate the seven personal facets with their caps inline — a
+ * sixth copy of the ontology — which also meant any facet outside that list was
+ * dropped here even after passing every other gate. It now keeps whatever the
+ * state carries and only enforces capacity.
+ */
+function normalizeProfile(profile?: Record<string, string[]>): Record<string, string[]> | undefined {
+  if (!profile) return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [facet, values] of Object.entries(profile)) {
+    out[facet] = (values ?? []).slice(0, getFacetCap(facet));
+  }
+  return out;
 }
 
 function normalizeTransitionSummary(summary?: Record<string, number> | null) {
@@ -1088,7 +1102,43 @@ function isInFactRegistry(state: DigestState, content: string): boolean {
 }
 
 export function getActiveFactRegistry(state: DigestState): FactRegistryEntry[] {
-  return (state.factRegistry ?? []).filter((entry) => !entry.supersededBy);
+  return (state.factRegistry ?? []).filter((entry) => !entry.supersededBy && !entry.retiredAt);
+}
+
+/**
+ * Retire a fact instead of deleting it.
+ *
+ * Capacity eviction used to `splice()` the registry record out entirely, which
+ * destroyed the very audit chain that supersession exists to provide: the fact
+ * had been believed, and then there was no record it ever had been. A retired
+ * fact stays on the record with a timestamp and a reason; it simply stops being
+ * active.
+ */
+export function retireFact(
+  state: DigestState,
+  content: string,
+  reason: string,
+  makeNow: () => string = createDefaultNowFactory(),
+  /**
+   * `exact` must be used wherever the fact was stored verbatim with exact-match
+   * dedup — notably notes. The fuzzy matcher strips short numeric tokens, so
+   * "API v1 key…" and "API v2 key…" look identical to it and the wrong entry
+   * would be retired.
+   */
+  options?: { exact?: boolean }
+): void {
+  if (!state.factRegistry) return;
+  const normalizeExact = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+  const matches = options?.exact
+    ? (entryContent: string) => normalizeExact(entryContent) === normalizeExact(content)
+    : (entryContent: string) => sameFactCjkAware(entryContent, content, 0.6);
+
+  const target = state.factRegistry.find(
+    (entry) => !entry.supersededBy && !entry.retiredAt && matches(entry.content)
+  );
+  if (!target) return;
+  target.retiredAt = makeNow();
+  target.retiredReason = reason;
 }
 
 function promoteToFactRegistry(
@@ -1150,7 +1200,7 @@ function supersedeFact(
 //   stream events cannot override protected entries; cap eviction skips protected.
 // writeProtected=false (VOLATILE): append/dedup via CJK-aware Jaccard; evictable at cap;
 //   no factRegistry entry.
-const PROFILE_FACET_ROUTING: Record<string, { facet: keyof NonNullable<DigestState["profile"]>; cap: number; writeProtected: boolean }> = {
+const PROFILE_FACET_ROUTING: Record<string, { facet: string; cap: number; writeProtected: boolean }> = {
   personal_detail: { facet: "identity", cap: 15, writeProtected: true },
   goal: { facet: "goals", cap: 8, writeProtected: true },
   life_decision: { facet: "goals", cap: 8, writeProtected: true },
@@ -1165,7 +1215,8 @@ function mergeProfileFacets(
   events: MemoryEvent[],
   prevFactRegistryIds: Set<string>,
   makeId: () => string,
-  makeNow: () => string = createDefaultNowFactory()
+  makeNow: () => string = createDefaultNowFactory(),
+  dropLog?: DropRecord[]
 ): void {
   // Lazy-init guard: only initialise profile if at least one event is routable
   if (!events.some((e) => e.classifiedType != null && e.classifiedType in PROFILE_FACET_ROUTING)) return;
@@ -1208,11 +1259,22 @@ function mergeProfileFacets(
       if (writeProtected) {
         // Evict first unprotected entry; if all protected, discard incoming
         const unprotectedIdx = facetFacts.findIndex((fact) => !isProtectedInFacet(facet, fact));
-        if (unprotectedIdx === -1) continue;
-        facetFacts.splice(unprotectedIdx, 1);
+        if (unprotectedIdx === -1) {
+          // The "no drift" guarantee is being paid for with the "no forgetting"
+          // guarantee here: the incoming fact loses to the protected ones.
+          if (dropLog) recordDrop(dropLog, "cap_rejected_incoming", { facet, value: incomingValue, cap });
+          continue;
+        }
+        const [evictedProtectedPath] = facetFacts.splice(unprotectedIdx, 1);
+        if (evictedProtectedPath && dropLog) {
+          recordDrop(dropLog, "cap_evicted", { facet, value: evictedProtectedPath, cap });
+        }
       } else {
         // Volatile: evict first (index 0 = weakest/oldest)
-        facetFacts.splice(0, 1);
+        const [evictedVolatile] = facetFacts.splice(0, 1);
+        if (evictedVolatile && dropLog) {
+          recordDrop(dropLog, "cap_evicted", { facet, value: evictedVolatile, cap });
+        }
       }
     }
 
@@ -1226,10 +1288,6 @@ function mergeProfileFacets(
   }
 }
 
-const DISPLAY_FACETS = new Set(["identity", "style", "goals", "relationships", "followUps", "ongoing", "notes"]);
-const PROFILE_FACET_CAPS: Record<string, number> = {
-  identity: 15, relationships: 10, ongoing: 8, goals: 8, followUps: 10, style: 6, notes: 30
-};
 
 export function applyProfileFactsFromDigest(
   state: DigestState,
@@ -1237,7 +1295,8 @@ export function applyProfileFactsFromDigest(
   documents: MemoryEvent[],
   streamEvidence: DigestEvidenceRef | null,
   makeId: () => string,
-  makeNow: () => string = createDefaultNowFactory()
+  makeNow: () => string = createDefaultNowFactory(),
+  dropLog?: DropRecord[]
 ): void {
   if (profileFacts.length === 0) return;
   if (!state.profile) state.profile = {};
@@ -1250,14 +1309,18 @@ export function applyProfileFactsFromDigest(
   for (const pf of profileFacts) {
     const facet = pf.facet.trim();
     const value = stripInternalIds(pf.value.trim());
-    if (!value || !DISPLAY_FACETS.has(facet)) continue;
+    if (!value) continue;
+    if (!isRegisteredFacet(facet)) {
+      if (dropLog) recordDrop(dropLog, "facet_not_registered", { facet, value });
+      continue;
+    }
 
     // identity is document-authority; conversational facets prefer the stream-event ref
     // (it carries the actual conversation turn); fall back to a doc ref if no stream ref.
     const evidence: DigestEvidenceRef | null =
       facet === "identity" ? docEvidence : (streamEvidence ?? docEvidence);
     const authority = evidence?.sourceType === "document" ? 0.85 : 0.6;
-    const cap = PROFILE_FACET_CAPS[facet] ?? 8;
+    const cap = getFacetCap(facet);
 
     const profileMap = state.profile as Record<string, string[]>;
     if (!profileMap[facet]) profileMap[facet] = [];
@@ -1287,14 +1350,16 @@ export function applyProfileFactsFromDigest(
     }
 
     if (facetFacts.length >= cap) {
-      if (facet === "identity") continue; // identity is high-value; don't evict to add
-      const [evicted] = facetFacts.splice(0, 1); // volatile facets: evict oldest (index 0)
-      if (evicted && state.factRegistry) {
-        const ri = state.factRegistry.findIndex(
-          (e) => e.type === "profile" && e.facet === facet && !e.supersededBy && sameFactCjkAware(e.content, evicted, 0.6)
-        );
-        if (ri !== -1) state.factRegistry.splice(ri, 1);
+      if (isWriteProtectedFacet(facet)) {
+        // Protected facets are high-value; don't evict one to make room.
+        if (dropLog) recordDrop(dropLog, "cap_rejected_incoming", { facet, value, cap });
+        continue;
       }
+      const [evicted] = facetFacts.splice(0, 1); // volatile facets: evict oldest (index 0)
+      if (evicted && dropLog) recordDrop(dropLog, "cap_evicted", { facet, value: evicted, cap });
+      // Retire, don't delete: the fact stops being active but the record of
+      // having believed it survives.
+      if (evicted) retireFact(state, evicted, "cap_evicted", makeNow);
     }
 
     facetFacts.push(value);
@@ -1342,18 +1407,13 @@ export function addNoteFact(
   if (!profileMap.notes) profileMap.notes = [];
   const notes = profileMap.notes;
 
-  // Cap enforcement: evict oldest entry (index 0) + its factRegistry record.
-  const cap = PROFILE_FACET_CAPS.notes ?? 30;
+  // Cap enforcement: evict the oldest entry (index 0) and retire its registry
+  // record. Retiring rather than deleting keeps the audit chain intact — the
+  // note stops being active, but the record that it was once held remains.
+  const cap = getFacetCap("notes");
   if (notes.length >= cap) {
     const [evicted] = notes.splice(0, 1);
-    if (evicted && state.factRegistry) {
-      // Use exact match here — the evicted note was stored verbatim and its
-      // registry entry was added with exact-match semantics.
-      const ri = state.factRegistry.findIndex(
-        (e) => e.type === "profile" && e.facet === "notes" && !e.supersededBy && norm(e.content) === norm(evicted)
-      );
-      if (ri !== -1) state.factRegistry.splice(ri, 1);
-    }
+    if (evicted) retireFact(state, evicted, "cap_evicted", makeNow, { exact: true });
   }
 
   notes.push(value);
@@ -1497,6 +1557,7 @@ export function protectedStateMerge(input: {
   documents: MemoryEvent[];
   idFactory?: () => string;
   nowFactory?: () => string;
+  dropLog?: DropRecord[];
 }): DigestState {
   const makeId = input.idFactory ?? createDefaultIdFactory();
   const makeNow = input.nowFactory ?? createDefaultNowFactory();
@@ -1779,7 +1840,7 @@ export function protectedStateMerge(input: {
 
   // Profile facet routing: personal_detail stream events → profile.identity (Stage 1)
   const streamEventsForProfile = input.deltaCandidates.map((d) => d.event);
-  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds, makeId, makeNow);
+  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds, makeId, makeNow, input.dropLog);
 
   next.stableFacts.decisions = [...new Set(next.stableFacts.decisions)];
   next.stableFacts.constraints = [...new Set(next.stableFacts.constraints ?? [])];
@@ -2501,8 +2562,11 @@ export async function runDigestControlPipeline(input: {
   deltas: DeltaCandidate[];
   metrics: Record<string, number>;
   consistency: DigestConsistencyResult;
+  /** Every piece of information this run discarded, and why. */
+  dropLog: DropRecord[];
 }> {
   const metrics: Record<string, number> = {};
+  const dropLog: DropRecord[] = [];
 
   if (input.lastDigest) {
     const hasNewEvents = input.recentEvents.some((event) => event.createdAt.getTime() > input.lastDigest!.createdAt.getTime());
@@ -2536,7 +2600,8 @@ export async function runDigestControlPipeline(input: {
         },
         deltas: [],
         metrics,
-        consistency
+        consistency,
+        dropLog
       };
     }
   }
@@ -2578,7 +2643,8 @@ export async function runDigestControlPipeline(input: {
   const state = protectedStateMerge({
     prevState: input.prevState ?? deriveStateFromDigest(input.lastDigest),
     deltaCandidates: deltas,
-    documents: selection.documents
+    documents: selection.documents,
+    dropLog
   });
   metrics.mergeMs = Date.now() - tMerge;
 
@@ -2608,7 +2674,7 @@ export async function runDigestControlPipeline(input: {
     const streamEvidence: DigestEvidenceRef | null = latestStream
       ? { id: latestStream.id, sourceType: "event" }
       : null;
-    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory());
+    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory(), dropLog);
   }
 
   // Prune forgotten facts BEFORE consolidation: consolidation rewrites/merges fact text,
@@ -2638,7 +2704,8 @@ export async function runDigestControlPipeline(input: {
         userPromptTemplate: input.prompts.consolidateFacetUserPrompt
       },
       makeId: createDefaultIdFactory(),
-      makeNow: createDefaultNowFactory()
+      makeNow: createDefaultNowFactory(),
+      dropLog
     });
   }
 
@@ -2660,5 +2727,5 @@ export async function runDigestControlPipeline(input: {
     pruneForgottenFacts(state, input.forgottenFactKeys);
   }
 
-  return { digest, state, selection, deltas, metrics, consistency };
+  return { digest, state, selection, deltas, metrics, consistency, dropLog };
 }

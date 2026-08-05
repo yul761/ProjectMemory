@@ -9,13 +9,15 @@ import {
   runDigestControlPipeline,
   selectWorkingMemoryEvents,
   computeDriftMetrics,
-  getDomainConfig
+  getDomainConfig,
+  buildFacetPromptSection,
+  overrideFacetCaps
 } from "@statecore/core";
 import type { DigestState, DriftMetrics, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import {
   digestClassifySystemPrompt,
   digestClassifyUserPrompt,
-  digestStage2SystemPrompt,
+  buildDigestStage2SystemPrompt,
   digestStage2UserPrompt,
   consolidateFacetSystemPrompt,
   consolidateFacetUserPrompt
@@ -31,6 +33,9 @@ import { runExpireEventsJob } from "./expire-events";
 import { runGcDigestsJob, runGcJobLogsJob, runGcRemindersJob } from "./data-gc";
 import { createDigestWithSnapshot } from "./digest-write";
 import Redis from "ioredis";
+
+// Applied once at boot, before any digest job can read a cap.
+overrideFacetCaps(workerEnv.digestFacetCaps);
 
 const connection = {
   url: workerEnv.redisUrl
@@ -275,7 +280,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     recentEvents,
     llm,
     prompts: {
-      digestStage2SystemPrompt,
+      digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection()),
       digestStage2UserPrompt,
       digestClassifySystemPrompt,
       digestClassifyUserPrompt,
@@ -304,7 +309,8 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     changes: result.digest.changes.map((c) => `- ${c}`).join("\n"),
     nextSteps: result.digest.nextSteps,
     state: result.state,
-    consistency: result.consistency
+    consistency: result.consistency,
+    selectionLog: { rationale: result.selection.rationale, drops: result.dropLog }
   });
 
   logger.info({
@@ -443,7 +449,7 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
       recentEvents: chunk,
       llm,
       prompts: {
-        digestStage2SystemPrompt,
+        digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection()),
         digestStage2UserPrompt,
         digestClassifySystemPrompt,
         digestClassifyUserPrompt,

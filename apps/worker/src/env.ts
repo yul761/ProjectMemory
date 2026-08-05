@@ -57,6 +57,10 @@ const envSchema = z.object({
   DIGEST_CHAR_BUDGET_TOTAL: z.string().optional(),
   DIGEST_EVENT_BUDGET_DOCS: z.string().optional(),
   DIGEST_EVENT_BUDGET_STREAM: z.string().optional(),
+  // Per-facet capacity overrides, e.g. "identity=60,notes=100". Capacity is an
+  // operational knob (a resume carries far more than 15 identity facts), not an
+  // ontology decision, so it is tunable without replacing the facet pack.
+  DIGEST_FACET_CAPS: z.string().optional(),
   DIGEST_NOVELTY_THRESHOLD: z.string().optional(),
   DIGEST_MAX_RETRIES: z.string().optional(),
   DIGEST_USE_LLM_CLASSIFIER: z.string().optional(),
@@ -82,6 +86,22 @@ if (!parsed.success) {
 
 const env = parsed.data;
 const toBool = (value?: string) => value === "true";
+
+/**
+ * Parses `"identity=60,notes=100"` into `{ identity: 60, notes: 100 }`.
+ * Malformed pairs are skipped rather than throwing — a typo in one facet cap
+ * must not stop the worker from booting.
+ */
+function parseFacetCaps(raw?: string): Record<string, number> {
+  if (!raw) return {};
+  const out: Record<string, number> = {};
+  for (const pair of raw.split(",")) {
+    const [name, value] = pair.split("=");
+    const cap = Number(value);
+    if (name?.trim() && Number.isFinite(cap) && cap > 0) out[name.trim()] = cap;
+  }
+  return out;
+}
 const clean = (value?: string) => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
@@ -161,6 +181,7 @@ export const workerEnv = {
   digestCharBudgetTotal: Number(env.DIGEST_CHAR_BUDGET_TOTAL || 240_000),
   digestEventBudgetDocs: Number(env.DIGEST_EVENT_BUDGET_DOCS || 10),
   digestEventBudgetStream: Number(env.DIGEST_EVENT_BUDGET_STREAM || 30),
+  digestFacetCaps: parseFacetCaps(env.DIGEST_FACET_CAPS),
   digestNoveltyThreshold: Number(env.DIGEST_NOVELTY_THRESHOLD || 0.15),
   digestMaxRetries: Number(env.DIGEST_MAX_RETRIES || 1),
   digestUseLlmClassifier: toBool(env.DIGEST_USE_LLM_CLASSIFIER),

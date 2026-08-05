@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { sameFactCjkAware, type DigestState, type FactRegistryEntry } from "./digest-control";
+import { recordDrop, type DropRecord } from "./drop-log";
+import { getFacetDescription, isRegisteredFacet, listFacets } from "./facet-registry";
 
 export interface ConsolidatedFact { text: string; mergedFrom: number[] }
 
@@ -114,38 +116,29 @@ type ConsolidatePrompts = { systemPrompt: string; userPromptTemplate: string };
 
 // Facet semantics live in core (alongside DISPLAY_FACETS in digest-control.ts). The prompt
 // carries a {{facetDescription}} slot the caller fills from this map.
-export const FACET_DESCRIPTIONS: Record<string, string> = {
-  identity: "durable personal facts (工作经历, 教育, 技能, 联系方式, 居住地, 身高体重).",
-  style: "tastes, communication preferences, and 行事作风 — working style, decision patterns, standards, values.",
-  goals: "things the user wants to achieve.",
-  relationships: "important people (and pets) in the user's life.",
-  followUps: "commitments or things to remember/do, with any date/time.",
-  ongoing: "projects or activities in progress.",
-  notes: "durable, useful non-personal information worth keeping long-term (product/project details, decisions, processes, facts to remember)."
-};
-
-export const CONSOLIDATION_DISPLAY_FACETS = ["identity", "style", "goals", "relationships", "followUps", "ongoing", "notes"];
-
 async function consolidateOne(state: DigestState, facet: string, llm: LlmLike, prompts: ConsolidatePrompts, makeId: () => string, makeNow?: () => string): Promise<boolean> {
   const profileMap = (state.profile ?? {}) as Record<string, string[]>;
   const items = profileMap[facet] ?? [];
   const siblings: Record<string, string[]> = {};
-  for (const f of CONSOLIDATION_DISPLAY_FACETS) {
+  for (const f of listFacets()) {
     if (f !== facet && (profileMap[f]?.length ?? 0) > 0) siblings[f] = profileMap[f];
   }
   const result = await consolidateFacetLlm({
-    facet, description: FACET_DESCRIPTIONS[facet] ?? "", items, siblings, llm,
+    facet, description: getFacetDescription(facet), items, siblings, llm,
     systemPrompt: prompts.systemPrompt, userPromptTemplate: prompts.userPromptTemplate
   });
   if (!result) return false;
   return applyFacetConsolidation(state, facet, items, result, makeId, makeNow);
 }
 
-async function runConsolidation(state: DigestState, facets: string[], llm: LlmLike, prompts: ConsolidatePrompts, makeId: () => string, makeNow: (() => string) | undefined, minItems: number): Promise<string[]> {
+async function runConsolidation(state: DigestState, facets: string[], llm: LlmLike, prompts: ConsolidatePrompts, makeId: () => string, makeNow: (() => string) | undefined, minItems: number, dropLog?: DropRecord[]): Promise<string[]> {
   const profileMap = (state.profile ?? {}) as Record<string, string[]>;
   const changed: string[] = [];
   for (const facet of facets) {
-    if (!CONSOLIDATION_DISPLAY_FACETS.includes(facet)) continue;
+    if (!isRegisteredFacet(facet)) {
+      if (dropLog) recordDrop(dropLog, "consolidation_skipped", { facet });
+      continue;
+    }
     if ((profileMap[facet]?.length ?? 0) < minItems) continue;
     try {
       if (await consolidateOne(state, facet, llm, prompts, makeId, makeNow)) changed.push(facet);
@@ -156,12 +149,12 @@ async function runConsolidation(state: DigestState, facets: string[], llm: LlmLi
   return changed;
 }
 
-export function consolidateChangedFacets(input: { state: DigestState; changedFacets: string[]; llm: LlmLike; prompts: ConsolidatePrompts; makeId: () => string; makeNow?: () => string; minItems?: number }): Promise<string[]> {
-  return runConsolidation(input.state, input.changedFacets, input.llm, input.prompts, input.makeId, input.makeNow, input.minItems ?? 4);
+export function consolidateChangedFacets(input: { state: DigestState; changedFacets: string[]; llm: LlmLike; prompts: ConsolidatePrompts; makeId: () => string; makeNow?: () => string; minItems?: number; dropLog?: DropRecord[] }): Promise<string[]> {
+  return runConsolidation(input.state, input.changedFacets, input.llm, input.prompts, input.makeId, input.makeNow, input.minItems ?? 4, input.dropLog);
 }
 
 export function consolidateAllProfileFacets(input: { state: DigestState; llm: LlmLike; prompts: ConsolidatePrompts; makeId: () => string; makeNow?: () => string; minItems?: number }): Promise<string[]> {
-  return runConsolidation(input.state, CONSOLIDATION_DISPLAY_FACETS, input.llm, input.prompts, input.makeId, input.makeNow, input.minItems ?? 2);
+  return runConsolidation(input.state, listFacets(), input.llm, input.prompts, input.makeId, input.makeNow, input.minItems ?? 2);
 }
 
 /**

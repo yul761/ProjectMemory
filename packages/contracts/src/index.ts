@@ -130,7 +130,11 @@ export const FactRegistryEntrySchema = z.object({
   evidenceId: z.string(),
   evidenceType: z.enum(["event", "document"]),
   supersededBy: z.string().optional(),
-  facet: z.string().optional()
+  facet: z.string().optional(),
+  // Additive and optional: a fact that left the active set without a replacement
+  // (capacity eviction, explicit forget). Absent on every pre-existing entry.
+  retiredAt: z.string().optional(),
+  retiredReason: z.string().optional()
 });
 
 export const RetrieveOutput = z.object({

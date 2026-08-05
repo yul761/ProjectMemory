@@ -79,3 +79,67 @@ describe("computeDriftMetrics", () => {
     expect(result.stabilityScore).toBeCloseTo(0.75);
   });
 });
+
+describe("computeDriftMetrics — fact registry observation", () => {
+  // The profile facets are where user facts actually live. Drift measured only
+  // over stableFacts could not see them at all, so "no drift" was a claim about
+  // a data model the facts were not in.
+  function withFacts(entries: Array<Record<string, unknown>>): DigestState {
+    return { stableFacts: {}, workingNotes: {}, todos: [], factRegistry: entries } as unknown as DigestState;
+  }
+
+  const fact = (over: Record<string, unknown> = {}) => ({
+    id: "a",
+    content: "旧",
+    type: "profile",
+    confidence: 0.7,
+    addedAt: "t0",
+    evidenceId: "e",
+    evidenceType: "event",
+    ...over
+  });
+
+  it("counts added, retired and superseded facts", () => {
+    const before = withFacts([fact()]);
+    const after = withFacts([
+      fact({ retiredAt: "t1", retiredReason: "cap_evicted" }),
+      fact({ id: "b", content: "新", addedAt: "t1" })
+    ]);
+
+    const m = computeDriftMetrics(before, after);
+    expect(m.factsAdded).toBe(1);
+    expect(m.factsRetired).toBe(1);
+    expect(m.factsSuperseded).toBe(0);
+  });
+
+  it("counts a supersession without counting it as a retirement", () => {
+    const before = withFacts([fact()]);
+    const after = withFacts([fact({ supersededBy: "b" }), fact({ id: "b", content: "修正后", addedAt: "t1" })]);
+
+    const m = computeDriftMetrics(before, after);
+    expect(m.factsSuperseded).toBe(1);
+    expect(m.factsRetired).toBe(0);
+    expect(m.factsAdded).toBe(1);
+  });
+
+  it("does not re-count a fact that was already retired before this run", () => {
+    const before = withFacts([fact({ retiredAt: "t1", retiredReason: "cap_evicted" })]);
+    const after = withFacts([fact({ retiredAt: "t1", retiredReason: "cap_evicted" })]);
+
+    expect(computeDriftMetrics(before, after).factsRetired).toBe(0);
+  });
+
+  it("treats every fact as added when there is no previous state", () => {
+    const m = computeDriftMetrics(null, withFacts([fact(), fact({ id: "b" })]));
+    expect(m.factsAdded).toBe(2);
+    expect(m.factsRetired).toBe(0);
+    expect(m.factsSuperseded).toBe(0);
+  });
+
+  it("reports zeros for a state with no fact registry at all", () => {
+    const m = computeDriftMetrics(base, base);
+    expect(m.factsAdded).toBe(0);
+    expect(m.factsRetired).toBe(0);
+    expect(m.factsSuperseded).toBe(0);
+  });
+});
