@@ -2131,9 +2131,28 @@ function alignDigestWithState(output: DigestOutput, state: DigestState): DigestO
   };
 }
 
+/**
+ * The tokens worth matching a fact by.
+ *
+ * tokenize() puts ASCII tokens ahead of CJK ones, so taking the first N off the
+ * raw list handed date and number tokens ("2019-2022") top billing. Those never
+ * appear verbatim in a Chinese summary, so `every()` was false and the check
+ * silently never fired — for protected facts, which are full of dates. The
+ * defence was dead on exactly the facts it existed to protect.
+ *
+ * Purely numeric tokens are dropped: they are the least discriminating part of a
+ * fact ("2019-2022" identifies nothing) and the most likely to be paraphrased
+ * away. Everything else is kept, so this only removes false negatives — it does
+ * not loosen what counts as a mention.
+ */
+function factKeyTokens(fact: string, tokenCount: number): string[] {
+  const meaningful = tokenize(fact).filter((token) => !/^[\d\-_/.]+$/.test(token));
+  return meaningful.slice(0, tokenCount);
+}
+
 function mentionsFactWithNegation(text: string, fact: string, negationPattern: RegExp) {
   const normalized = text.toLowerCase();
-  const keyTokens = tokenize(fact).slice(0, 4);
+  const keyTokens = factKeyTokens(fact, 4);
   if (!keyTokens.length) return false;
   const mentionsFact = keyTokens.every((token) => normalized.includes(token));
   return mentionsFact && negationPattern.test(normalized);
@@ -2141,7 +2160,7 @@ function mentionsFactWithNegation(text: string, fact: string, negationPattern: R
 
 function mentionsFact(text: string, fact: string, tokenCount = 3) {
   const normalized = text.toLowerCase();
-  const keyTokens = tokenize(fact).slice(0, tokenCount);
+  const keyTokens = factKeyTokens(fact, tokenCount);
   if (!keyTokens.length) return false;
   return keyTokens.every((token) => normalized.includes(token));
 }
@@ -2275,7 +2294,9 @@ export function consistencyCheck(input: {
     if (checkedFacets.has(facetName)) continue;
     checkedFacets.add(facetName);
     const protectedFacts = (input.protectedState.factRegistry ?? [])
-      .filter((e) => !e.supersededBy && e.facet === facetName)
+      // A retired fact is no longer believed; failing a digest over a belief the
+      // engine has already abandoned would be a false positive.
+      .filter((e) => !e.supersededBy && !e.retiredAt && e.facet === facetName)
       .map((e) => e.content);
     for (const fact of protectedFacts) {
       if (mentionsFactWithNegation(combinedText, fact, profileNegation)) {
