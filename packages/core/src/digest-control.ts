@@ -3,7 +3,7 @@ import type { Digest, MemoryEvent, ProjectScope } from "./index";
 import { pruneForgottenFacts } from "./memory-facts";
 import { stripInternalIds, consolidateChangedFacets } from "./facet-consolidation";
 import { recordDrop, type DropRecord } from "./drop-log";
-import { isRegisteredFacet, getFacetCap, isWriteProtectedFacet, isDocumentAuthorityFacet, getDefaultFacetPack, type FacetPack } from "./facet-registry";
+import { isRegisteredFacet, getFacetCap, isWriteProtectedFacet, isDocumentAuthorityFacet, resolveFacetRoute, writeProtectedFacets, getDefaultFacetPack, type FacetPack } from "./facet-registry";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1213,31 +1213,17 @@ function supersedeFact(
   state.factRegistry.push(newEntry);
 }
 
-// Facet routing table for Stage 2 (extends Stage 1).
-// writeProtected=true: entry is promoted to factRegistry with `facet` tag;
-//   stream events cannot override protected entries; cap eviction skips protected.
-// writeProtected=false (VOLATILE): append/dedup via CJK-aware Jaccard; evictable at cap;
-//   no factRegistry entry.
-const PROFILE_FACET_ROUTING: Record<string, { facet: string; cap: number; writeProtected: boolean }> = {
-  personal_detail: { facet: "identity", cap: 15, writeProtected: true },
-  goal: { facet: "goals", cap: 8, writeProtected: true },
-  life_decision: { facet: "goals", cap: 8, writeProtected: true },
-  experience: { facet: "ongoing", cap: 8, writeProtected: false },
-  person_note: { facet: "relationships", cap: 10, writeProtected: false },
-  commitment: { facet: "followUps", cap: 10, writeProtected: false },
-  style_preference: { facet: "style", cap: 6, writeProtected: false }
-};
-
 function mergeProfileFacets(
   state: DigestState,
   events: MemoryEvent[],
   prevFactRegistryIds: Set<string>,
   makeId: () => string,
   makeNow: () => string = createDefaultNowFactory(),
-  dropLog?: DropRecord[]
+  dropLog?: DropRecord[],
+  pack: FacetPack = getDefaultFacetPack()
 ): void {
   // Lazy-init guard: only initialise profile if at least one event is routable
-  if (!events.some((e) => e.classifiedType != null && e.classifiedType in PROFILE_FACET_ROUTING)) return;
+  if (!events.some((e) => resolveFacetRoute(pack, e.classifiedType) !== undefined)) return;
   if (!state.profile) state.profile = {};
 
   function isProtectedInFacet(facetName: string, fact: string): boolean {
@@ -1251,7 +1237,7 @@ function mergeProfileFacets(
   }
 
   for (const evt of events) {
-    const route = evt.classifiedType != null ? PROFILE_FACET_ROUTING[evt.classifiedType] : undefined;
+    const route = resolveFacetRoute(pack, evt.classifiedType);
     if (!route) continue;
     const incomingValue = evt.content.trim();
     if (!incomingValue) continue;
@@ -1578,6 +1564,7 @@ export function protectedStateMerge(input: {
   idFactory?: () => string;
   nowFactory?: () => string;
   dropLog?: DropRecord[];
+  pack?: FacetPack;
 }): DigestState {
   const makeId = input.idFactory ?? createDefaultIdFactory();
   const makeNow = input.nowFactory ?? createDefaultNowFactory();
@@ -1860,7 +1847,7 @@ export function protectedStateMerge(input: {
 
   // Profile facet routing: personal_detail stream events → profile.identity (Stage 1)
   const streamEventsForProfile = input.deltaCandidates.map((d) => d.event);
-  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds, makeId, makeNow, input.dropLog);
+  mergeProfileFacets(next, streamEventsForProfile, prevFactRegistryIds, makeId, makeNow, input.dropLog, input.pack ?? getDefaultFacetPack());
 
   next.stableFacts.decisions = [...new Set(next.stableFacts.decisions)];
   next.stableFacts.constraints = [...new Set(next.stableFacts.constraints ?? [])];
@@ -2147,6 +2134,7 @@ export function consistencyCheck(input: {
   output: DigestOutput;
   previousDigest?: Digest | null;
   protectedState: DigestState;
+  pack?: FacetPack;
 }): DigestConsistencyResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -2244,15 +2232,13 @@ export function consistencyCheck(input: {
   }
 
   // Profile write-protected facets: check identity and goals facts in factRegistry.
-  // Generalised to iterate all write-protected facets so adding new ones (Stage 3+) requires
-  // only a PROFILE_FACET_ROUTING entry — no additional consistency-check wiring.
+  // Iterates whatever the tenant's pack marks write-protected, so a new protected
+  // facet needs no additional consistency-check wiring.
   // CJK chars have no ASCII word boundaries, so list them without \b anchors.
   const profileNegation = /\b(not|no longer|incorrect|wrong|remove|delete|revoke|cancel|never)\b|放弃|移除|错误|不再/;
-  const writeProtectedFacets = Object.values(PROFILE_FACET_ROUTING)
-    .filter((r) => r.writeProtected)
-    .map((r) => r.facet);
+  const protectedFacets = writeProtectedFacets(input.pack ?? getDefaultFacetPack());
   const checkedFacets = new Set<string>();
-  for (const facetName of writeProtectedFacets) {
+  for (const facetName of protectedFacets) {
     if (checkedFacets.has(facetName)) continue;
     checkedFacets.add(facetName);
     const protectedFacts = (input.protectedState.factRegistry ?? [])
@@ -2676,7 +2662,8 @@ export async function runDigestControlPipeline(input: {
     prevState: input.prevState ?? deriveStateFromDigest(input.lastDigest),
     deltaCandidates: deltas,
     documents: selection.documents,
-    dropLog
+    dropLog,
+    pack
   });
   metrics.mergeMs = Date.now() - tMerge;
 
@@ -2750,7 +2737,8 @@ export async function runDigestControlPipeline(input: {
   const consistency = consistencyCheck({
     output: digest,
     previousDigest: input.lastDigest,
-    protectedState: state
+    protectedState: state,
+    pack
   });
 
   // Defensive second prune: applyProfileFactsFromDigest (and any future post-merge mutation)

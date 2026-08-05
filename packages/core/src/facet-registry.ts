@@ -28,6 +28,16 @@ export interface FacetDefinition {
    * ref when no document exists.
    */
   documentAuthority?: boolean;
+  /**
+   * Classifier entity types (DomainConfig.entityTypes) whose events land in this
+   * facet on the Stage 1 path.
+   *
+   * This routing used to be a standalone table keyed by the *personal* domain's
+   * entity types, carrying its own copy of every facet's cap and write-protection
+   * flag. Declaring it on the facet keeps the destination and its rules together
+   * and removes the duplicate.
+   */
+  routesFrom?: string[];
   /** Shown to the extraction LLM; also used as the consolidation hint. */
   description: string;
 }
@@ -54,6 +64,7 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
     {
       name: "followUps",
       cap: 10,
+      routesFrom: ["commitment"],
       writeProtected: false,
       displayGroup: "Schedule",
       description:
@@ -62,6 +73,7 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
     {
       name: "relationships",
       cap: 10,
+      routesFrom: ["person_note"],
       writeProtected: false,
       displayGroup: "People",
       description:
@@ -70,6 +82,7 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
     {
       name: "style",
       cap: 6,
+      routesFrom: ["style_preference"],
       writeProtected: false,
       displayGroup: "Style",
       description:
@@ -78,6 +91,7 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
     {
       name: "goals",
       cap: 8,
+      routesFrom: ["goal", "life_decision"],
       writeProtected: true,
       displayGroup: "Projects",
       description: 'things the user wants to achieve (e.g. "想减肥", "7 月上线 Remi").'
@@ -85,6 +99,7 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
     {
       name: "ongoing",
       cap: 8,
+      routesFrom: ["experience"],
       writeProtected: false,
       displayGroup: "Projects",
       description: 'projects or activities in progress (e.g. "在做盲盒生意", "在学西班牙语").'
@@ -100,6 +115,7 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
     {
       name: "identity",
       cap: 15,
+      routesFrom: ["personal_detail"],
       writeProtected: true,
       displayGroup: null,
       documentAuthority: true,
@@ -177,6 +193,26 @@ export function isDocumentAuthorityFacet(pack: FacetPack, facet: string): boolea
   return indexPack(pack).get(facet)?.documentAuthority === true;
 }
 
+/**
+ * Where a classified event lands, if anywhere. Returns the destination facet
+ * together with its rules, read from the facet itself so there is only one
+ * place that says what a facet's cap and protection are.
+ */
+export function resolveFacetRoute(
+  pack: FacetPack,
+  classifiedType: string | null | undefined
+): { facet: string; cap: number; writeProtected: boolean } | undefined {
+  if (!classifiedType) return undefined;
+  const definition = pack.facets.find((f) => f.routesFrom?.includes(classifiedType));
+  if (!definition) return undefined;
+  return { facet: definition.name, cap: definition.cap, writeProtected: definition.writeProtected };
+}
+
+/** Facets whose contents stream events may not override. */
+export function writeProtectedFacets(pack: FacetPack): string[] {
+  return pack.facets.filter((f) => f.writeProtected).map((f) => f.name);
+}
+
 export function getFacetDescription(pack: FacetPack, facet: string): string {
   return indexPack(pack).get(facet)?.description ?? "";
 }
@@ -223,6 +259,9 @@ export function parseFacetPack(raw: unknown): { pack: FacetPack; usedDefault: bo
       cap: typeof f.cap === "number" && Number.isFinite(f.cap) && f.cap > 0 ? f.cap : DEFAULT_CAP,
       writeProtected: f.writeProtected === true,
       documentAuthority: f.documentAuthority === true,
+      ...(Array.isArray(f.routesFrom)
+        ? { routesFrom: f.routesFrom.filter((t): t is string => typeof t === "string") }
+        : {}),
       displayGroup: typeof f.displayGroup === "string" && f.displayGroup ? f.displayGroup : null,
       description: typeof f.description === "string" ? f.description : ""
     });

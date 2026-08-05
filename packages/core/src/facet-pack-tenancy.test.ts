@@ -140,3 +140,63 @@ describe("per-tenant facet packs", () => {
     expect(active.some((e) => e.facet === "goals")).toBe(false);
   });
 });
+
+describe("stage-1 routing follows the tenant's pack", () => {
+  const ROUTED_PACK: FacetPack = {
+    name: "legal-routed",
+    facets: [
+      {
+        name: "matter",
+        cap: 50,
+        writeProtected: true,
+        displayGroup: "Matters",
+        routesFrom: ["case_event", "filing"],
+        description: "case matters"
+      }
+    ]
+  };
+
+  function classified(id: string, content: string, classifiedType: string): MemoryEvent {
+    return { ...event(id, content), classifiedType };
+  }
+
+  it("routes a tenant's own classifier types into their own facets", async () => {
+    const result = await runDigestControlPipeline({
+      scope,
+      recentEvents: [classified("e1", "本案已于 9 月开庭", "case_event")],
+      llm: { chat: async () => JSON.stringify({ summary: "s", changes: ["c"], nextSteps: ["n"], profileFacts: [] }) },
+      prompts,
+      config,
+      pack: ROUTED_PACK
+    });
+
+    expect((result.state.profile as Record<string, string[]>).matter).toContain("本案已于 9 月开庭");
+  });
+
+  it("ignores a classifier type the tenant's pack does not route", async () => {
+    const result = await runDigestControlPipeline({
+      scope,
+      // personal_detail routes under the default pack, but not under this one.
+      recentEvents: [classified("e2", "本案已于 9 月开庭", "personal_detail")],
+      llm: { chat: async () => JSON.stringify({ summary: "s", changes: ["c"], nextSteps: ["n"], profileFacts: [] }) },
+      prompts,
+      config,
+      pack: ROUTED_PACK
+    });
+
+    expect(result.state.profile?.identity).toBeUndefined();
+    expect((result.state.profile as Record<string, string[]> | undefined)?.matter).toBeUndefined();
+  });
+
+  it("still routes personal_detail into identity under the default pack", async () => {
+    const result = await runDigestControlPipeline({
+      scope,
+      recentEvents: [classified("e3", "本案已于 9 月开庭", "personal_detail")],
+      llm: { chat: async () => JSON.stringify({ summary: "s", changes: ["c"], nextSteps: ["n"], profileFacts: [] }) },
+      prompts,
+      config
+    });
+
+    expect(result.state.profile?.identity).toContain("本案已于 9 月开庭");
+  });
+});
