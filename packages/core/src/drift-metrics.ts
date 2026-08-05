@@ -9,6 +9,17 @@ export interface DriftMetrics {
   todosAdded: number;
   todosRemoved: number;
   stabilityScore: number;
+  /**
+   * Fact-registry observation.
+   *
+   * The metrics above cover stableFacts only — decisions, constraints, goal,
+   * todos. User facts live in the profile facets and their registry entries, so
+   * a drift score computed without these was measuring a data model the facts
+   * were not in, and could report perfect stability while the fact store churned.
+   */
+  factsAdded: number;
+  factsRetired: number;
+  factsSuperseded: number;
 }
 
 function countAdded(before: string[], after: string[]): number {
@@ -25,6 +36,8 @@ export function computeDriftMetrics(
   before: DigestState | null,
   after: DigestState
 ): DriftMetrics {
+  const registryDrift = computeRegistryDrift(before, after);
+
   if (!before) {
     return {
       goalChanged: false,
@@ -34,7 +47,8 @@ export function computeDriftMetrics(
       constraintsRemoved: 0,
       todosAdded: 0,
       todosRemoved: 0,
-      stabilityScore: 1
+      stabilityScore: 1,
+      ...registryDrift
     };
   }
 
@@ -71,6 +85,36 @@ export function computeDriftMetrics(
     constraintsRemoved,
     todosAdded,
     todosRemoved,
-    stabilityScore
+    stabilityScore,
+    ...registryDrift
   };
+}
+
+/**
+ * Counts registry transitions that happened during this run.
+ *
+ * Entries are compared by id: a fact whose id was not present before is new, and
+ * a fact that gained `retiredAt` / `supersededBy` during this run transitioned.
+ * Comparing by id rather than by presence keeps an already-retired fact from
+ * being re-counted on every subsequent digest.
+ */
+function computeRegistryDrift(
+  before: DigestState | null,
+  after: DigestState
+): Pick<DriftMetrics, "factsAdded" | "factsRetired" | "factsSuperseded"> {
+  const afterEntries = after.factRegistry ?? [];
+  const beforeById = new Map((before?.factRegistry ?? []).map((entry) => [entry.id, entry]));
+
+  let factsAdded = 0;
+  let factsRetired = 0;
+  let factsSuperseded = 0;
+
+  for (const entry of afterEntries) {
+    const previous = beforeById.get(entry.id);
+    if (!previous) factsAdded++;
+    if (entry.retiredAt && !previous?.retiredAt) factsRetired++;
+    if (entry.supersededBy && !previous?.supersededBy) factsSuperseded++;
+  }
+
+  return { factsAdded, factsRetired, factsSuperseded };
 }
