@@ -12,6 +12,8 @@ import {
   buildFacetPromptSection,
   type FacetPack
 } from "./facet-registry";
+import { applyProfileFactsFromDigest, type DigestState } from "./digest-control";
+import { factToGroup } from "./memory-facts";
 
 const LEGAL_PACK: FacetPack = {
   name: "legal",
@@ -100,5 +102,60 @@ describe("facet registry", () => {
     expect(getFacetCap("matter")).toBe(100);
     expect(getFacetDescription("obligation")).toBe("compliance duties");
     expect(listFacets()).toEqual(["matter", "obligation"]);
+  });
+});
+
+describe("registry drives the digest pipeline", () => {
+  const NOW = () => "2026-08-05T00:00:00.000Z";
+
+  function emptyState(): DigestState {
+    return { stableFacts: {}, factRegistry: [] } as unknown as DigestState;
+  }
+
+  it("stores facets from a replacement pack and rejects the old ones", () => {
+    setFacetPack(LEGAL_PACK);
+    const state = emptyState();
+    applyProfileFactsFromDigest(
+      state,
+      [
+        { facet: "matter", value: "案件 A 已结案" },
+        { facet: "goals", value: "想减肥" }
+      ],
+      [],
+      null,
+      () => "id",
+      NOW
+    );
+    const profile = state.profile as unknown as Record<string, string[]>;
+    expect(profile.matter).toContain("案件 A 已结案");
+    expect(profile.goals).toBeUndefined();
+  });
+
+  it("enforces the replacement pack's cap rather than the historical one", () => {
+    setFacetPack({
+      name: "tiny",
+      facets: [{ name: "matter", cap: 2, writeProtected: false, displayGroup: "Matters", description: "" }]
+    });
+    const state = emptyState();
+    let n = 0;
+    applyProfileFactsFromDigest(
+      state,
+      [
+        { facet: "matter", value: "第一宗合同纠纷" },
+        { facet: "matter", value: "第二宗劳动仲裁" },
+        { facet: "matter", value: "第三宗知识产权侵权" }
+      ],
+      [],
+      null,
+      () => `id-${n++}`,
+      NOW
+    );
+    expect((state.profile as unknown as Record<string, string[]>).matter).toHaveLength(2);
+  });
+
+  it("routes display grouping through the active pack", () => {
+    setFacetPack(LEGAL_PACK);
+    expect(factToGroup("matter")).toBe("Matters");
+    expect(factToGroup("relationships")).toBeNull();
   });
 });

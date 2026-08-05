@@ -3,6 +3,7 @@ import type { Digest, MemoryEvent, ProjectScope } from "./index";
 import { pruneForgottenFacts } from "./memory-facts";
 import { stripInternalIds, consolidateChangedFacets } from "./facet-consolidation";
 import { recordDrop, type DropRecord } from "./drop-log";
+import { isRegisteredFacet, getFacetCap, isWriteProtectedFacet } from "./facet-registry";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -1239,10 +1240,6 @@ function mergeProfileFacets(
   }
 }
 
-const DISPLAY_FACETS = new Set(["identity", "style", "goals", "relationships", "followUps", "ongoing", "notes"]);
-const PROFILE_FACET_CAPS: Record<string, number> = {
-  identity: 15, relationships: 10, ongoing: 8, goals: 8, followUps: 10, style: 6, notes: 30
-};
 
 export function applyProfileFactsFromDigest(
   state: DigestState,
@@ -1265,7 +1262,7 @@ export function applyProfileFactsFromDigest(
     const facet = pf.facet.trim();
     const value = stripInternalIds(pf.value.trim());
     if (!value) continue;
-    if (!DISPLAY_FACETS.has(facet)) {
+    if (!isRegisteredFacet(facet)) {
       if (dropLog) recordDrop(dropLog, "facet_not_registered", { facet, value });
       continue;
     }
@@ -1275,7 +1272,7 @@ export function applyProfileFactsFromDigest(
     const evidence: DigestEvidenceRef | null =
       facet === "identity" ? docEvidence : (streamEvidence ?? docEvidence);
     const authority = evidence?.sourceType === "document" ? 0.85 : 0.6;
-    const cap = PROFILE_FACET_CAPS[facet] ?? 8;
+    const cap = getFacetCap(facet);
 
     const profileMap = state.profile as Record<string, string[]>;
     if (!profileMap[facet]) profileMap[facet] = [];
@@ -1305,8 +1302,8 @@ export function applyProfileFactsFromDigest(
     }
 
     if (facetFacts.length >= cap) {
-      if (facet === "identity") {
-        // identity is high-value; don't evict to add
+      if (isWriteProtectedFacet(facet)) {
+        // Protected facets are high-value; don't evict one to make room.
         if (dropLog) recordDrop(dropLog, "cap_rejected_incoming", { facet, value, cap });
         continue;
       }
@@ -1366,7 +1363,7 @@ export function addNoteFact(
   const notes = profileMap.notes;
 
   // Cap enforcement: evict oldest entry (index 0) + its factRegistry record.
-  const cap = PROFILE_FACET_CAPS.notes ?? 30;
+  const cap = getFacetCap("notes");
   if (notes.length >= cap) {
     const [evicted] = notes.splice(0, 1);
     if (evicted && state.factRegistry) {

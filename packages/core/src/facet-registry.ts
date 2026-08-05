@@ -35,17 +35,27 @@ const DEFAULT_CAP = 8;
 /**
  * The historical StateCore ontology, preserved value-for-value so existing
  * DigestState.profile data keeps working with no migration.
+ *
+ * Declaration order is load-bearing: it determines the display group order
+ * (see `groupOrder` in memory-facts.ts). This list is ordered to reproduce the
+ * previous hardcoded order — Schedule, People, Style, Projects, Notes.
  */
 export const PERSONAL_PROFILE_PACK: FacetPack = {
   name: "personal",
   facets: [
     {
-      name: "identity",
-      cap: 15,
-      writeProtected: true,
-      displayGroup: null,
-      description:
-        "durable personal facts from documents (resume/bio): 工作经历, 教育, 技能, 联系方式."
+      name: "followUps",
+      cap: 10,
+      writeProtected: false,
+      displayGroup: "Schedule",
+      description: "commitments or things to remember/do, with any date/time."
+    },
+    {
+      name: "relationships",
+      cap: 10,
+      writeProtected: false,
+      displayGroup: "People",
+      description: "important people (and pets) in the user's life."
     },
     {
       name: "style",
@@ -63,20 +73,6 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
       description: "things the user wants to achieve."
     },
     {
-      name: "relationships",
-      cap: 10,
-      writeProtected: false,
-      displayGroup: "People",
-      description: "important people (and pets) in the user's life."
-    },
-    {
-      name: "followUps",
-      cap: 10,
-      writeProtected: false,
-      displayGroup: "Schedule",
-      description: "commitments or things to remember/do, with any date/time."
-    },
-    {
       name: "ongoing",
       cap: 8,
       writeProtected: false,
@@ -90,6 +86,14 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
       displayGroup: "Notes",
       description:
         "durable, useful non-personal information worth keeping long-term (product/project details, decisions, processes, facts to remember). Be selective: no small talk or transient logistics."
+    },
+    {
+      name: "identity",
+      cap: 15,
+      writeProtected: true,
+      displayGroup: null,
+      description:
+        "durable personal facts from documents (resume/bio): 工作经历, 教育, 技能, 联系方式."
     }
   ]
 };

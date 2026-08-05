@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
 import { getActiveFactRegistry, type DigestState } from "./digest-control";
 import { recordDrop, type DropRecord } from "./drop-log";
+import { getFacetDisplayGroup, listFacets } from "./facet-registry";
 
-export type DisplayGroup = "Schedule" | "People" | "Style" | "Projects" | "Notes";
+/**
+ * Open by design: the display groups come from the active facet pack, so a
+ * deployment with a non-personal ontology gets its own groups rather than being
+ * forced into Schedule/People/Style/Projects/Notes.
+ */
+export type DisplayGroup = string;
 
 export type DisplayFact = {
   factKey: string;
@@ -12,17 +18,18 @@ export type DisplayFact = {
   evidenceId?: string;
 };
 
-const FACET_TO_GROUP: Record<string, DisplayGroup> = {
-  followUps: "Schedule",
-  relationships: "People",
-  style: "Style",
-  goals: "Projects",
-  ongoing: "Projects",
-  notes: "Notes"
-  // identity: intentionally omitted (never shown)
-};
-
-const GROUP_ORDER: DisplayGroup[] = ["Schedule", "People", "Style", "Projects", "Notes"];
+/**
+ * Display order follows the pack's declaration order, de-duplicated. Facets
+ * whose displayGroup is null (identity) contribute no group and stay hidden.
+ */
+function groupOrder(): DisplayGroup[] {
+  const seen: DisplayGroup[] = [];
+  for (const facet of listFacets()) {
+    const group = getFacetDisplayGroup(facet);
+    if (group && !seen.includes(group)) seen.push(group);
+  }
+  return seen;
+}
 
 function normalize(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
@@ -36,7 +43,7 @@ export function computeFactKey(group: string, content: string): string {
 }
 
 export function factToGroup(facet: string): DisplayGroup | null {
-  return FACET_TO_GROUP[facet] ?? null;
+  return getFacetDisplayGroup(facet);
 }
 
 export function flattenScopeFacts(state: DigestState, dropLog?: DropRecord[]): DisplayFact[] {
@@ -81,7 +88,7 @@ export function flattenScopeFacts(state: DigestState, dropLog?: DropRecord[]): D
 export function groupFactsForDisplay(
   facts: DisplayFact[]
 ): Array<{ group: DisplayGroup; items: Array<{ factKey: string; text: string; createdAt: string | null }> }> {
-  return GROUP_ORDER.map((group) => ({
+  return groupOrder().map((group) => ({
     group,
     items: facts
       .filter((f) => f.group === group)
