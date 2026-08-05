@@ -23,7 +23,7 @@ describe("MemoryFactsService.getFacts", () => {
     } as any;
 
     const service = new MemoryFactsService(mockPrisma);
-    const groups = await service.getFacts("scope-1");
+    const groups = await service.getFacts("scope-1", "user-1");
 
     // "Call the supplier" (People) was forgotten -> only Projects/"Launching Remi" remains
     expect(groups.map((g) => g.group)).toEqual(["Projects"]);
@@ -37,7 +37,7 @@ describe("MemoryFactsService.getFacts", () => {
       forgottenFact: { findMany: vi.fn().mockResolvedValue([]) }
     } as any;
     const service = new MemoryFactsService(mockPrisma);
-    expect(await service.getFacts("scope-empty")).toEqual([]);
+    expect(await service.getFacts("scope-empty", "user-1")).toEqual([]);
   });
 });
 

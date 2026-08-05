@@ -11,7 +11,8 @@ import {
   computeDriftMetrics,
   getDomainConfig,
   buildFacetPromptSection,
-  overrideFacetCaps
+  overrideFacetCaps,
+  resolveFacetPack
 } from "@statecore/core";
 import type { DigestState, DriftMetrics, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import {
@@ -34,8 +35,18 @@ import { runGcDigestsJob, runGcJobLogsJob, runGcRemindersJob } from "./data-gc";
 import { createDigestWithSnapshot } from "./digest-write";
 import Redis from "ioredis";
 
-// Applied once at boot, before any digest job can read a cap.
+// Applied once at boot, before any digest job can read a cap. Overrides land on
+// the default pack; a tenant that installed its own pack carries its own caps.
 overrideFacetCaps(workerEnv.digestFacetCaps);
+
+// Per-tenant facet ontology. A cloud account maps 1:1 onto a core user, so the
+// pack lives on the User row.
+const facetPackStore = {
+  findFacetPack: async (userId: string) => {
+    const row = await prisma.user.findUnique({ where: { id: userId }, select: { facetPack: true } });
+    return row?.facetPack ?? null;
+  }
+};
 
 const connection = {
   url: workerEnv.redisUrl
@@ -228,6 +239,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
   }
 
   const t0 = Date.now();
+  const facetPack = await resolveFacetPack(facetPackStore, data.userId);
   const scope = await prisma.projectScope.findFirst({ where: { id: data.scopeId, userId: data.userId } });
   if (!scope) {
     throw new Error("Scope not found for user");
@@ -280,13 +292,14 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     recentEvents,
     llm,
     prompts: {
-      digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection()),
+      digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection(facetPack)),
       digestStage2UserPrompt,
       digestClassifySystemPrompt,
       digestClassifyUserPrompt,
       consolidateFacetSystemPrompt,
       consolidateFacetUserPrompt
     },
+    pack: facetPack,
     config: {
       eventBudgetTotal: workerEnv.digestEventBudgetTotal,
       eventBudgetDocs: workerEnv.digestEventBudgetDocs,
@@ -399,6 +412,9 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
     throw new Error("FEATURE_LLM disabled or model provider not configured. Rebuild requires MODEL_* or OPENAI_* configuration.");
   }
 
+  // Rebuilds must use the tenant's own ontology too, or replaying history would
+  // reclassify every fact under the default pack.
+  const facetPack = await resolveFacetPack(facetPackStore, data.userId);
   const scope = await prisma.projectScope.findFirst({ where: { id: data.scopeId, userId: data.userId } });
   if (!scope) throw new Error("Scope not found for user");
 
@@ -449,13 +465,14 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
       recentEvents: chunk,
       llm,
       prompts: {
-        digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection()),
+        digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection(facetPack)),
         digestStage2UserPrompt,
         digestClassifySystemPrompt,
         digestClassifyUserPrompt,
         consolidateFacetSystemPrompt,
         consolidateFacetUserPrompt
       },
+      pack: facetPack,
       config: {
         eventBudgetTotal: workerEnv.digestEventBudgetTotal,
         eventBudgetDocs: workerEnv.digestEventBudgetDocs,

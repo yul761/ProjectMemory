@@ -3,7 +3,7 @@ import type { Digest, MemoryEvent, ProjectScope } from "./index";
 import { pruneForgottenFacts } from "./memory-facts";
 import { stripInternalIds, consolidateChangedFacets } from "./facet-consolidation";
 import { recordDrop, type DropRecord } from "./drop-log";
-import { isRegisteredFacet, getFacetCap, isWriteProtectedFacet } from "./facet-registry";
+import { isRegisteredFacet, getFacetCap, isWriteProtectedFacet, isDocumentAuthorityFacet, getDefaultFacetPack, type FacetPack } from "./facet-registry";
 
 function createDefaultIdFactory(): () => string {
   return () => `fact-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -333,18 +333,21 @@ export function normalizeDigestState(state?: DigestState | null): DigestState {
 }
 
 /**
- * Trims each facet to the active pack's cap.
+ * Copies the profile through without judgement.
  *
- * This used to enumerate the seven personal facets with their caps inline — a
- * sixth copy of the ontology — which also meant any facet outside that list was
- * dropped here even after passing every other gate. It now keeps whatever the
- * state carries and only enforces capacity.
+ * This used to enumerate the seven personal facets with their caps inline (a
+ * sixth copy of the ontology), then briefly trimmed each facet to the active
+ * pack's cap. Both were wrong for the same reason: normalisation is a *read*
+ * path, and silently returning less than the state holds is precisely the
+ * failure mode this engine is supposed to not have. Capacity is enforced where
+ * facts are written — applyProfileFactsFromDigest and addNoteFact — and that is
+ * the only place it belongs.
  */
 function normalizeProfile(profile?: Record<string, string[]>): Record<string, string[]> | undefined {
   if (!profile) return undefined;
   const out: Record<string, string[]> = {};
   for (const [facet, values] of Object.entries(profile)) {
-    out[facet] = (values ?? []).slice(0, getFacetCap(facet));
+    out[facet] = [...(values ?? [])];
   }
   return out;
 }
@@ -1311,7 +1314,8 @@ export function applyProfileFactsFromDigest(
   streamEvidence: DigestEvidenceRef | null,
   makeId: () => string,
   makeNow: () => string = createDefaultNowFactory(),
-  dropLog?: DropRecord[]
+  dropLog?: DropRecord[],
+  pack: FacetPack = getDefaultFacetPack()
 ): void {
   if (profileFacts.length === 0) return;
   if (!state.profile) state.profile = {};
@@ -1325,17 +1329,17 @@ export function applyProfileFactsFromDigest(
     const facet = pf.facet.trim();
     const value = stripInternalIds(pf.value.trim());
     if (!value) continue;
-    if (!isRegisteredFacet(facet)) {
+    if (!isRegisteredFacet(pack, facet)) {
       if (dropLog) recordDrop(dropLog, "facet_not_registered", { facet, value });
       continue;
     }
 
-    // identity is document-authority; conversational facets prefer the stream-event ref
-    // (it carries the actual conversation turn); fall back to a doc ref if no stream ref.
+    // Document-authority facets take the document ref; conversational facets prefer
+    // the stream-event ref (it carries the actual turn) and fall back to a doc ref.
     const evidence: DigestEvidenceRef | null =
-      facet === "identity" ? docEvidence : (streamEvidence ?? docEvidence);
+      isDocumentAuthorityFacet(pack, facet) ? docEvidence : (streamEvidence ?? docEvidence);
     const authority = evidence?.sourceType === "document" ? 0.85 : 0.6;
-    const cap = getFacetCap(facet);
+    const cap = getFacetCap(pack, facet);
 
     const profileMap = state.profile as Record<string, string[]>;
     if (!profileMap[facet]) profileMap[facet] = [];
@@ -1365,7 +1369,7 @@ export function applyProfileFactsFromDigest(
     }
 
     if (facetFacts.length >= cap) {
-      if (isWriteProtectedFacet(facet)) {
+      if (isWriteProtectedFacet(pack, facet)) {
         // Protected facets are high-value; don't evict one to make room.
         if (dropLog) recordDrop(dropLog, "cap_rejected_incoming", { facet, value, cap });
         continue;
@@ -1402,7 +1406,8 @@ export function addNoteFact(
   state: DigestState,
   text: string,
   makeId: () => string,
-  makeNow: () => string = createDefaultNowFactory()
+  makeNow: () => string = createDefaultNowFactory(),
+  pack: FacetPack = getDefaultFacetPack()
 ): boolean {
   const value = text.trim();
   if (!value) return false;
@@ -1425,7 +1430,7 @@ export function addNoteFact(
   // Cap enforcement: evict the oldest entry (index 0) and retire its registry
   // record. Retiring rather than deleting keeps the audit chain intact — the
   // note stops being active, but the record that it was once held remains.
-  const cap = getFacetCap("notes");
+  const cap = getFacetCap(pack, "notes");
   if (notes.length >= cap) {
     const [evicted] = notes.splice(0, 1);
     if (evicted) retireFact(state, evicted, "cap_evicted", makeNow, { exact: true });
@@ -2570,6 +2575,8 @@ export async function runDigestControlPipeline(input: {
   config: DigestControlConfig;
   forgottenFactKeys?: ReadonlySet<string>;
   forgottenFactContents?: readonly string[];
+  /** The tenant's facet ontology. Defaults to the deployment pack. */
+  pack?: FacetPack;
 }): Promise<{
   digest: DigestOutput;
   state: DigestState;
@@ -2582,6 +2589,7 @@ export async function runDigestControlPipeline(input: {
 }> {
   const metrics: Record<string, number> = {};
   const dropLog: DropRecord[] = [];
+  const pack = input.pack ?? getDefaultFacetPack();
 
   if (input.lastDigest) {
     // A document upsert rewrites content and stamps updatedAt but keeps the
@@ -2698,7 +2706,7 @@ export async function runDigestControlPipeline(input: {
     const streamEvidence: DigestEvidenceRef | null = latestStream
       ? { id: latestStream.id, sourceType: "event" }
       : null;
-    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory(), dropLog);
+    applyProfileFactsFromDigest(state, digest.profileFacts, selection.documents, streamEvidence, createDefaultIdFactory(), createDefaultNowFactory(), dropLog, pack);
   }
 
   // Prune forgotten facts BEFORE consolidation: consolidation rewrites/merges fact text,
@@ -2729,7 +2737,8 @@ export async function runDigestControlPipeline(input: {
       },
       makeId: createDefaultIdFactory(),
       makeNow: createDefaultNowFactory(),
-      dropLog
+      dropLog,
+      pack
     });
   }
 

@@ -20,6 +20,14 @@ export interface FacetDefinition {
   writeProtected: boolean;
   /** null = never surfaced through the display API (identity stays private). */
   displayGroup: string | null;
+  /**
+   * Facts in this facet are authored by documents, not conversation, so their
+   * evidence ref points at the document even when a stream event is available.
+   * Distinct from writeProtected: a protected facet can still be conversational
+   * (goals), and would lose its registry entry entirely if forced to a document
+   * ref when no document exists.
+   */
+  documentAuthority?: boolean;
   /** Shown to the extraction LLM; also used as the consolidation hint. */
   description: string;
 }
@@ -94,17 +102,37 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
       cap: 15,
       writeProtected: true,
       displayGroup: null,
+      documentAuthority: true,
       description:
         "durable personal facts from documents (resume/bio): 工作经历, 教育, 技能, 联系方式."
     }
   ]
 };
 
-let activePack: FacetPack = clonePack(PERSONAL_PROFILE_PACK);
-let byName = indexPack(activePack);
+/**
+ * The pack used when a tenant has not installed one of their own.
+ *
+ * Deliberately NOT the pack that pipeline code reads implicitly. Every accessor
+ * below takes its pack as an argument, because the alternative — a process-wide
+ * "current pack" set from request context — fails silently: forget to set it and
+ * a legal tenant's ontology quietly degrades to the personal one with no error.
+ * A missing argument is a compile error; a missing context is a wrong answer.
+ */
+let defaultPack: FacetPack = clonePack(PERSONAL_PROFILE_PACK);
+
+/**
+ * Accessors are called once per fact per facet, so the name index is memoised
+ * per pack object rather than rebuilt on every lookup. Weak so that a tenant's
+ * pack becomes collectable as soon as the resolver's cache drops it.
+ */
+const indexCache = new WeakMap<FacetPack, Map<string, FacetDefinition>>();
 
 function indexPack(pack: FacetPack): Map<string, FacetDefinition> {
-  return new Map(pack.facets.map((facet) => [facet.name, facet]));
+  const cached = indexCache.get(pack);
+  if (cached) return cached;
+  const index = new Map(pack.facets.map((facet) => [facet.name, facet]));
+  indexCache.set(pack, index);
+  return index;
 }
 
 /**
@@ -116,53 +144,89 @@ function clonePack(pack: FacetPack): FacetPack {
   return { name: pack.name, facets: pack.facets.map((facet) => ({ ...facet })) };
 }
 
-export function setFacetPack(pack: FacetPack): void {
-  activePack = clonePack(pack);
-  byName = indexPack(activePack);
+/** Replaces the fallback pack for tenants that have not installed their own. */
+export function setDefaultFacetPack(pack: FacetPack): void {
+  defaultPack = clonePack(pack);
 }
 
-export function getFacetPack(): FacetPack {
-  return activePack;
+export function getDefaultFacetPack(): FacetPack {
+  return defaultPack;
 }
 
-export function listFacets(): string[] {
-  return activePack.facets.map((facet) => facet.name);
+export function listFacets(pack: FacetPack): string[] {
+  return pack.facets.map((facet) => facet.name);
 }
 
-export function isRegisteredFacet(facet: string): boolean {
-  return byName.has(facet);
+export function isRegisteredFacet(pack: FacetPack, facet: string): boolean {
+  return indexPack(pack).has(facet);
 }
 
-export function getFacetCap(facet: string): number {
-  return byName.get(facet)?.cap ?? DEFAULT_CAP;
+export function getFacetCap(pack: FacetPack, facet: string): number {
+  return indexPack(pack).get(facet)?.cap ?? DEFAULT_CAP;
 }
 
-export function isWriteProtectedFacet(facet: string): boolean {
-  return byName.get(facet)?.writeProtected ?? false;
+export function isWriteProtectedFacet(pack: FacetPack, facet: string): boolean {
+  return indexPack(pack).get(facet)?.writeProtected ?? false;
 }
 
-export function getFacetDisplayGroup(facet: string): string | null {
-  return byName.get(facet)?.displayGroup ?? null;
+export function getFacetDisplayGroup(pack: FacetPack, facet: string): string | null {
+  return indexPack(pack).get(facet)?.displayGroup ?? null;
 }
 
-export function getFacetDescription(facet: string): string {
-  return byName.get(facet)?.description ?? "";
+export function isDocumentAuthorityFacet(pack: FacetPack, facet: string): boolean {
+  return indexPack(pack).get(facet)?.documentAuthority === true;
+}
+
+export function getFacetDescription(pack: FacetPack, facet: string): string {
+  return indexPack(pack).get(facet)?.description ?? "";
 }
 
 /**
- * Per-facet cap overrides, applied on top of the active pack.
+ * Per-facet cap overrides for the default pack.
  *
  * Deployments hit different scales — a resume can carry far more than 15
  * identity facts — so the cap is an operational knob, not an ontology decision.
  */
 export function overrideFacetCaps(caps: Record<string, number>): void {
+  const byName = indexPack(defaultPack);
   for (const [name, cap] of Object.entries(caps)) {
     const definition = byName.get(name);
     if (definition && Number.isFinite(cap) && cap > 0) definition.cap = cap;
   }
 }
 
-/** Renders the active pack's facets as the `Allowed facets:` block of the stage-2 prompt. */
-export function buildFacetPromptSection(): string {
-  return activePack.facets.map((facet) => `  - "${facet.name}": ${facet.description}`).join("\n");
+/** Renders a pack's facets as the `Allowed facets:` block of the stage-2 prompt. */
+export function buildFacetPromptSection(pack: FacetPack): string {
+  return pack.facets.map((facet) => `  - "${facet.name}": ${facet.description}`).join("\n");
+}
+
+/**
+ * Coerces a stored JSON blob into a pack, falling back to the default.
+ *
+ * Stored packs are operator-authored and can be malformed or from an older
+ * shape. Falling back is safe (the tenant gets the default ontology) but must be
+ * visible, so the caller is told which happened rather than having to guess.
+ */
+export function parseFacetPack(raw: unknown): { pack: FacetPack; usedDefault: boolean } {
+  if (!raw || typeof raw !== "object") return { pack: defaultPack, usedDefault: true };
+  const candidate = raw as { name?: unknown; facets?: unknown };
+  if (typeof candidate.name !== "string" || !Array.isArray(candidate.facets) || candidate.facets.length === 0) {
+    return { pack: defaultPack, usedDefault: true };
+  }
+  const facets: FacetDefinition[] = [];
+  for (const item of candidate.facets) {
+    if (!item || typeof item !== "object") continue;
+    const f = item as Record<string, unknown>;
+    if (typeof f.name !== "string" || !f.name.trim()) continue;
+    facets.push({
+      name: f.name.trim(),
+      cap: typeof f.cap === "number" && Number.isFinite(f.cap) && f.cap > 0 ? f.cap : DEFAULT_CAP,
+      writeProtected: f.writeProtected === true,
+      documentAuthority: f.documentAuthority === true,
+      displayGroup: typeof f.displayGroup === "string" && f.displayGroup ? f.displayGroup : null,
+      description: typeof f.description === "string" ? f.description : ""
+    });
+  }
+  if (facets.length === 0) return { pack: defaultPack, usedDefault: true };
+  return { pack: { name: candidate.name, facets }, usedDefault: false };
 }

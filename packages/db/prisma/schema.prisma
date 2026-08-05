@@ -38,6 +38,10 @@ model User {
   identity       String   @unique
   telegramUserId String?  @unique
   createdAt      DateTime @default(now())
+  // The tenant's profile-facet ontology. NULL = use the deployment default pack.
+  // A cloud account maps 1:1 onto a core user (the gateway forwards accountId as
+  // x-user-id), so "per customer" and "per user" are the same thing here.
+  facetPack      Json?
 
   scopes    ProjectScope[]
   state     UserState?

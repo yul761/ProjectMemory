@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { buildDigestStage2SystemPrompt, digestStage2UserPrompt } from "../../prompts/src/index";
-import { buildFacetPromptSection } from "./facet-registry";
+import { buildFacetPromptSection, getDefaultFacetPack } from "./facet-registry";
 
 // The facet vocabulary now lives in the registry, not in the prompt template, so
 // the "real" stage-2 prompt is the template rendered against the active pack.
-const digestStage2SystemPrompt = buildDigestStage2SystemPrompt(buildFacetPromptSection());
+const digestStage2SystemPrompt = buildDigestStage2SystemPrompt(buildFacetPromptSection(getDefaultFacetPack()));
 import {
   consistencyCheck,
   detectDeltas,

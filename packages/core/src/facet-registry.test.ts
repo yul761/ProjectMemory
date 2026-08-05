@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import {
   PERSONAL_PROFILE_PACK,
-  setFacetPack,
+  setDefaultFacetPack,
+  getDefaultFacetPack,
   isRegisteredFacet,
   getFacetCap,
   getFacetDisplayGroup,
@@ -23,11 +24,11 @@ const LEGAL_PACK: FacetPack = {
   ]
 };
 
-afterEach(() => setFacetPack(PERSONAL_PROFILE_PACK));
+afterEach(() => setDefaultFacetPack(PERSONAL_PROFILE_PACK));
 
 describe("facet registry", () => {
   it("defaults to the personal profile pack with the historical 7 facets", () => {
-    expect(listFacets().slice().sort()).toEqual([
+    expect(listFacets(getDefaultFacetPack()).slice().sort()).toEqual([
       "followUps",
       "goals",
       "identity",
@@ -39,69 +40,69 @@ describe("facet registry", () => {
   });
 
   it("preserves the historical caps exactly", () => {
-    expect(getFacetCap("identity")).toBe(15);
-    expect(getFacetCap("relationships")).toBe(10);
-    expect(getFacetCap("ongoing")).toBe(8);
-    expect(getFacetCap("goals")).toBe(8);
-    expect(getFacetCap("followUps")).toBe(10);
-    expect(getFacetCap("style")).toBe(6);
-    expect(getFacetCap("notes")).toBe(30);
+    expect(getFacetCap(getDefaultFacetPack(), "identity")).toBe(15);
+    expect(getFacetCap(getDefaultFacetPack(), "relationships")).toBe(10);
+    expect(getFacetCap(getDefaultFacetPack(), "ongoing")).toBe(8);
+    expect(getFacetCap(getDefaultFacetPack(), "goals")).toBe(8);
+    expect(getFacetCap(getDefaultFacetPack(), "followUps")).toBe(10);
+    expect(getFacetCap(getDefaultFacetPack(), "style")).toBe(6);
+    expect(getFacetCap(getDefaultFacetPack(), "notes")).toBe(30);
   });
 
   it("preserves the historical write-protection flags", () => {
-    expect(isWriteProtectedFacet("identity")).toBe(true);
-    expect(isWriteProtectedFacet("goals")).toBe(true);
-    expect(isWriteProtectedFacet("style")).toBe(false);
-    expect(isWriteProtectedFacet("notes")).toBe(false);
+    expect(isWriteProtectedFacet(getDefaultFacetPack(), "identity")).toBe(true);
+    expect(isWriteProtectedFacet(getDefaultFacetPack(), "goals")).toBe(true);
+    expect(isWriteProtectedFacet(getDefaultFacetPack(), "style")).toBe(false);
+    expect(isWriteProtectedFacet(getDefaultFacetPack(), "notes")).toBe(false);
   });
 
   it("keeps identity out of the display path, as before", () => {
-    expect(getFacetDisplayGroup("identity")).toBeNull();
-    expect(getFacetDisplayGroup("followUps")).toBe("Schedule");
-    expect(getFacetDisplayGroup("relationships")).toBe("People");
-    expect(getFacetDisplayGroup("goals")).toBe("Projects");
-    expect(getFacetDisplayGroup("ongoing")).toBe("Projects");
+    expect(getFacetDisplayGroup(getDefaultFacetPack(), "identity")).toBeNull();
+    expect(getFacetDisplayGroup(getDefaultFacetPack(), "followUps")).toBe("Schedule");
+    expect(getFacetDisplayGroup(getDefaultFacetPack(), "relationships")).toBe("People");
+    expect(getFacetDisplayGroup(getDefaultFacetPack(), "goals")).toBe("Projects");
+    expect(getFacetDisplayGroup(getDefaultFacetPack(), "ongoing")).toBe("Projects");
   });
 
   it("reports unknown facets as unregistered under the default pack", () => {
-    expect(isRegisteredFacet("legal_matter")).toBe(false);
-    expect(getFacetCap("legal_matter")).toBe(8);
+    expect(isRegisteredFacet(getDefaultFacetPack(), "legal_matter")).toBe(false);
+    expect(getFacetCap(getDefaultFacetPack(), "legal_matter")).toBe(8);
   });
 
   it("does not let cap overrides leak into the exported pack constant", () => {
     overrideFacetCaps({ identity: 99 });
-    expect(getFacetCap("identity")).toBe(99);
-    setFacetPack(PERSONAL_PROFILE_PACK);
-    expect(getFacetCap("identity")).toBe(15);
+    expect(getFacetCap(getDefaultFacetPack(), "identity")).toBe(99);
+    setDefaultFacetPack(PERSONAL_PROFILE_PACK);
+    expect(getFacetCap(getDefaultFacetPack(), "identity")).toBe(15);
   });
 
   it("applies per-facet cap overrides without replacing the pack", () => {
     overrideFacetCaps({ identity: 60 });
-    expect(getFacetCap("identity")).toBe(60);
-    expect(getFacetCap("notes")).toBe(30);
+    expect(getFacetCap(getDefaultFacetPack(), "identity")).toBe(60);
+    expect(getFacetCap(getDefaultFacetPack(), "notes")).toBe(30);
   });
 
   it("ignores overrides for facets the active pack does not define", () => {
     overrideFacetCaps({ nonexistent: 42 });
-    expect(getFacetCap("nonexistent")).toBe(8);
+    expect(getFacetCap(getDefaultFacetPack(), "nonexistent")).toBe(8);
   });
 
   it("generates the prompt facet list from the active pack", () => {
-    setFacetPack(LEGAL_PACK);
-    const section = buildFacetPromptSection();
+    setDefaultFacetPack(LEGAL_PACK);
+    const section = buildFacetPromptSection(getDefaultFacetPack());
     expect(section).toContain('- "matter": case matters');
     expect(section).toContain('- "obligation": compliance duties');
     expect(section).not.toContain("identity");
   });
 
   it("accepts a replacement pack so the core carries no domain ontology", () => {
-    setFacetPack(LEGAL_PACK);
-    expect(isRegisteredFacet("matter")).toBe(true);
-    expect(isRegisteredFacet("identity")).toBe(false);
-    expect(getFacetDisplayGroup("matter")).toBe("Matters");
-    expect(getFacetCap("matter")).toBe(100);
-    expect(getFacetDescription("obligation")).toBe("compliance duties");
-    expect(listFacets()).toEqual(["matter", "obligation"]);
+    setDefaultFacetPack(LEGAL_PACK);
+    expect(isRegisteredFacet(getDefaultFacetPack(), "matter")).toBe(true);
+    expect(isRegisteredFacet(getDefaultFacetPack(), "identity")).toBe(false);
+    expect(getFacetDisplayGroup(getDefaultFacetPack(), "matter")).toBe("Matters");
+    expect(getFacetCap(getDefaultFacetPack(), "matter")).toBe(100);
+    expect(getFacetDescription(getDefaultFacetPack(), "obligation")).toBe("compliance duties");
+    expect(listFacets(getDefaultFacetPack())).toEqual(["matter", "obligation"]);
   });
 });
 
@@ -113,7 +114,7 @@ describe("registry drives the digest pipeline", () => {
   }
 
   it("stores facets from a replacement pack and rejects the old ones", () => {
-    setFacetPack(LEGAL_PACK);
+    setDefaultFacetPack(LEGAL_PACK);
     const state = emptyState();
     applyProfileFactsFromDigest(
       state,
@@ -132,7 +133,7 @@ describe("registry drives the digest pipeline", () => {
   });
 
   it("enforces the replacement pack's cap rather than the historical one", () => {
-    setFacetPack({
+    setDefaultFacetPack({
       name: "tiny",
       facets: [{ name: "matter", cap: 2, writeProtected: false, displayGroup: "Matters", description: "" }]
     });
@@ -154,7 +155,7 @@ describe("registry drives the digest pipeline", () => {
   });
 
   it("routes display grouping through the active pack", () => {
-    setFacetPack(LEGAL_PACK);
+    setDefaultFacetPack(LEGAL_PACK);
     expect(factToGroup("matter")).toBe("Matters");
     expect(factToGroup("relationships")).toBeNull();
   });

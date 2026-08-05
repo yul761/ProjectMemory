@@ -1,6 +1,62 @@
 import { BadRequestException, Body, Controller, Get, Inject, NotFoundException, Param, Post, Query, Req } from "@nestjs/common";
 import { checkContradiction } from "./check-contradiction";
 
+import { createHash, randomUUID } from "crypto";
+import {
+  AnswerInput,
+  AnswerOutput,
+  DigestEnqueueOutput,
+  DigestListOutput,
+  DigestRebuildOutput,
+  DigestStateHistoryOutput,
+  DigestStateOutput,
+  DigestRebuildInput,
+  DigestRequestInput,
+  FastLayerViewOutput,
+  LayerStatusOutput,
+  MemoryEventListOutput,
+  MemoryEventInput,
+  MemoryEventOutput,
+  ForgetFactInput,
+  AddNoteInput,
+  MemoryFactsOutput,
+  RetrieveOutput,
+  RuntimeTurnInput,
+  RuntimeTurnOutput,
+  RetrieveInput,
+  StableStateOutput,
+  WorkingMemoryOutput
+} from "@statecore/contracts";
+import {
+  AssistantSession,
+  buildGroundingEvidence,
+  buildRelationshipContext,
+  buildRuntimeSystemPrompt,
+  type ChatModel,
+  compileFastLayerContext,
+  compileStateLayerView,
+  computeLayerDiagnostics,
+  createChatModelClient,
+  createRuntimePolicyBundle,
+  createRuntimeRecallPolicy,
+  createModelProvider,
+  generateAnswer,
+  getActiveFactRegistry,
+  getDomainConfig,
+  logger,
+  type DigestState,
+  type FactRegistryEntry
+} from "@statecore/core";
+import { z } from "zod";
+import { prisma } from "@statecore/db";
+import { digestQueue, workingMemoryQueue, embedQueue, classifyQueue } from "./queue";
+import { DomainService } from "./domain.service";
+import { MemoryFactsService } from "./memory-facts.service";
+import { parseOutput } from "./output";
+import type { RequestWithUser } from "./types";
+import { apiEnv } from "./env";
+import { answerSystemPrompt, answerUserPrompt, runtimeSystemPrompt, runtimeUserPrompt } from "@statecore/prompts";
+
 /**
  * Walks a fact's supersession chain, oldest version first.
  *
@@ -63,61 +119,6 @@ export function normalizeSelectionLog(raw: unknown): { rationale: string[]; drop
     drops: Array.isArray(log.drops) ? log.drops : []
   };
 }
-import { createHash, randomUUID } from "crypto";
-import {
-  AnswerInput,
-  AnswerOutput,
-  DigestEnqueueOutput,
-  DigestListOutput,
-  DigestRebuildOutput,
-  DigestStateHistoryOutput,
-  DigestStateOutput,
-  DigestRebuildInput,
-  DigestRequestInput,
-  FastLayerViewOutput,
-  LayerStatusOutput,
-  MemoryEventListOutput,
-  MemoryEventInput,
-  MemoryEventOutput,
-  ForgetFactInput,
-  AddNoteInput,
-  MemoryFactsOutput,
-  RetrieveOutput,
-  RuntimeTurnInput,
-  RuntimeTurnOutput,
-  RetrieveInput,
-  StableStateOutput,
-  WorkingMemoryOutput
-} from "@statecore/contracts";
-import {
-  AssistantSession,
-  buildGroundingEvidence,
-  buildRelationshipContext,
-  buildRuntimeSystemPrompt,
-  type ChatModel,
-  compileFastLayerContext,
-  compileStateLayerView,
-  computeLayerDiagnostics,
-  createChatModelClient,
-  createRuntimePolicyBundle,
-  createRuntimeRecallPolicy,
-  createModelProvider,
-  generateAnswer,
-  getActiveFactRegistry,
-  getDomainConfig,
-  logger,
-  type DigestState,
-  type FactRegistryEntry
-} from "@statecore/core";
-import { z } from "zod";
-import { prisma } from "@statecore/db";
-import { digestQueue, workingMemoryQueue, embedQueue, classifyQueue } from "./queue";
-import { DomainService } from "./domain.service";
-import { MemoryFactsService } from "./memory-facts.service";
-import { parseOutput } from "./output";
-import type { RequestWithUser } from "./types";
-import { apiEnv } from "./env";
-import { answerSystemPrompt, answerUserPrompt, runtimeSystemPrompt, runtimeUserPrompt } from "@statecore/prompts";
 
 const WORKING_MEMORY_CAUGHT_UP_WINDOW_MS = 15_000;
 const STABLE_STATE_CAUGHT_UP_WINDOW_MS = 60_000;
@@ -518,7 +519,7 @@ export class MemoryController {
     if (!scopeId) throw new BadRequestException("scopeId required");
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) throw new NotFoundException("Scope not found");
-    const groups = await this.memoryFacts.getFacts(scopeId);
+    const groups = await this.memoryFacts.getFacts(scopeId, req.userId);
     return parseOutput(MemoryFactsOutput, { groups });
   }
 

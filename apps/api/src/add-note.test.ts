@@ -56,7 +56,7 @@ describe("MemoryFactsService.addNote", () => {
       forgottenFact: { findMany: vi.fn().mockResolvedValue([]) }
     } as any;
     const service2 = new MemoryFactsService(getFacstPrisma);
-    const groups = await service2.getFacts("scope-1");
+    const groups = await service2.getFacts("scope-1", "user-1");
 
     const notesGroup = groups.find((g) => g.group === "Notes");
     expect(notesGroup).toBeDefined();

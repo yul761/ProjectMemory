@@ -703,6 +703,7 @@ export * from "./digest-control";
 export * from "./drift-metrics";
 export * from "./drop-log";
 export * from "./facet-registry";
+export * from "./facet-pack-resolver";
 export * from "./assistant-runtime";
 export * from "./memory-facts";
 export * from "./facet-consolidation";

@@ -1,5 +1,5 @@
 import { Injectable, Optional } from "@nestjs/common";
-import { flattenScopeFacts, groupFactsForDisplay, addNoteFact, type DisplayFact } from "@statecore/core";
+import { flattenScopeFacts, groupFactsForDisplay, addNoteFact, resolveFacetPack, type DisplayFact } from "@statecore/core";
 import type { DigestState } from "@statecore/core";
 import { prisma as defaultPrisma } from "@statecore/db";
 import { randomUUID } from "node:crypto";
@@ -8,12 +8,31 @@ import { randomUUID } from "node:crypto";
 export class MemoryFactsService {
   constructor(@Optional() private readonly prisma: typeof defaultPrisma = defaultPrisma) {}
 
+  /**
+   * The tenant's facet ontology. A cloud account maps 1:1 onto a core user, so
+   * the pack lives on the User row. Resolved per call (cached inside the
+   * resolver) rather than read from a process-wide "current pack", which would
+   * silently serve one tenant's ontology to another.
+   */
+  private packFor(userId: string) {
+    return resolveFacetPack(
+      {
+        findFacetPack: async (id: string) => {
+          const row = await this.prisma.user.findUnique({ where: { id }, select: { facetPack: true } });
+          return row?.facetPack ?? null;
+        }
+      },
+      userId
+    );
+  }
+
   async forgetFact(userId: string, scopeId: string, factKey: string): Promise<{ ok: true }> {
     const snapshot = await this.prisma.digestStateSnapshot.findFirst({
       where: { scopeId },
       orderBy: { createdAt: "desc" }
     });
-    const facts = snapshot ? flattenScopeFacts(snapshot.state as unknown as DigestState) : [];
+    const pack = await this.packFor(userId);
+    const facts = snapshot ? flattenScopeFacts(snapshot.state as unknown as DigestState, undefined, pack) : [];
     const match = facts.find((f) => f.factKey === factKey);
     const contentSnapshot = match?.text ?? "";
 
@@ -40,7 +59,7 @@ export class MemoryFactsService {
 
     if (snap) {
       const state = snap.state as unknown as DigestState;
-      if (addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString())) {
+      if (addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString(), await this.packFor(userId))) {
         await this.prisma.digestStateSnapshot.update({
           where: { id: snap.id },
           data: { state: state as any }
@@ -54,7 +73,7 @@ export class MemoryFactsService {
         factRegistry: [],
         profile: {}
       };
-      addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString());
+      addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString(), await this.packFor(userId));
       await this.prisma.$transaction(async (tx: any) => {
         const digest = await tx.digest.create({
           data: { scopeId, summary: "Notes", changes: "", nextSteps: [] }
@@ -68,16 +87,17 @@ export class MemoryFactsService {
     return { ok: true };
   }
 
-  async getFacts(scopeId: string) {
+  async getFacts(scopeId: string, userId: string) {
     const [snapshot, forgotten] = await Promise.all([
       this.prisma.digestStateSnapshot.findFirst({ where: { scopeId }, orderBy: { createdAt: "desc" } }),
       this.prisma.forgottenFact.findMany({ where: { scopeId } })
     ]);
     if (!snapshot) return [];
     const forgottenKeys = new Set(forgotten.map((f) => f.factKey));
-    const facts: DisplayFact[] = flattenScopeFacts(snapshot.state as unknown as DigestState).filter(
+    const pack = await this.packFor(userId);
+    const facts: DisplayFact[] = flattenScopeFacts(snapshot.state as unknown as DigestState, undefined, pack).filter(
       (f) => !forgottenKeys.has(f.factKey)
     );
-    return groupFactsForDisplay(facts);
+    return groupFactsForDisplay(facts, pack);
   }
 }
