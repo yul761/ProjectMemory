@@ -10,7 +10,8 @@ import {
   selectWorkingMemoryEvents,
   computeDriftMetrics,
   getDomainConfig,
-  buildFacetPromptSection
+  buildFacetPromptSection,
+  overrideFacetCaps
 } from "@statecore/core";
 import type { DigestState, DriftMetrics, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import {
@@ -32,6 +33,9 @@ import { runExpireEventsJob } from "./expire-events";
 import { runGcDigestsJob, runGcJobLogsJob, runGcRemindersJob } from "./data-gc";
 import { createDigestWithSnapshot } from "./digest-write";
 import Redis from "ioredis";
+
+// Applied once at boot, before any digest job can read a cap.
+overrideFacetCaps(workerEnv.digestFacetCaps);
 
 const connection = {
   url: workerEnv.redisUrl
