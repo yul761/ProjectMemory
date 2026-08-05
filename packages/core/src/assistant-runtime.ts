@@ -175,6 +175,13 @@ export interface GroundingEvidence {
   eventIds: string[];
   stateRefs: string[];
   digestSummary?: string | null;
+  /**
+   * How many events actually grounded the answer, when `eventSnippets` shows
+   * only the first few. "Here is why I said that" listing 5 of 30 without saying
+   * so is the same silent truncation this engine is meant not to do; eventIds
+   * carries the full set.
+   */
+  eventSnippetsTotal?: number;
   eventSnippets?: Array<{
     id: string;
     createdAt: string;
@@ -636,6 +643,7 @@ export function buildGroundingEvidence(input: {
     eventIds: input.events.map((event) => event.id),
     stateRefs: input.stateRef ? [input.stateRef] : [],
     digestSummary: input.digest?.summary ?? null,
+    eventSnippetsTotal: input.events.length,
     eventSnippets: input.events.slice(0, 5).map((event) => {
       const match = retrievalMatches.get(event.id);
       return {

@@ -210,3 +210,20 @@ describe("rejections are recorded, never silent", () => {
     expect(state.profile?.identity).toBeUndefined();
   });
 });
+
+describe("grounding evidence reports what it truncated", () => {
+  it("says how many events grounded the answer, not just the ones it shows", async () => {
+    const { buildGroundingEvidence } = await import("./assistant-runtime");
+    const events = Array.from({ length: 12 }, (_, i) => ({
+      id: `e${i}`,
+      content: `事件 ${i}`,
+      createdAt: new Date("2026-07-01T00:00:00Z")
+    }));
+
+    const evidence = buildGroundingEvidence({ digest: null, events, retrieval: undefined, stateRef: null } as never);
+
+    expect(evidence.eventSnippets).toHaveLength(5);
+    expect(evidence.eventSnippetsTotal).toBe(12);
+    expect(evidence.eventIds).toHaveLength(12);
+  });
+});

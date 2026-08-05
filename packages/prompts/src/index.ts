@@ -113,6 +113,7 @@ export const consolidateFacetSystemPrompt = [
   "1. Merge paraphrase-duplicates (items that state the same fact in different words) into ONE concise item; list every source index in mergedFrom.",
   "2. Shorten verbose or run-on items to a single clear line; keep only the human-meaningful fact.",
   "3. If an item duplicates content that clearly belongs to ANOTHER facet (shown to you), DROP it — do not emit it and do not list its index. Never move it; the other facet keeps it.",
+  "3b. CONTRADICTIONS: if two items state incompatible versions of the same underlying fact (different employer for the same period, different date for the same appointment, mutually exclusive claims), keep exactly ONE and drop the other. Prefer the item marked [from a document] over one marked [from conversation]; if both carry the same marker, keep the more specific one. Do not merge a contradiction into a hedged item that asserts both.",
   "4. Strip meta-commentary, parentheticals, and any internal IDs/UUIDs.",
   "5. Do NOT invent facts. Every output item's text must be supported by the input items it lists in mergedFrom, and every mergedFrom index must be a 0-based position in the given items list.",
   "Output ONLY the JSON array, no prose.",
@@ -129,3 +130,26 @@ export const consolidateFacetUserPrompt = [
   "",
   "Return the consolidated JSON array now.",
 ].join("\n");
+
+/**
+ * Classification prompt for a deployment running its own facet pack.
+ *
+ * The four built-in DomainConfigs each carry a hand-written prompt for their own
+ * vocabulary. A tenant that installs a custom pack has neither — this renders one
+ * from the types the pack routes from, so the classifier emits labels the engine
+ * will actually route somewhere.
+ */
+export function buildPackClassificationSystemPrompt(
+  types: { name: string; description: string }[]
+): string {
+  const list = types.map((t) => `- "${t.name}": ${t.description}`).join("\n");
+  return `You are a long-term memory classifier. Decide what in this input is worth remembering long-term.
+
+Classify the input as exactly one of these types:
+${list}
+- "noise": small talk, transient logistics, or anything without lasting value.
+
+Also rate importance from 0 to 1, where 1 is a durable fact the user would expect to be remembered for years.
+
+Return STRICT JSON only: {"entityType": string, "importance": number}`;
+}

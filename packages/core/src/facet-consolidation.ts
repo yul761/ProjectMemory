@@ -104,13 +104,24 @@ export async function consolidateFacetLlm(input: {
   facet: string;
   description: string;
   items: string[];
+  /**
+   * Per-item provenance labels, parallel to `items`. Rendered into the prompt so
+   * the model can decide which side of a contradiction to keep; the raw `items`
+   * stay unannotated because outputs are matched back to them by content.
+   */
+  itemSources?: (string | undefined)[];
   siblings: Record<string, string[]>;
   llm: { chat: (m: { role: "system" | "user"; content: string }[]) => Promise<string> };
   systemPrompt: string;
   userPromptTemplate: string;
   maxRetries?: number;
 }): Promise<ConsolidatedFact[] | null> {
-  const itemsBlock = input.items.map((t, i) => `${i}. ${t}`).join("\n");
+  const itemsBlock = input.items
+    .map((t, i) => {
+      const source = input.itemSources?.[i];
+      return source ? `${i}. [${source}] ${t}` : `${i}. ${t}`;
+    })
+    .join("\n");
   const siblingsBlock = Object.entries(input.siblings)
     .filter(([, v]) => v.length)
     .map(([f, v]) => `${f}: ${v.join("; ")}`)
@@ -146,8 +157,24 @@ async function consolidateOne(state: DigestState, facet: string, llm: LlmLike, p
   for (const f of listFacets(pack)) {
     if (f !== facet && (profileMap[f]?.length ?? 0) > 0) siblings[f] = profileMap[f];
   }
+  // Label each item with where it came from, so a contradiction can be resolved
+  // by authority rather than by whichever the model happens to prefer.
+  const registry = state.factRegistry ?? [];
+  const itemSources = items.map((text) => {
+    const entry = registry.find(
+      (e) =>
+        !e.supersededBy &&
+        !e.retiredAt &&
+        e.type === "profile" &&
+        e.facet === facet &&
+        (e.content.trim() === text.trim() || sameFactCjkAware(e.content, text, 0.6))
+    );
+    if (!entry) return undefined;
+    return entry.evidenceType === "document" ? "from a document" : "from conversation";
+  });
+
   const result = await consolidateFacetLlm({
-    facet, description: getFacetDescription(pack, facet), items, siblings, llm,
+    facet, description: getFacetDescription(pack, facet), items, itemSources, siblings, llm,
     systemPrompt: prompts.systemPrompt, userPromptTemplate: prompts.userPromptTemplate
   });
   if (!result) return false;

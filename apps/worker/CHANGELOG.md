@@ -1,5 +1,39 @@
 # @statecore/worker
 
+## 1.2.1
+
+### Patch Changes
+
+- Close the three gaps 1.2.0 left open.
+
+  **Contradiction accumulation now has a defence.** Two incompatible facts could
+  sit in the same protected facet indefinitely; nothing looked at the resulting
+  state, only at the digest's prose. Consolidation — which already runs on every
+  digest that touches a facet — now receives each item's provenance and is
+  instructed to resolve contradictions by keeping the document-sourced side. The
+  losing side is retired as `consolidation_dropped`, so the rejected belief stays
+  on the record. No additional model call.
+
+  **A tenant's pack can now drive the classifier.** A pack could declare
+  `routesFrom: ["case_event"]`, but nothing ever emitted `case_event`: the four
+  built-in DomainConfigs are the only classification vocabularies, and each names
+  its own. When a tenant has installed a custom pack, the classification prompt is
+  now derived from the types that pack routes from. Tenants on the default pack
+  keep their DomainConfig prompt unchanged.
+
+  **Grounding evidence reports its own truncation.** `eventSnippets` shows the
+  first five events behind an answer; it now also carries `eventSnippetsTotal`.
+  Answering "here is why I said that" with 5 of 30 and no indication is the same
+  silent truncation this engine exists to avoid.
+
+  Audit note: the retrieval layer was reviewed for silent loss and none was found
+  — every limit there is either the caller's requested `limit` or already reported
+  in the `retrieval` metadata.
+
+- Updated dependencies []:
+  - @statecore/core@1.2.1
+  - @statecore/prompts@1.2.1
+
 ## 1.2.0
 
 ### Minor Changes

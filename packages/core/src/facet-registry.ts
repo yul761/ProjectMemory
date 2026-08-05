@@ -231,6 +231,24 @@ export function overrideFacetCaps(caps: Record<string, number>): void {
   }
 }
 
+/**
+ * The classifier entity types a pack routes from, with the facet they land in.
+ *
+ * Closes the loop between the two extensibility mechanisms: a pack can declare
+ * `routesFrom: ["case_event"]`, but nothing would ever emit `case_event` unless
+ * the classifier is told about it. Returns an empty list when the pack declares
+ * no routing, in which case the caller keeps the domain config's own types.
+ */
+export function packClassificationTypes(pack: FacetPack): { name: string; facet: string; description: string }[] {
+  const types: { name: string; facet: string; description: string }[] = [];
+  for (const facet of pack.facets) {
+    for (const type of facet.routesFrom ?? []) {
+      types.push({ name: type, facet: facet.name, description: facet.description });
+    }
+  }
+  return types;
+}
+
 /** Renders a pack's facets as the `Allowed facets:` block of the stage-2 prompt. */
 export function buildFacetPromptSection(pack: FacetPack): string {
   return pack.facets.map((facet) => `  - "${facet.name}": ${facet.description}`).join("\n");

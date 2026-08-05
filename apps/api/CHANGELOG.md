@@ -1,5 +1,13 @@
 # @statecore/api
 
+## 1.2.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @statecore/core@1.2.1
+  - @statecore/prompts@1.2.1
+
 ## 1.2.0
 
 ### Minor Changes
