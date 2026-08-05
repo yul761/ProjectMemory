@@ -1327,6 +1327,16 @@ export function applyProfileFactsFromDigest(
     const authority = evidence?.sourceType === "document" ? 0.85 : 0.6;
     const cap = getFacetCap(pack, facet);
 
+    // A document-authority facet with no document in this run has nothing to
+    // attach the fact to. Writing it anyway put a fact into the profile with no
+    // registry entry behind it: unciteable, untraceable, and unable to be
+    // superseded later because supersession works off the registry. Reject it
+    // and say so.
+    if (isDocumentAuthorityFacet(pack, facet) && !evidence) {
+      if (dropLog) recordDrop(dropLog, "no_document_evidence", { facet, value });
+      continue;
+    }
+
     const profileMap = state.profile as Record<string, string[]>;
     if (!profileMap[facet]) profileMap[facet] = [];
     const facetFacts = profileMap[facet];
@@ -1341,10 +1351,33 @@ export function applyProfileFactsFromDigest(
       // re-extraction of the same fact each digest run must NOT re-stamp it — otherwise every
       // stable fact reads as "just now" in the Memory list. (Evidence id changes every run,
       // so compare authority, not id.)
+      const activeEntry = (state.factRegistry ?? []).find(
+        (e) =>
+          !e.supersededBy && !e.retiredAt && e.type === "profile" && sameFactCjkAware(e.content, existing, 0.6)
+      );
+
+      // Write protection, on the path that actually runs every digest.
+      //
+      // It used to live only in mergeProfileFacets (the stage-1, classifier-driven
+      // path). Stage 2 — where the digest LLM emits profileFacts directly — had no
+      // check at all, so a 0.6-authority sentence pulled out of chat would quietly
+      // supersede a 0.85-authority fact taken from an uploaded document. That is
+      // exactly the drift the protected facets exist to prevent, on exactly the
+      // path that carries the resume.
+      if (isWriteProtectedFacet(pack, facet) && activeEntry && authority < activeEntry.confidence) {
+        if (dropLog) {
+          recordDrop(dropLog, "protected_lower_authority", {
+            facet,
+            value,
+            existing,
+            incomingAuthority: authority,
+            existingAuthority: activeEntry.confidence
+          });
+        }
+        continue;
+      }
+
       if (evidence) {
-        const activeEntry = (state.factRegistry ?? []).find(
-          (e) => !e.supersededBy && e.type === "profile" && sameFactCjkAware(e.content, existing, 0.6)
-        );
         const authorityIncreased = activeEntry !== undefined && authority > activeEntry.confidence;
         if (contentChanged || authorityIncreased) {
           supersedeFact(state, existing, value, evidence, makeId, { facet, confidence: authority, type: "profile" }, makeNow);

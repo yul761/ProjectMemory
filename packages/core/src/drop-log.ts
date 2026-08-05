@@ -10,6 +10,8 @@ export type DropReason =
   | "cap_evicted" // facet at capacity, oldest entry retired
   | "cap_rejected_incoming" // facet at capacity and fully write-protected
   | "no_display_group" // facet has no display group mapping
+  | "protected_lower_authority" // write-protected facet, incoming source ranks lower
+  | "no_document_evidence" // document-authority facet, but this run had no document
   | "consolidation_skipped"; // facet not eligible for consolidation
 
 export interface DropRecord {
