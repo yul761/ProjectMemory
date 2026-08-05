@@ -43,6 +43,7 @@ import {
   generateAnswer,
   getActiveFactRegistry,
   getDomainConfig,
+  parseFacetPack,
   logger,
   type DigestState,
   type FactRegistryEntry
@@ -521,6 +522,36 @@ export class MemoryController {
     if (!scope) throw new NotFoundException("Scope not found");
     const groups = await this.memoryFacts.getFacts(scopeId, req.userId);
     return parseOutput(MemoryFactsOutput, { groups });
+  }
+
+  /**
+   * The tenant's active facet ontology.
+   *
+   * Read-only on purpose. Swapping a pack is destructive in a way a button
+   * should not be: facts in facets the new pack does not define stop being
+   * displayed and new ones are rejected. Installing a pack stays an operator
+   * action until there is a second tenant with a real need for self-service.
+   */
+  @Get(["/facet-pack", "/v1/facet-pack"])
+  async facetPack(@Req() req: RequestWithUser) {
+    const row = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { facetPack: true }
+    });
+    const { pack, usedDefault } = parseFacetPack(row?.facetPack ?? null);
+    return {
+      name: pack.name,
+      isDefault: usedDefault,
+      facets: pack.facets.map((facet) => ({
+        name: facet.name,
+        cap: facet.cap,
+        writeProtected: facet.writeProtected,
+        documentAuthority: facet.documentAuthority === true,
+        displayGroup: facet.displayGroup,
+        routesFrom: facet.routesFrom ?? [],
+        description: facet.description
+      }))
+    };
   }
 
   @Get(["/memory/facts/:factId/provenance", "/v1/memory/facts/:factId/provenance"])

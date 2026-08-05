@@ -1,5 +1,23 @@
 # @statecore/api
 
+## 1.3.0
+
+### Minor Changes
+
+- Expose the tenant's facet ontology.
+
+  New: `GET /v1/facet-pack` returns the account's active pack — its facets, their
+  capacity, whether conversation may overwrite them, whether they take facts only
+  from documents, and which classifier types route into them.
+
+  Read-only by design. Swapping a pack is destructive in a way a button should not
+  be: facts in facets the new pack does not define stop being displayed, and new
+  ones are rejected. Installing a pack stays an operator action until there is a
+  second tenant that actually needs self-service.
+
+  Deliberately not added to `PublicRuntimeRoutes`, so the shape stays free to
+  evolve while the pack model is young.
+
 ## 1.2.1
 
 ### Patch Changes
