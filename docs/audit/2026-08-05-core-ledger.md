@@ -224,7 +224,28 @@ if (writeProtected) {
 | working-memory 子系统 | ✅ 无持久损失。`maxItemsPerField`（默认 10）与 fast-layer 的 180/220 字符截断都发生在**短期层**；其来源事件同时进入 digest 路径，`shouldUseForWorkingMemory` 不影响 digest。 |
 | event store / data GC | ✅ 不毁审计链。GC 删旧 digest 与其快照，但**永远保留每个 scope 的最新 digest**，而事实历史活在最新状态里。 |
 
-仍未检查：pgvector 索引本身的召回质量（属于检索效果，非信息完整性）。
+### pgvector 召回质量
+
+| 检查项 | 结果 |
+|---|---|
+| `hnsw.ef_search` 默认 40 是否截断结果 | ❌ **假设不成立**。pgvector 0.8.3 下 `ef=40` 配 `LIMIT 100` 仍返回 100 行。 |
+| 默认 ef_search 下的召回质量 | ✅ 2 万条 64 维向量，`ef=40` 与 `ef=200` 的 recall@100 **均为 100%**。 |
+| HNSW 索引是否存在于生产 | ✅ `MemoryEventEmbedding_embedding_hnsw_idx`，vector 0.8.3。 |
+| **嵌入覆盖率** | ⚠️ **结构性风险，已修**。见下。 |
+
+原本据此写了一处 `set_config('hnsw.ef_search', …)` 的修复，实测两条前提都不成立后
+**已撤销**——为未经证实的收益给每次向量检索加一个事务，代价大于收益。若将来某个部署
+的语料规模显著变大，值得重测（本次样本仅 2 万条随机向量，真实嵌入的聚集性更强）。
+
+### 嵌入覆盖率（本次唯一的真实缺陷）
+
+`BullMqQueueAdapter.add` 不带任何选项，BullMQ 默认 `attempts: 1`。一次瞬时失败
+（限流、超时、API 抖动）就让该事件**永久对语义检索隐形**，只留一行日志，且无从查起。
+
+生产实测当时为 34/34、缺失 0——**风险是结构性的，尚未被触发**（流量极小）。
+
+已修：`attempts: 3` + 指数退避；并在 `GET /metrics/digest/:scopeId` 增加
+`embeddings: { events, embedded, missing, coverage }`，使残留缺口可被发现而非只能猜测。
 
 ### 一个由此确认的依赖关系
 

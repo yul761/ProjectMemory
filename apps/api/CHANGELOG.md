@@ -1,5 +1,21 @@
 # @statecore/api
 
+## 1.3.1
+
+### Patch Changes
+
+- Stop a single transient failure from making an event invisible to search.
+
+  Jobs were enqueued with no options, so BullMQ's default of one attempt applied.
+  For `embed_event` that meant one rate limit or timeout left the event
+  permanently absent from semantic search — stored, retrievable by keyword, and
+  silently missing from every vector query, with only a log line to say so. Jobs
+  now retry three times with exponential backoff.
+
+  `GET /metrics/digest/:scopeId` gains an `embeddings` block reporting how many of
+  a scope's events have no embedding, so a gap that survives the retries can be
+  found rather than guessed at.
+
 ## 1.3.0
 
 ### Minor Changes

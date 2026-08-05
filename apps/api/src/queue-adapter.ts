@@ -9,7 +9,15 @@ export class BullMqQueueAdapter implements IQueue {
   constructor(private readonly queue: Queue) {}
 
   async add(jobName: string, data: unknown): Promise<{ id: string }> {
-    const job = await this.queue.add(jobName, data as object);
+    // BullMQ defaults to a single attempt. For embed and classify that meant one
+    // transient failure — a rate limit, a timeout, an API blip — permanently
+    // removed an event from semantic search, with nothing but a log line to say
+    // so. Retry with backoff; a job that still fails after this is a real outage,
+    // not noise.
+    const job = await this.queue.add(jobName, data as object, {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5_000 }
+    });
     return { id: String(job.id) };
   }
 
