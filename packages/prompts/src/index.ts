@@ -1,4 +1,14 @@
-export const digestStage2SystemPrompt = `You are a long-term memory engine. Create a concise and faithful digest.
+/**
+ * Builds the stage-2 system prompt around a facet list supplied by the caller.
+ *
+ * The facet vocabulary used to be baked in here, which made this file a copy of
+ * the ontology that had to be kept in sync with the core by hand. The caller now
+ * renders the active facet pack (`buildFacetPromptSection()` in @statecore/core)
+ * and passes it in, so a deployment running a non-personal pack gets a prompt
+ * that matches what its engine will actually accept.
+ */
+export function buildDigestStage2SystemPrompt(facetSection: string): string {
+  return `You are a long-term memory engine. Create a concise and faithful digest.
 Rules:
 - Output JSON only.
 - goal must be a single short line (the scope goal, verbatim or lightly refined).
@@ -6,15 +16,10 @@ Rules:
 - changes must be <= 3 bullets.
 - nextSteps must be 1-3 concrete actionable tasks.
 - profileFacts: array of {facet, value} pairs extracted from the conversation (Delta candidates) AND any documents. Aggressively capture durable things the user reveals about themselves. Allowed facets:
-  - "style": the user's tastes, communication preferences, AND their 行事作风 — how they like things handled: their working style, decision patterns, standards, and what they value (e.g. "喜欢 teal 色", "偏好简洁的回答、先给结论再给细节", "重要决定前喜欢先看数据", "不喜欢被反复追问，给空间", "做事追求效率、讨厌拖延"). Capture durable working traits, not one-off moods.
-  - "goals": things the user wants to achieve (e.g. "想减肥", "7 月上线 Remi").
-  - "relationships": important people in the user's life (e.g. "妈妈住在上海", "同事 Alex 负责后端").
-  - "followUps": commitments or things to remember/do (e.g. "周四 2 点看牙医", "给供应商打电话问 Q3").
-  - "ongoing": projects or activities in progress (e.g. "在做盲盒生意", "在学西班牙语").
-  - "notes": durable, useful information that is NOT a personal-profile fact — knowledge worth keeping long-term such as project/product details, decisions, processes, or facts the user states or asks you to remember (e.g. "API keys rotate every 90 days", "公司差旅每天上限 $75", "客户 X 合同 9 月续签"). Be selective: capture only things with lasting value; do NOT store small talk, transient logistics, greetings, or one-off chit-chat.
-  - "identity": durable personal facts from documents (resume/bio): 工作经历, 教育, 技能, 联系方式.
+${facetSection}
   Each value is a self-contained fact line in the user's own language. Prefer the user's own statements over the assistant's. Do NOT include internal identifiers (reminder IDs, UUIDs, database ids) or system bookkeeping in a value — keep only the human-meaningful fact (e.g. "7 月 3 日晚上 6 点去接太太的船", NOT "…（提醒 ID: …）"). When the user corrects or updates a fact (a changed date, time, or detail), output ONLY the latest value — never also emit the superseded older version. Extract whenever the user reveals such info; omit profileFacts only when the conversation reveals none. Do not invent facts not present in the evidence.
 - Do not invent facts not present in the provided evidence.`;
+}
 
 export const digestStage2UserPrompt = `Context:
 Scope: {{scopeName}}

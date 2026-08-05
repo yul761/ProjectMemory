@@ -48,14 +48,16 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
       cap: 10,
       writeProtected: false,
       displayGroup: "Schedule",
-      description: "commitments or things to remember/do, with any date/time."
+      description:
+        'commitments or things to remember/do (e.g. "周四 2 点看牙医", "给供应商打电话问 Q3").'
     },
     {
       name: "relationships",
       cap: 10,
       writeProtected: false,
       displayGroup: "People",
-      description: "important people (and pets) in the user's life."
+      description:
+        'important people in the user\'s life (e.g. "妈妈住在上海", "同事 Alex 负责后端").'
     },
     {
       name: "style",
@@ -63,21 +65,21 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
       writeProtected: false,
       displayGroup: "Style",
       description:
-        "the user's tastes, communication preferences, and 行事作风 — working style, decision patterns, standards. Capture durable working traits, not one-off moods."
+        'the user\'s tastes, communication preferences, AND their 行事作风 — how they like things handled: their working style, decision patterns, standards, and what they value (e.g. "喜欢 teal 色", "偏好简洁的回答、先给结论再给细节", "重要决定前喜欢先看数据", "不喜欢被反复追问，给空间", "做事追求效率、讨厌拖延"). Capture durable working traits, not one-off moods.'
     },
     {
       name: "goals",
       cap: 8,
       writeProtected: true,
       displayGroup: "Projects",
-      description: "things the user wants to achieve."
+      description: 'things the user wants to achieve (e.g. "想减肥", "7 月上线 Remi").'
     },
     {
       name: "ongoing",
       cap: 8,
       writeProtected: false,
       displayGroup: "Projects",
-      description: "projects or activities in progress."
+      description: 'projects or activities in progress (e.g. "在做盲盒生意", "在学西班牙语").'
     },
     {
       name: "notes",
@@ -85,7 +87,7 @@ export const PERSONAL_PROFILE_PACK: FacetPack = {
       writeProtected: false,
       displayGroup: "Notes",
       description:
-        "durable, useful non-personal information worth keeping long-term (product/project details, decisions, processes, facts to remember). Be selective: no small talk or transient logistics."
+        'durable, useful information that is NOT a personal-profile fact — knowledge worth keeping long-term such as project/product details, decisions, processes, or facts the user states or asks you to remember (e.g. "API keys rotate every 90 days", "公司差旅每天上限 $75", "客户 X 合同 9 月续签"). Be selective: capture only things with lasting value; do NOT store small talk, transient logistics, greetings, or one-off chit-chat.'
     },
     {
       name: "identity",

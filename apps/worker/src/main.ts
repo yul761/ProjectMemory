@@ -9,13 +9,14 @@ import {
   runDigestControlPipeline,
   selectWorkingMemoryEvents,
   computeDriftMetrics,
-  getDomainConfig
+  getDomainConfig,
+  buildFacetPromptSection
 } from "@statecore/core";
 import type { DigestState, DriftMetrics, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import {
   digestClassifySystemPrompt,
   digestClassifyUserPrompt,
-  digestStage2SystemPrompt,
+  buildDigestStage2SystemPrompt,
   digestStage2UserPrompt,
   consolidateFacetSystemPrompt,
   consolidateFacetUserPrompt
@@ -275,7 +276,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     recentEvents,
     llm,
     prompts: {
-      digestStage2SystemPrompt,
+      digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection()),
       digestStage2UserPrompt,
       digestClassifySystemPrompt,
       digestClassifyUserPrompt,
@@ -444,7 +445,7 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
       recentEvents: chunk,
       llm,
       prompts: {
-        digestStage2SystemPrompt,
+        digestStage2SystemPrompt: buildDigestStage2SystemPrompt(buildFacetPromptSection()),
         digestStage2UserPrompt,
         digestClassifySystemPrompt,
         digestClassifyUserPrompt,
