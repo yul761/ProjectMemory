@@ -193,7 +193,11 @@ describe("addNoteFact", () => {
     expect(s.factRegistry!.filter((e) => e.facet === "notes")).toHaveLength(1);
   });
 
-  it("enforces the cap of 30 with oldest-eviction and removes the evicted note's registry entry", () => {
+  it("enforces the cap of 30 with oldest-eviction and retires the evicted note's registry entry", () => {
+    // Behaviour change (2026-08-05): eviction used to splice the registry record
+    // out entirely, which broke the audit chain — the fact had been believed and
+    // then there was no record it ever had been. The record now stays, marked
+    // retired, and only drops out of the *active* set.
     const s = emptyState();
     const make = ids();
     for (let i = 0; i <= 30; i++) {
@@ -202,9 +206,33 @@ describe("addNoteFact", () => {
     expect(s.profile!.notes).toHaveLength(30);
     expect(s.profile!.notes).not.toContain("note-0");
     expect(s.profile!.notes![0]).toBe("note-1");
+
     const notesEntries = s.factRegistry!.filter((e) => e.facet === "notes");
-    expect(notesEntries).toHaveLength(30);
-    expect(notesEntries.every((e) => e.content !== "note-0")).toBe(true);
+    expect(notesEntries).toHaveLength(31);
+
+    const active = notesEntries.filter((e) => !e.retiredAt && !e.supersededBy);
+    expect(active).toHaveLength(30);
+    expect(active.every((e) => e.content !== "note-0")).toBe(true);
+
+    const retired = notesEntries.filter((e) => e.retiredAt);
+    expect(retired).toHaveLength(1);
+    expect(retired[0].content).toBe("note-0");
+    expect(retired[0].retiredReason).toBe("cap_evicted");
+  });
+
+  it("retires the exact evicted note, not a fuzzy near-match", () => {
+    // The fuzzy matcher strips short numeric tokens, so "note v1" and "note v2"
+    // are indistinguishable to it. Eviction must use exact matching or it would
+    // retire whichever near-duplicate it happened to find first.
+    const s = emptyState();
+    const make = ids();
+    addNoteFact(s, "API v1 key rotates every 90 days", make, () => "t0");
+    for (let i = 1; i <= 30; i++) {
+      addNoteFact(s, `unrelated note number ${i} about something else entirely`, make, () => `t${i}`);
+    }
+    const retired = s.factRegistry!.filter((e) => e.retiredAt);
+    expect(retired).toHaveLength(1);
+    expect(retired[0].content).toBe("API v1 key rotates every 90 days");
   });
 
   it("keeps near-but-not-equal notes as distinct entries (exact-match dedup fix)", () => {

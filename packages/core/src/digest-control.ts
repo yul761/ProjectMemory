@@ -77,6 +77,13 @@ export interface FactRegistryEntry {
   evidenceType: "event" | "document";
   supersededBy?: string;
   facet?: string;
+  /**
+   * Set when the fact left the active set without being replaced by a newer
+   * version — capacity eviction, or an explicit forget. Distinct from
+   * `supersededBy`, which points at the fact that took its place.
+   */
+  retiredAt?: string;
+  retiredReason?: string;
 }
 
 export interface DigestEvidenceRef {
@@ -1095,7 +1102,43 @@ function isInFactRegistry(state: DigestState, content: string): boolean {
 }
 
 export function getActiveFactRegistry(state: DigestState): FactRegistryEntry[] {
-  return (state.factRegistry ?? []).filter((entry) => !entry.supersededBy);
+  return (state.factRegistry ?? []).filter((entry) => !entry.supersededBy && !entry.retiredAt);
+}
+
+/**
+ * Retire a fact instead of deleting it.
+ *
+ * Capacity eviction used to `splice()` the registry record out entirely, which
+ * destroyed the very audit chain that supersession exists to provide: the fact
+ * had been believed, and then there was no record it ever had been. A retired
+ * fact stays on the record with a timestamp and a reason; it simply stops being
+ * active.
+ */
+export function retireFact(
+  state: DigestState,
+  content: string,
+  reason: string,
+  makeNow: () => string = createDefaultNowFactory(),
+  /**
+   * `exact` must be used wherever the fact was stored verbatim with exact-match
+   * dedup — notably notes. The fuzzy matcher strips short numeric tokens, so
+   * "API v1 key…" and "API v2 key…" look identical to it and the wrong entry
+   * would be retired.
+   */
+  options?: { exact?: boolean }
+): void {
+  if (!state.factRegistry) return;
+  const normalizeExact = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+  const matches = options?.exact
+    ? (entryContent: string) => normalizeExact(entryContent) === normalizeExact(content)
+    : (entryContent: string) => sameFactCjkAware(entryContent, content, 0.6);
+
+  const target = state.factRegistry.find(
+    (entry) => !entry.supersededBy && !entry.retiredAt && matches(entry.content)
+  );
+  if (!target) return;
+  target.retiredAt = makeNow();
+  target.retiredReason = reason;
 }
 
 function promoteToFactRegistry(
@@ -1314,12 +1357,9 @@ export function applyProfileFactsFromDigest(
       }
       const [evicted] = facetFacts.splice(0, 1); // volatile facets: evict oldest (index 0)
       if (evicted && dropLog) recordDrop(dropLog, "cap_evicted", { facet, value: evicted, cap });
-      if (evicted && state.factRegistry) {
-        const ri = state.factRegistry.findIndex(
-          (e) => e.type === "profile" && e.facet === facet && !e.supersededBy && sameFactCjkAware(e.content, evicted, 0.6)
-        );
-        if (ri !== -1) state.factRegistry.splice(ri, 1);
-      }
+      // Retire, don't delete: the fact stops being active but the record of
+      // having believed it survives.
+      if (evicted) retireFact(state, evicted, "cap_evicted", makeNow);
     }
 
     facetFacts.push(value);
@@ -1367,18 +1407,13 @@ export function addNoteFact(
   if (!profileMap.notes) profileMap.notes = [];
   const notes = profileMap.notes;
 
-  // Cap enforcement: evict oldest entry (index 0) + its factRegistry record.
+  // Cap enforcement: evict the oldest entry (index 0) and retire its registry
+  // record. Retiring rather than deleting keeps the audit chain intact — the
+  // note stops being active, but the record that it was once held remains.
   const cap = getFacetCap("notes");
   if (notes.length >= cap) {
     const [evicted] = notes.splice(0, 1);
-    if (evicted && state.factRegistry) {
-      // Use exact match here — the evicted note was stored verbatim and its
-      // registry entry was added with exact-match semantics.
-      const ri = state.factRegistry.findIndex(
-        (e) => e.type === "profile" && e.facet === "notes" && !e.supersededBy && norm(e.content) === norm(evicted)
-      );
-      if (ri !== -1) state.factRegistry.splice(ri, 1);
-    }
+    if (evicted) retireFact(state, evicted, "cap_evicted", makeNow, { exact: true });
   }
 
   notes.push(value);
