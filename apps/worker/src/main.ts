@@ -12,7 +12,7 @@ import {
   getDomainConfig,
   buildFacetPromptSection,
   overrideFacetCaps,
-  resolveFacetPack
+  resolveFacetPackForScope
 } from "@statecore/core";
 import type { DigestState, DriftMetrics, WorkingMemoryState, WorkingMemoryView } from "@statecore/core";
 import {
@@ -239,8 +239,8 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
   }
 
   const t0 = Date.now();
-  const facetPack = await resolveFacetPack(facetPackStore, data.userId);
   const scope = await prisma.projectScope.findFirst({ where: { id: data.scopeId, userId: data.userId } });
+  const facetPack = await resolveFacetPackForScope(facetPackStore, data.userId, (scope as { template?: string | null } | null)?.template);
   if (!scope) {
     throw new Error("Scope not found for user");
   }
@@ -414,8 +414,8 @@ async function runRebuildDigestChainJob(data: { userId: string; scopeId: string;
 
   // Rebuilds must use the tenant's own ontology too, or replaying history would
   // reclassify every fact under the default pack.
-  const facetPack = await resolveFacetPack(facetPackStore, data.userId);
   const scope = await prisma.projectScope.findFirst({ where: { id: data.scopeId, userId: data.userId } });
+  const facetPack = await resolveFacetPackForScope(facetPackStore, data.userId, (scope as { template?: string | null } | null)?.template);
   if (!scope) throw new Error("Scope not found for user");
 
   let fromDate = data.from ? new Date(data.from) : undefined;

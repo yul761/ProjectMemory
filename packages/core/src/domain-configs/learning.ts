@@ -1,6 +1,31 @@
 import type { DomainConfig } from "./types";
+import type { FacetPack } from "../facet-registry";
+
+export const learningFacetPack: FacetPack = {
+  name: "learning",
+  facets: [
+    { name: "knowledge", cap: 40, writeProtected: true, displayGroup: "Knowledge",
+      routesFrom: ["knowledge_claim"],
+      description: "things the learner has established as true and should retain." },
+    { name: "learningGoals", cap: 10, writeProtected: true, displayGroup: "Goals",
+      routesFrom: ["learning_goal"],
+      description: "what the learner is trying to be able to do." },
+    { name: "openQuestions", cap: 20, writeProtected: false, displayGroup: "Questions",
+      routesFrom: ["open_question"],
+      description: "questions the learner has raised and not yet answered." },
+    { name: "insights", cap: 20, writeProtected: false, displayGroup: "Insights",
+      routesFrom: ["insight"],
+      description: "realisations and connections the learner has made." },
+    { name: "progress", cap: 10, writeProtected: false, displayGroup: "Progress",
+      routesFrom: ["progress"],
+      description: "where the learner has got to." },
+    { name: "notes", cap: 30, writeProtected: false, displayGroup: "Notes",
+      description: "durable learning material worth keeping long-term." }
+  ]
+};
 
 export const learningConfig: DomainConfig = {
+  facetPack: learningFacetPack,
   name: "learning",
   description: "Study assistant — learning goals, knowledge claims, open questions, and progress tracking",
   entityTypes: [

@@ -1,6 +1,33 @@
 import type { DomainConfig } from "./types";
+import type { FacetPack } from "../facet-registry";
+
+// Facets for the project domain. routesFrom names this domain's own classifier
+// entity types, which is what makes stage 1 actually land somewhere.
+export const projectFacetPack: FacetPack = {
+  name: "project",
+  facets: [
+    { name: "decisions", cap: 20, writeProtected: true, displayGroup: "Decisions",
+      routesFrom: ["decision"],
+      description: 'technical or product decisions the team has reached (e.g. "use Postgres for storage").' },
+    { name: "constraints", cap: 15, writeProtected: true, displayGroup: "Constraints",
+      routesFrom: ["constraint"],
+      description: 'boundaries or requirements the project must respect (e.g. "self-hosted only", "ship before Q3").' },
+    { name: "todos", cap: 20, writeProtected: false, displayGroup: "Todos",
+      routesFrom: ["todo"],
+      description: "concrete action items still to be completed." },
+    { name: "openQuestions", cap: 15, writeProtected: false, displayGroup: "Questions",
+      routesFrom: ["question"],
+      description: "questions raised and not yet resolved." },
+    { name: "status", cap: 10, writeProtected: false, displayGroup: "Status",
+      routesFrom: ["status"],
+      description: "progress updates on the work." },
+    { name: "notes", cap: 30, writeProtected: false, displayGroup: "Notes",
+      description: "durable project or product details worth keeping long-term." }
+  ]
+};
 
 export const projectConfig: DomainConfig = {
+  facetPack: projectFacetPack,
   name: "project",
   description: "Engineering and product project memory — technical decisions, constraints, and todos",
   entityTypes: [

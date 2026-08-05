@@ -1,5 +1,6 @@
 import { logger } from "./index";
 import { getDefaultFacetPack, parseFacetPack, type FacetPack } from "./facet-registry";
+import { getDomainConfig } from "./domain-configs/index";
 
 /**
  * Resolves the facet pack for a tenant.
@@ -61,4 +62,31 @@ export async function resolveFacetPack(
   }
   cache.set(userId, { pack, expiresAt: now() + CACHE_TTL_MS });
   return pack;
+}
+
+/**
+ * The pack for a scope, which is where the choice actually belongs.
+ *
+ * A scope's `template` already selects its classifier vocabulary, and each domain
+ * now carries the facets that vocabulary routes into — so one choice, already in
+ * the public contract and already self-service, settles both halves. Before this,
+ * three of the four templates classified events into types no facet routed from,
+ * and their stage-1 work landed nowhere.
+ *
+ * An account-level pack still wins when set: a tenant whose domain none of the
+ * built-ins describe gets one ontology across all their scopes.
+ */
+export async function resolveFacetPackForScope(
+  store: FacetPackStore,
+  userId: string,
+  template: string | null | undefined,
+  now: () => number = () => Date.now()
+): Promise<FacetPack> {
+  const accountPack = await resolveFacetPack(store, userId, now);
+  // resolveFacetPack falls back to the deployment default, which is also what a
+  // tenant with no override gets — so "did they override?" is the question here,
+  // not "what did resolve return".
+  if (accountPack.name !== getDefaultFacetPack().name) return accountPack;
+
+  return getDomainConfig(template).facetPack ?? getDefaultFacetPack();
 }

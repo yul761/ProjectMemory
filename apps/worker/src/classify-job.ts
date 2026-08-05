@@ -3,7 +3,7 @@ import {
   getDomainConfig,
   getDefaultFacetPack,
   packClassificationTypes,
-  resolveFacetPack,
+  resolveFacetPackForScope,
   type FacetPack
 } from "@statecore/core";
 import { buildPackClassificationSystemPrompt } from "@statecore/prompts";
@@ -25,14 +25,15 @@ export async function runClassifyEventJob(
   // built-in ones name a vocabulary its facets do not route from. Derive the
   // classifier's types from the pack instead, so what the classifier emits is what
   // the engine can actually route. Tenants on the default pack are unaffected.
-  const pack: FacetPack = await resolveFacetPack(
+  const pack: FacetPack = await resolveFacetPackForScope(
     {
       findFacetPack: async (userId: string) => {
         const row = await db.user.findUnique({ where: { id: userId }, select: { facetPack: true } });
         return row?.facetPack ?? null;
       }
     },
-    (scope as any).userId as string
+    (scope as any).userId as string,
+    (scope as any).template as string | null | undefined
   );
   const packTypes = packClassificationTypes(pack);
   const usePackTypes = pack.name !== getDefaultFacetPack().name && packTypes.length > 0;

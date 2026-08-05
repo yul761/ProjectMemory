@@ -1,6 +1,31 @@
 import type { DomainConfig } from "./types";
+import type { FacetPack } from "../facet-registry";
+
+export const healthFacetPack: FacetPack = {
+  name: "health",
+  facets: [
+    { name: "medicalFacts", cap: 20, writeProtected: true, displayGroup: "Medical",
+      routesFrom: ["medical_fact"],
+      description: "durable medical facts: conditions, allergies, medications, past procedures." },
+    { name: "dietaryRules", cap: 15, writeProtected: true, displayGroup: "Diet",
+      routesFrom: ["dietary_rule"],
+      description: "dietary rules the user follows or must follow." },
+    { name: "fitnessGoals", cap: 10, writeProtected: true, displayGroup: "Goals",
+      routesFrom: ["fitness_goal"],
+      description: "health or fitness outcomes the user is working towards." },
+    { name: "plans", cap: 8, writeProtected: false, displayGroup: "Plans",
+      routesFrom: ["current_plan"],
+      description: "the training, treatment or diet plan currently in effect." },
+    { name: "preferences", cap: 10, writeProtected: false, displayGroup: "Preferences",
+      routesFrom: ["preference"],
+      description: "how the user prefers to train, eat, or be coached." },
+    { name: "notes", cap: 30, writeProtected: false, displayGroup: "Notes",
+      description: "durable health information that is not one of the above." }
+  ]
+};
 
 export const healthConfig: DomainConfig = {
+  facetPack: healthFacetPack,
   name: "health",
   description: "Fitness and health assistant — training goals, physical limitations, dietary rules, daily logs",
   entityTypes: [

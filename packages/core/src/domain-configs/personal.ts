@@ -1,6 +1,8 @@
 import type { DomainConfig } from "./types";
+import { PERSONAL_PROFILE_PACK } from "../facet-registry";
 
 export const personalConfig: DomainConfig = {
+  facetPack: PERSONAL_PROFILE_PACK,
   name: "personal",
   description: "Personal life assistant — goals, commitments, experiences, and daily reflections",
   entityTypes: [

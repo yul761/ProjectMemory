@@ -1,5 +1,36 @@
 # @statecore/worker
 
+## 1.3.0
+
+### Minor Changes
+
+- Give every domain the facets its classifier vocabulary routes into.
+
+  Scope templates and facet packs were two extensibility mechanisms at two
+  granularities, and only `personal` happened to line up. `health` classified
+  events as `medical_fact`, `learning` as `knowledge_claim`, `project` as
+  `decision` — and the account-level pack routed from none of them, so for three
+  of the four templates (including the default) stage-1 classification produced
+  labels that landed nowhere.
+
+  A domain now carries both halves. `project`, `health` and `learning` gain facet
+  packs whose `routesFrom` names their own entity types, and a scope's pack is
+  resolved from its template — one choice, already in the public contract and
+  already self-service, settling both the input and the state vocabulary.
+
+  An account-level `User.facetPack` still wins when set, for a tenant whose domain
+  none of the built-ins describe.
+
+  This means one account can run several scopes with different ontologies, which
+  is what a customer building more than one product needs. Note that API keys do
+  not scope: every key on an account can reach all of its scopes, so keys are a
+  rotation mechanism, not an isolation boundary.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @statecore/core@1.3.0
+
 ## 1.2.1
 
 ### Patch Changes
