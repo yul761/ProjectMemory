@@ -25,6 +25,7 @@ import {
 } from "@statecore/prompts";
 import { workerEnv } from "./env";
 import { withDigestLock, DigestAlreadyRunningError, type LockRedis } from "./digest-lock";
+import { selectDigestEventWindow } from "./digest-lookback";
 import { processRebuildDigestChainJob } from "./rebuild-job";
 import { runEmbedEventJob } from "./embed-job";
 import { runClassifyEventJob } from "./classify-job";
@@ -255,9 +256,16 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     orderBy: [{ createdAt: "desc" }, { id: "desc" }]
   });
 
-  const since = new Date(Date.now() - workerEnv.maxDaysLookback * 24 * 60 * 60 * 1000);
+  // Recent by either clock — occurred recently, or reached us recently. Filtering
+  // on createdAt alone meant backfilled history (which sets createdAt from
+  // occurredAt) fell outside every window, and the digest selected nothing while
+  // reporting success.
+  const lookbackWindow = selectDigestEventWindow({
+    scopeId: data.scopeId,
+    lookbackDays: workerEnv.maxDaysLookback
+  });
   const streamEventQuery = {
-    where: { scopeId: data.scopeId, createdAt: { gte: since }, type: "stream" as const, suppressedAt: null },
+    where: { ...lookbackWindow, type: "stream" as const },
     orderBy: [{ createdAt: "desc" as const }, { id: "desc" as const }],
     take: lastDigestRow ? workerEnv.maxRecentEvents : workerEnv.digestFirstRunMaxEvents
   };
@@ -265,7 +273,7 @@ async function runDigestScopeJob(data: { userId: string; scopeId: string }): Pro
     ...streamEventQuery
   });
   const recentDocumentEvents = await prisma.memoryEvent.findMany({
-    where: { scopeId: data.scopeId, createdAt: { gte: since }, type: "document", suppressedAt: null },
+    where: { ...lookbackWindow, type: "document" as const },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }]
   });
   const recentEvents = [...recentStreamEvents, ...recentDocumentEvents];

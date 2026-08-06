@@ -1,5 +1,13 @@
 # @statecore/api
 
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @statecore/db@1.3.0
+  - @statecore/core@1.3.1
+
 ## 1.4.1
 
 ### Patch Changes

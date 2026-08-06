@@ -90,7 +90,12 @@ model MemoryEvent {
   contentHash String?
   chatId      String?
   messageId   String?
+  // When the event happened. Ingest overwrites this with `occurredAt` when the
+  // caller supplies one, so it answers "when", not "when did we learn it".
   createdAt   DateTime     @default(now())
+  // When we learned it. Never overwritten, so a window over "what is new to us"
+  // stays answerable after history has been backfilled.
+  ingestedAt  DateTime     @default(now())
   updatedAt   DateTime?
 
   classifiedType        String?

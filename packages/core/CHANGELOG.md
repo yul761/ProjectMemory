@@ -1,5 +1,12 @@
 # @statecore/core
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @statecore/db@1.3.0
+
 ## 1.3.0
 
 ### Minor Changes

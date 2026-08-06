@@ -1,5 +1,34 @@
 # @statecore/worker
 
+## 1.4.0
+
+### Minor Changes
+
+- Stop backfilled history from producing an empty digest.
+
+  `occurredAt` is a documented `/v1` field whose purpose is importing conversation
+  that happened before now — and using it silently disabled the fact layer.
+
+  Ingest sets an event's `createdAt` from `occurredAt`, so that column answers
+  "when did this happen". The digest's lookback window needs "when did we learn
+  this", and filtered on the same column: import two years of history and every
+  event fell outside a 14-day window, so the digest selected nothing, reported
+  success, and wrote no facts. Nothing errored.
+
+  `MemoryEvent.ingestedAt` is now stamped on write and never moved, and the digest
+  window admits an event that is recent by either clock. Existing rows are seeded
+  from `createdAt`, which is exact for them — nothing in production has ever sent
+  `occurredAt`.
+
+  A lookback of zero or less now means "unbounded" rather than "select nothing",
+  since a misconfigured window should not silently empty the digest.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @statecore/db@1.3.0
+  - @statecore/core@1.3.1
+
 ## 1.3.0
 
 ### Minor Changes
