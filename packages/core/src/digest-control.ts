@@ -1155,6 +1155,33 @@ export function getActiveFactRegistry(state: DigestState): FactRegistryEntry[] {
 }
 
 /**
+ * The longest a single fact may be.
+ *
+ * Three paths used to promote `event.content` verbatim — profile facets,
+ * decisions, constraints. With a chat message that reads fine, because a message
+ * is about the size of a statement. With a session or a document it is not: the
+ * fact layer becomes a second copy of the corpus, and since every consumer of it
+ * works against a context budget, those copies crowd out the facts that
+ * extraction actually produced. Measured on LongMemEval at session granularity:
+ * 87% of registry entries over 1000 tokens, median 2691, against extracted facts
+ * of 11-27 tokens — a ratio near 100:1.
+ *
+ * 500 characters is a generous sentence and a small fraction of any document, so
+ * the bound separates the two cases without needing to know which one it is in.
+ */
+export const MAX_FACT_CHARS = 500;
+
+/**
+ * Whether a value is a statement rather than a document.
+ *
+ * This sits on what gets written, not on the event it came from: a long
+ * conversation that yields a short fact is the normal case and must still pass.
+ */
+export function isFactSized(content: string): boolean {
+  return content.trim().length <= MAX_FACT_CHARS;
+}
+
+/**
  * Retire a fact instead of deleting it.
  *
  * Capacity eviction used to `splice()` the registry record out entirely, which
@@ -1202,6 +1229,9 @@ function promoteToFactRegistry(
 ): void {
   if (!state.factRegistry) state.factRegistry = [];
   if (isInFactRegistry(state, content)) return;
+  // Backstop. Every caller checks already; this makes it impossible for a new
+  // one to put a document in the registry by forgetting to.
+  if (!isFactSized(content)) return;
   const entry: FactRegistryEntry = {
     id: makeId(),
     content,
@@ -1274,6 +1304,21 @@ function mergeProfileFacets(
     if (!incomingValue) continue;
 
     const { facet, cap, writeProtected } = route;
+
+    // Routing classifies an event into a facet; it does not turn it into a fact.
+    // A session-sized event has to reach the profile through extraction, or the
+    // facet fills up with transcripts. See MAX_FACT_CHARS.
+    if (!isFactSized(incomingValue)) {
+      if (dropLog) {
+        recordDrop(dropLog, "fact_too_long", {
+          facet,
+          value: incomingValue,
+          length: incomingValue.length,
+          limit: MAX_FACT_CHARS
+        });
+      }
+      continue;
+    }
     if (!state.profile[facet]) (state.profile as Record<string, string[]>)[facet] = [];
     const facetFacts: string[] = (state.profile as Record<string, string[]>)[facet]!;
 
@@ -1348,6 +1393,21 @@ export function applyProfileFactsFromDigest(
     if (!value) continue;
     if (!isRegisteredFacet(pack, facet)) {
       if (dropLog) recordDrop(dropLog, "facet_not_registered", { facet, value });
+      continue;
+    }
+
+    // Extraction is supposed to return statements. When it returns a passage
+    // instead — quoting a whole turn back, most often — the same crowding-out
+    // applies as on the routing path, so the bound holds here too.
+    if (!isFactSized(value)) {
+      if (dropLog) {
+        recordDrop(dropLog, "fact_too_long", {
+          facet,
+          value,
+          length: value.length,
+          limit: MAX_FACT_CHARS
+        });
+      }
       continue;
     }
 
@@ -1753,6 +1813,18 @@ export function protectedStateMerge(input: {
             pushRecentChange(next, { field: "decisions", action: "remove", value: matched, evidence });
           }
         }
+      } else if (!isFactSized(text)) {
+        // Skip the whole branch, not just the write. `findConflictingDecisions`
+        // below would be matching real decisions against a transcript, and a
+        // spurious match there deletes one.
+        if (input.dropLog) {
+          recordDrop(input.dropLog, "fact_too_long", {
+            field: "decisions",
+            value: text,
+            length: text.length,
+            limit: MAX_FACT_CHARS
+          });
+        }
       } else {
         const conflicting = findConflictingDecisions(next.stableFacts.decisions, text);
         for (const conflict of conflicting) {
@@ -1797,8 +1869,19 @@ export function protectedStateMerge(input: {
 
     if (delta.features.kind === "constraint" && delta.features.importanceScore >= 0.75) {
       const normalizedConstraint = normalizeConstraintFactText(text);
-      const existing = findBestSemanticMatch(next.stableFacts.constraints, normalizedConstraint);
-      if (!existing) {
+      const existing = isFactSized(normalizedConstraint)
+        ? findBestSemanticMatch(next.stableFacts.constraints, normalizedConstraint)
+        : undefined;
+      if (!isFactSized(normalizedConstraint)) {
+        if (input.dropLog) {
+          recordDrop(input.dropLog, "fact_too_long", {
+            field: "constraints",
+            value: normalizedConstraint,
+            length: normalizedConstraint.length,
+            limit: MAX_FACT_CHARS
+          });
+        }
+      } else if (!existing) {
         next.stableFacts.constraints.push(normalizedConstraint);
         pushRecentChange(next, { field: "constraints", action: "add", value: normalizedConstraint, evidence });
         next.provenance.constraints = upsertValueProvenance(next.provenance.constraints, normalizedConstraint, evidence);

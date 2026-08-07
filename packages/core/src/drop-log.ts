@@ -12,6 +12,7 @@ export type DropReason =
   | "no_display_group" // facet has no display group mapping
   | "protected_lower_authority" // write-protected facet, incoming source ranks lower
   | "no_document_evidence" // document-authority facet, but this run had no document
+  | "fact_too_long" // a whole session or document, not a statement
   | "consolidation_skipped"; // facet not eligible for consolidation
 
 export interface DropRecord {
