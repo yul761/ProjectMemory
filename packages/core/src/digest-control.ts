@@ -2470,7 +2470,58 @@ function formatDocuments(docs: MemoryEvent[]) {
  * becomes an overflow the moment someone points StateCore at a smaller one, and
  * the failure mode is a dead digest rather than a degraded one.
  */
-const STAGE2_SECTION_CHAR_BUDGET = 60_000;
+export const STAGE2_SECTION_CHAR_BUDGET = 60_000;
+
+/**
+ * How many stage-2 passes one digest run will make.
+ *
+ * Chunking removes the silent truncation, but it must not turn a bulk import
+ * into an unbounded number of LLM calls. Events beyond the ceiling are not lost:
+ * they stay in the store and the next digest run picks them up. 12 passes is
+ * ~720k characters of corpus per run.
+ */
+export const STAGE2_MAX_CHUNKS = 12;
+
+/**
+ * Split the delta candidates into prompt-sized groups.
+ *
+ * `clipSection` used to cut this section at the budget and drop the remainder on
+ * the floor, so on any corpus larger than one prompt the extractor only ever saw
+ * the beginning of it. Measured on LongMemEval: ~490k characters of sessions
+ * against a 60k window, about 12% reaching extraction. Bulk import
+ * (`ingest:docs`) hits the same wall.
+ *
+ * When the corpus overflows the pass ceiling the tail is kept: events arrive
+ * oldest-first, and the recent end is both what a reader is most likely to ask
+ * about and the part that has not yet had a chance to be digested.
+ */
+export function chunkDeltaCandidates(
+  candidates: DeltaCandidate[],
+  budget = STAGE2_SECTION_CHAR_BUDGET,
+  maxChunks = STAGE2_MAX_CHUNKS
+): DeltaCandidate[][] {
+  if (candidates.length === 0) return [];
+
+  const chunks: DeltaCandidate[][] = [];
+  let current: DeltaCandidate[] = [];
+  let size = 0;
+
+  for (const candidate of candidates) {
+    const cost = candidate.event.content.length;
+    // A single event over budget cannot be made to fit; it goes alone and the
+    // per-section clip still bounds what the model sees.
+    if (current.length > 0 && size + cost > budget) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(candidate);
+    size += cost;
+  }
+  if (current.length > 0) chunks.push(current);
+
+  return chunks.length <= maxChunks ? chunks : chunks.slice(chunks.length - maxChunks);
+}
 
 /**
  * Backstop on the fully assembled prompt. Per-section limits cannot bound the
@@ -2584,7 +2635,7 @@ function formatForgottenFacts(contents?: readonly string[]): string {
   );
 }
 
-export async function generateDigestStage2(input: {
+interface Stage2Input {
   scope: ProjectScope;
   lastDigest?: Digest | null;
   protectedState: DigestState;
@@ -2595,7 +2646,47 @@ export async function generateDigestStage2(input: {
   userPromptTemplate: string;
   maxRetries: number;
   forgottenFacts?: readonly string[];
-}): Promise<DigestOutput> {
+}
+
+/**
+ * Run stage 2 over the whole corpus, one prompt-sized pass at a time.
+ *
+ * Each pass carries the previous pass's output forward as its `lastDigest`,
+ * which is the same shape as consecutive incremental digest runs — the summary
+ * accumulates rather than being overwritten by the final chunk. Facts are the
+ * union across passes, deduplicated, since a durable fact restated in two
+ * chunks is one fact.
+ */
+export async function generateDigestStage2(input: Stage2Input): Promise<DigestOutput> {
+  const chunks = chunkDeltaCandidates(input.deltaCandidates);
+  if (chunks.length <= 1) return runStage2Pass(input);
+
+  const facts: { facet: string; value: string }[] = [];
+  const seen = new Set<string>();
+  let carried: Digest | null | undefined = input.lastDigest;
+  let last: DigestOutput | null = null;
+
+  for (const chunk of chunks) {
+    const out = await runStage2Pass({ ...input, deltaCandidates: chunk, lastDigest: carried });
+    for (const fact of out.profileFacts ?? []) {
+      const key = `${fact.facet}|${normalizeText(fact.value)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      facts.push(fact);
+    }
+    last = out;
+    carried = {
+      ...(carried ?? {}),
+      summary: out.summary,
+      changes: out.changes.join("; "),
+      nextSteps: out.nextSteps
+    } as Digest;
+  }
+
+  return { ...(last as DigestOutput), profileFacts: facts };
+}
+
+async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
   const lastDigestText = input.lastDigest
     ? `Summary: ${input.lastDigest.summary}\nChanges: ${input.lastDigest.changes}\nNext steps: ${input.lastDigest.nextSteps.join(", ")}`
     : "(none)";
