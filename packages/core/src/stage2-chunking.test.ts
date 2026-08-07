@@ -172,3 +172,70 @@ describe("stage 2 sees the whole corpus, not the first prompt-full of it", () =>
     expect(new Set(llm.prompts).size).toBe(llm.prompts.length);
   });
 });
+
+describe("a consistency failure must not also lose the facts", () => {
+  // Threading each chunk's output forward as the next chunk's lastDigest makes a
+  // consistency trip likely — consecutive chunks of one corpus describe similar
+  // changes. Every fallback return in the pass dropped profileFacts, so one trip
+  // discarded everything that pass had extracted. Observed live: a digest that
+  // completed in 344s, reported success, and wrote zero facts.
+  //
+  // `improve it` is a vague next step under 4 tokens, which fails the check
+  // deterministically — no reliance on how the model happens to word things.
+  const failingOutput = (facts: { facet: string; value: string }[]) => ({
+    goal: "g",
+    summary: "a summary",
+    changes: ["something changed"],
+    nextSteps: ["improve it"],
+    profileFacts: facts
+  });
+
+  it("keeps the facts from the passes that succeeded when one chunk fails", async () => {
+    // The realistic shape: some chunks satisfy the gate, some do not. Before the
+    // wrapper caught it, one failing chunk threw and took the whole corpus with
+    // it — a regression chunking introduced, since a single pass only ever cost
+    // one digest.
+    const llm = llmReturning((n) =>
+      n === 2
+        ? failingOutput([{ facet: "goals", value: `fact ${n}` }])
+        : okOutput([{ facet: "goals", value: `fact ${n}` }])
+    );
+    const deltas = Array.from({ length: 6 }, (_, i) => delta(`e${i}`, 40_000));
+
+    const out = await generateDigestStage2({
+      scope: SCOPE,
+      lastDigest: null,
+      protectedState: STATE,
+      deltaCandidates: deltas,
+      documents: [],
+      llm,
+      systemPrompt: "sys",
+      userPromptTemplate: TEMPLATE,
+      maxRetries: 0
+    });
+
+    const values = (out.profileFacts ?? []).map((f) => f.value);
+    expect(values).toContain("fact 1");
+    expect(values).toContain("fact 3");
+  });
+
+  it("keeps the facts when a previous digest exists to fall back to", async () => {
+    const llm = llmReturning((n) => failingOutput([{ facet: "goals", value: `fact ${n}` }]));
+
+    const out = await generateDigestStage2({
+      scope: SCOPE,
+      lastDigest: { summary: "prior", changes: "old change", nextSteps: ["ship it"] } as never,
+      protectedState: STATE,
+      deltaCandidates: [delta("a", 200)],
+      documents: [],
+      llm,
+      systemPrompt: "sys",
+      userPromptTemplate: TEMPLATE,
+      maxRetries: 0
+    });
+
+    // The digest degrades to the previous summary — that part is intended. The
+    // facts are a separate output and did not fail anything.
+    expect((out.profileFacts ?? []).map((f) => f.value)).toContain("fact 1");
+  });
+});

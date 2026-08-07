@@ -2667,7 +2667,15 @@ export async function generateDigestStage2(input: Stage2Input): Promise<DigestOu
   let last: DigestOutput | null = null;
 
   for (const chunk of chunks) {
-    const out = await runStage2Pass({ ...input, deltaCandidates: chunk, lastDigest: carried });
+    // One chunk that cannot satisfy the consistency gate must not discard the
+    // other eight. Before chunking a throw here cost one digest; now it would
+    // cost the whole corpus, so a failed pass is skipped rather than fatal.
+    let out: DigestOutput;
+    try {
+      out = await runStage2Pass({ ...input, deltaCandidates: chunk, lastDigest: carried });
+    } catch {
+      continue;
+    }
     for (const fact of out.profileFacts ?? []) {
       const key = `${fact.facet}|${normalizeText(fact.value)}`;
       if (seen.has(key)) continue;
@@ -2683,7 +2691,10 @@ export async function generateDigestStage2(input: Stage2Input): Promise<DigestOu
     } as Digest;
   }
 
-  return { ...(last as DigestOutput), profileFacts: facts };
+  // Every pass failed. Nothing to degrade to, so fail the way a single pass does.
+  if (!last) return runStage2Pass({ ...input, deltaCandidates: chunks[chunks.length - 1] });
+
+  return { ...last, profileFacts: facts };
 }
 
 async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
@@ -2694,6 +2705,11 @@ async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
 
   let fixInstruction = "";
   let lastErrors: string[] = [];
+  // The consistency gate judges the summary, changes, and next steps. The facts
+  // extracted on the way are a separate output and did not fail anything, so
+  // every degraded return below carries them out rather than discarding a pass's
+  // worth of extraction along with its prose.
+  let extracted: { facet: string; value: string }[] = [];
 
   for (let attempt = 0; attempt <= input.maxRetries; attempt += 1) {
     const userPrompt = renderTemplate(input.userPromptTemplate, {
@@ -2735,6 +2751,7 @@ async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
     };
 
     const aligned = alignDigestWithState(normalized, input.protectedState);
+    if (aligned.profileFacts?.length) extracted = aligned.profileFacts;
 
     const check = consistencyCheck({
       output: aligned,
@@ -2754,7 +2771,8 @@ async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
         changes: [],
         nextSteps: input.lastDigest.nextSteps?.length
           ? input.lastDigest.nextSteps.slice(0, 3)
-          : ["Review recent events for changes."]
+          : ["Review recent events for changes."],
+        profileFacts: extracted
       };
     }
 
@@ -2784,6 +2802,7 @@ async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
       nextSteps: input.lastDigest.nextSteps?.length
         ? input.lastDigest.nextSteps.slice(0, 3)
         : ["Review recent events for changes."],
+      profileFacts: extracted,
       degraded: { reason: "consistency_failed", errors: lastErrors }
     };
   }
@@ -2796,6 +2815,7 @@ async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
       summary: projected,
       changes: [],
       nextSteps: ["Review recent events for changes."],
+      profileFacts: extracted,
       degraded: { reason: "consistency_failed_no_prior_digest", errors: lastErrors }
     };
   }
