@@ -299,6 +299,38 @@ additive-only change is accepted by regenerating the snapshot
 removal/rename/retype/required-addition is a breaking change — do not ship it
 under `/v1`.
 
+### Versioning the contract
+
+Three different version numbers describe this repository and they answer
+different questions. Conflating them is the usual source of confusion:
+
+| number | where | what it answers |
+|---|---|---|
+| package versions | `packages/*/package.json` | which build of this package is installed |
+| release tag | `git tag`, e.g. `v1.5.0` | what shipped, and when |
+| **`info.version`** | the generated OpenAPI document | **how current is the contract you are holding** |
+
+`info.version` follows the contract, not the code:
+
+1. **MINOR on every additive change** — a new endpoint, a new optional field.
+   Bump it in `apps/api/src/openapi.ts` in the same commit that regenerates the
+   snapshots.
+2. **PATCH for a documentation-only correction** — a clarified description, a
+   fixed example, with no change to the shape.
+3. **MAJOR never.** A breaking change gets a new path prefix (`/v2`), which is
+   the entire meaning of `/v1`. If you find yourself wanting `2.0.0` here, what
+   you actually want is a new prefix.
+
+Narrowing what is *declared* frozen — moving a diagnostic field out of
+`PublicV1Contracts` — is not a version-bearing change: it changes the promise's
+scope, not the runtime. Note it in the changeset instead.
+
+History: `1.0.0` at the freeze, `1.1.0` for `GET /v1/memory/facts` and
+`POST /v1/memory/facts/forget`, `1.2.0` for the optional `pinned` field on event
+input, `1.3.0` for `maxChars` and the top-level `budget` on retrieve. The number
+sat at `1.0.0` through all three before this rule existed, which meant a reader
+could not tell a three-month-old spec from a current one.
+
 > **Diagnostic fields are not frozen.** `POST /v1/memory/retrieve`,
 > `/v1/memory/answer`, and `/v1/memory/runtime/turn` return additional
 > diagnostic/ranking fields (e.g. `retrieval`, `evidence`, `layerAlignment`,

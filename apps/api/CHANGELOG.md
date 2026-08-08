@@ -1,5 +1,26 @@
 # @statecore/api
 
+## 1.5.1
+
+### Patch Changes
+
+- Version the frozen contract, and write down the rule.
+
+  The generated OpenAPI document declared `info.version: "1.0.0"` and had done so
+  through three additive changes to the `/v1` surface — two endpoints, an optional
+  `pinned` field, and retrieve's `maxChars`/`budget`. A number that never moves
+  carries no information: a reader could not tell a three-month-old spec from a
+  current one, which matters now that the document is linked from public docs.
+
+  It now reads `1.3.0`, and `docs/api.md` states the rule: MINOR on every additive
+  change, PATCH for documentation-only corrections, and MAJOR never — a breaking
+  change gets a new path prefix, which is what `/v1` means. Narrowing what is
+  _declared_ frozen is not version-bearing; it changes the promise's scope, not the
+  runtime.
+
+  No behaviour changes. This is the contract's own version, distinct from package
+  versions and from the release tag.
+
 ## 1.5.0
 
 ### Minor Changes

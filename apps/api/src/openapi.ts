@@ -111,7 +111,13 @@ export function buildOpenApiDocument(): JsonObject {
     openapi: "3.0.3",
     info: {
       title: "StateCore API",
-      version: "1.0.0",
+      // The frozen surface's own version, tracked separately from any package
+      // version. MINOR on every additive change (a new endpoint, a new optional
+      // field); MAJOR never — a breaking change gets a new path prefix instead,
+      // which is what /v1 means. It sat at 1.0.0 through three additive changes
+      // and so told a reader nothing about whether the spec they were holding
+      // was current. See "Compatibility rules" in docs/api.md.
+      version: "1.3.0",
       description: "Frozen public /v1 surface of the StateCore memory runtime."
     },
     servers: [{ url: "/" }],
