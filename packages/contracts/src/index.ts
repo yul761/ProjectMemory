@@ -123,7 +123,10 @@ export const DigestRebuildInput = z.object({
 export const RetrieveInput = z.object({
   scopeId: z.string().uuid(),
   query: z.string().min(1).optional(),
-  limit: z.number().int().min(1).max(100).optional()
+  limit: z.number().int().min(1).max(100).optional(),
+  // Optional by contract rule: /v1 is an additively-compatible freeze, so a new
+  // field is never required. Absent means "behave exactly as before".
+  maxChars: z.number().int().positive().optional()
 });
 
 export const FactRegistryEntrySchema = z.object({
@@ -140,6 +143,31 @@ export const FactRegistryEntrySchema = z.object({
   // (capacity eviction, explicit forget). Absent on every pre-existing entry.
   retiredAt: z.string().optional(),
   retiredReason: z.string().optional()
+});
+
+export const BudgetDropSchema = z.object({
+  kind: z.enum(["digest", "fact", "event"]),
+  id: z.string().nullable(),
+  chars: z.number().int().min(0),
+  reason: z.enum(["budget_exhausted", "fact_share_cap", "digest_too_large"]),
+  score: z.number().optional()
+});
+
+export const BudgetReportSchema = z.object({
+  maxChars: z.number().int().min(0),
+  usedChars: z.number().int().min(0),
+  digestChars: z.number().int().min(0),
+  factChars: z.number().int().min(0),
+  eventChars: z.number().int().min(0),
+  factShareCap: z.number().int().min(0),
+  // Counts are exact and never truncated; `dropped` is the bounded detail.
+  droppedCounts: z.object({
+    digest: z.number().int().min(0),
+    fact: z.number().int().min(0),
+    event: z.number().int().min(0)
+  }),
+  dropped: z.array(BudgetDropSchema),
+  itemsOmitted: z.number().int().min(0)
 });
 
 export const RetrieveOutput = z.object({
@@ -169,7 +197,8 @@ export const RetrieveOutput = z.object({
       embeddingScore: z.number().optional(),
       finalScore: z.number(),
       rankingReason: z.string()
-    }))
+    })),
+    budget: BudgetReportSchema.optional()
   }).optional()
 });
 

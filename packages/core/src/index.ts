@@ -344,6 +344,17 @@ export class RetrieveService {
     return [...asciiTokens, ...cjkTokens];
   }
 
+  /**
+   * Relevance of one text to a query, on the same scale events are ranked by.
+   *
+   * Facts are ranked for the context budget outside this class, and the scorer
+   * they need is this one. Exposing it beats copying the tokenizer and the
+   * alias table into a second implementation that would drift.
+   */
+  scoreText(query: string, content: string): number {
+    return this.scoreByQuery(query, content);
+  }
+
   private scoreByQuery(query: string, content: string) {
     return this.explainQueryScore(query, content).score;
   }
