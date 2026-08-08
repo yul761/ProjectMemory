@@ -1,5 +1,39 @@
 # @statecore/api
 
+## 1.5.0
+
+### Minor Changes
+
+- `POST /v1/memory/retrieve` accepts an optional context budget.
+
+  The endpoint took an item count (`limit`) and could not take a budget, so the
+  "a few large items or many small ones" tradeoff — the one that decides what a
+  caller actually gets at a tight budget — was a decision only the engine could
+  make and had no way to hear about. Callers filled the gap themselves: one
+  reimplemented it in eighty lines, another simply took the first forty facts.
+
+  Pass `maxChars` and the engine packs within it and reports what it refused, in a
+  new top-level optional `budget` field. Ordering is digest, then facts, then
+  events. The digest is atomic. Facts take at most `FACT_BUDGET_SHARE` (40%) of
+  the budget so raw evidence always has room, and are ranked by relevance to the
+  query when one is given — by confidence and recency when it is not. Items are
+  included whole or skipped; an item that does not fit never ends the fill, since
+  a smaller one ranked below it may still belong.
+
+  Everything refused is recorded with a reason and a score. Exact counts are never
+  truncated; the itemised list is bounded at 100 and says how many it omitted. A
+  budget means dropping things, and a response that quietly holds less than the
+  caller asked for is the defect class this engine exists to remove.
+
+  Additive and optional throughout: a request without `maxChars` gets byte-identical
+  behaviour, and the frozen `/v1` surface gains only optional fields.
+
+### Patch Changes
+
+- Updated dependencies [[`8317037`](https://github.com/yul761/StateCore/commit/8317037e34aae3eb2933f8db8676c3a7dc77b35f), [`0d6d75d`](https://github.com/yul761/StateCore/commit/0d6d75d0e2c4a0758149b6f5be99a1bdce97ea4a)]:
+  - @statecore/core@1.4.0
+  - @statecore/contracts@1.3.0
+
 ## 1.4.2
 
 ### Patch Changes

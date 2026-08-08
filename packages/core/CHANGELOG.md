@@ -1,5 +1,79 @@
 # @statecore/core
 
+## 1.4.0
+
+### Minor Changes
+
+- `POST /v1/memory/retrieve` accepts an optional context budget.
+
+  The endpoint took an item count (`limit`) and could not take a budget, so the
+  "a few large items or many small ones" tradeoff — the one that decides what a
+  caller actually gets at a tight budget — was a decision only the engine could
+  make and had no way to hear about. Callers filled the gap themselves: one
+  reimplemented it in eighty lines, another simply took the first forty facts.
+
+  Pass `maxChars` and the engine packs within it and reports what it refused, in a
+  new top-level optional `budget` field. Ordering is digest, then facts, then
+  events. The digest is atomic. Facts take at most `FACT_BUDGET_SHARE` (40%) of
+  the budget so raw evidence always has room, and are ranked by relevance to the
+  query when one is given — by confidence and recency when it is not. Items are
+  included whole or skipped; an item that does not fit never ends the fill, since
+  a smaller one ranked below it may still belong.
+
+  Everything refused is recorded with a reason and a score. Exact counts are never
+  truncated; the itemised list is bounded at 100 and says how many it omitted. A
+  budget means dropping things, and a response that quietly holds less than the
+  caller asked for is the defect class this engine exists to remove.
+
+  Additive and optional throughout: a request without `maxChars` gets byte-identical
+  behaviour, and the frozen `/v1` surface gains only optional fields.
+
+### Patch Changes
+
+- [`8317037`](https://github.com/yul761/StateCore/commit/8317037e34aae3eb2933f8db8676c3a7dc77b35f) Thanks [@yul761](https://github.com/yul761)! - Stop whole sessions and documents from being written into the fact registry.
+
+  Three paths promoted `event.content` verbatim — facet routing, decisions, and
+  constraints. With a chat message that is about the size of a statement, so the
+  defect stayed invisible in the assistant use case. With a session or a document
+  it is not: the fact layer became a second copy of the corpus and, because every
+  consumer reads it against a context budget, those copies crowded out the facts
+  extraction had actually produced. Measured on LongMemEval at session
+  granularity: 87% of registry entries over 1000 tokens, median 2691, against
+  genuine extracted facts of 11-27 tokens — roughly 100:1.
+
+  A fact is now bounded at `MAX_FACT_CHARS` (500) at every write path, with a
+  `fact_too_long` drop record so the refusal is auditable rather than silent. The
+  bound is on what gets written, not on the event it came from: a long
+  conversation yielding a short fact is unaffected.
+
+- [`0d6d75d`](https://github.com/yul761/StateCore/commit/0d6d75d0e2c4a0758149b6f5be99a1bdce97ea4a) Thanks [@yul761](https://github.com/yul761)! - Extract from the whole corpus, not the first prompt-full of it.
+
+  Stage 2 clipped its `deltaCandidates` section at 60k characters and dropped the
+  remainder, so on any corpus larger than one prompt the extractor only ever saw
+  the beginning. On LongMemEval that was ~490k characters of sessions against a
+  60k window — about 12% reaching extraction. Bulk import (`ingest:docs`) hits the
+  same wall, and the shortfall was invisible because the verbatim promotion paths
+  were separately copying every event into the fact registry.
+
+  Stage 2 now runs one pass per prompt-sized chunk, threading each pass's output
+  forward as the next pass's `lastDigest` so the summary accumulates the way
+  consecutive incremental digests do, and unioning the extracted facts.
+  `STAGE2_MAX_CHUNKS` bounds the work per run; events beyond it stay in the store
+  for the next one.
+
+- Keep the facts a stage-2 pass extracted when that pass degrades.
+
+  Chunking stage 2 threads each chunk's output forward as the next chunk's
+  `lastDigest`, which makes a consistency trip likely — consecutive chunks of one
+  corpus describe similar changes. Every degraded return in the pass discarded
+  `profileFacts`, so one trip threw away everything that pass had extracted.
+  Observed live: a digest that completed in 344s, reported success, and wrote zero
+  facts.
+
+  The extracted facts now survive all three degraded returns, and a failing chunk
+  no longer takes the whole corpus with it — before chunking a throw cost one
+  digest; after it, it would have cost every remaining pass.
+
 ## 1.3.1
 
 ### Patch Changes
