@@ -8,6 +8,12 @@
 
 **Tech Stack:** TypeScript · NestJS · zod · Vitest · pnpm + Turbo
 
+> **执行后修订(2026-08-08)。** 本计划按原样执行完毕,随后的全分支 review 发现
+> `retrieval.budget` 这个位置在无 `query` 的请求上会导致 HTTP 500 —— `retrieve()`
+> 的无 query 分支不返回 `retrieval`。已改为 **`RetrieveOutput` 的顶层 `budget`**
+> 可选字段(见 spec 第 4 节的修订说明)。下文各任务保留执行时的原貌,凡出现
+> `retrieval.budget` 之处,最终形态均为顶层 `budget`。
+
 ## Global Constraints
 
 以下取自 spec `docs/superpowers/specs/2026-08-08-retrieve-budget-design.md`,每个任务都隐含包含:

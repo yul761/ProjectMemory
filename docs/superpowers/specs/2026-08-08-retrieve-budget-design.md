@@ -41,10 +41,19 @@
 ```ts
 // packages/contracts/src/index.ts
 RetrieveInput  += maxChars?: z.number().int().positive()
-RetrieveOutput += retrieval.budget?: BudgetReportSchema
+RetrieveOutput += budget?: BudgetReportSchema   // 顶层,紧随 factRegistry
 ```
 
-两处都可选,符合 `docs/api.md:267` 的加性冻结规则。`retrieval` 本就不在冻结面内,预算报告挂在那里不新开通道。
+两处都可选,符合 `docs/api.md:267` 的加性冻结规则。
+
+> **2026-08-08 全分支 review 后修订。** 本节原本把 `budget` 挂在不冻结的 `retrieval`
+> 对象里,理由是不扩大冻结面。实现后 review 跑真实请求发现:`retrieve()` 在无 `query`
+> 分支根本不返回 `retrieval`(该字段本就 `.optional()`),于是 `{ ...undefined, budget }`
+> 展开成缺 7 个必填字段的对象,`parseOutput` 判为服务端 bug → **HTTP 500**。
+>
+> 预算总是存在(只要传了 `maxChars`),它的容器却不总是存在 —— 这个错配指向的结论是:
+> 预算不是排序诊断信息,而是关于响应本身的声明,应当平级。改为顶层可选字段后,无 `query`
+> 的路径不再有任何特殊情况。代价是冻结面多一个可选字段(加性合法,但加进去就拿不掉)。
 
 **不传 `maxChars` 时输出与今天逐字节相同** —— 包括事实仍按 `getActiveFactRegistry` 原顺序全量返回、不排序。这是硬约束,有专门的测试挡着。
 
@@ -163,4 +172,4 @@ budget: {
 
 ## 10. 文档
 
-`docs/api.md` 的 retrieve 段落补 `maxChars` 与 `retrieval.budget`,并写明:不传则行为不变;事实排序仅在传了预算时发生;`FACT_BUDGET_SHARE` 是常数不可调。
+`docs/api.md` 的 retrieve 段落补 `maxChars` 与顶层 `budget`,并写明:不传则行为不变;事实排序仅在传了预算时发生;`FACT_BUDGET_SHARE` 是常数不可调;预算以字符而非 token 计,因为 token 数是模型特定的。
