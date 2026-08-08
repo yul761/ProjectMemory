@@ -541,6 +541,10 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
           "minimum": 1,
           "type": "integer",
         },
+        "maxChars": {
+          "exclusiveMinimum": 0,
+          "type": "integer",
+        },
         "query": {
           "minLength": 1,
           "type": "string",

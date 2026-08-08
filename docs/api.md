@@ -95,7 +95,7 @@ dependency of a product demo.
 ### Retrieval And Answer Inspection
 
 - `POST /memory/retrieve`
-  - body: `{ scopeId, query, limit? }`
+  - body: `{ scopeId, query, limit?, maxChars? }`
   - returns last digest plus recent events
   - `retrieval` metadata includes:
     - `mode`
@@ -104,6 +104,25 @@ dependency of a product demo.
     - `candidateCount`
     - `returnedCount`
     - `matches[]` with source type, scores, and `rankingReason`
+
+`maxChars`(可选,正整数)声明本次调用愿意在记忆上花费的字符预算。传了它,
+StateCore 会在预算内装填并在 `retrieval.budget` 里交代砍掉了什么;不传则行为
+与本字段引入前完全一致。
+
+装填顺序是 digest → 事实 → events。digest 是原子的(装不下就整个不装)。事实
+最多占 `maxChars` 的 40%,以保证原始证据总有位置;这个比例是常数,不可通过请求
+调整。条目一律整条装入,装不下的会被跳过,但装填不会就此停止 —— 排在后面的较小
+条目仍有机会进入。
+
+事实的排序只在传了 `maxChars` 时发生:有 `query` 时按相关性,无 `query` 时按
+confidence 再按新近度。
+
+`retrieval.budget.droppedCounts` 永远是精确计数;`retrieval.budget.dropped`
+是上限 100 条的明细,被略去的条数写在 `itemsOmitted`。
+
+预算以**字符**而非 token 计:token 数是模型特定的,StateCore 不假装知道调用方
+用的是哪个 tokenizer。
+
 - `POST /memory/answer`
   - body: `{ scopeId, question }`
   - requires `FEATURE_LLM=true`

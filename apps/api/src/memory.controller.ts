@@ -43,6 +43,7 @@ import {
   generateAnswer,
   getActiveFactRegistry,
   getDomainConfig,
+  packWithinBudget,
   parseFacetPack,
   resolveFacetPackForScope,
   logger,
@@ -866,15 +867,42 @@ export class MemoryController {
       this.domain.getLatestDigestState(input.scopeId)
     ]);
     const activeFactRegistry = snapshot ? getActiveFactRegistry(snapshot.state) : [];
+    const digest = result.digest ? result.digest.summary : null;
+    const events = result.events.map((event) => ({
+      id: event.id,
+      content: event.content,
+      createdAt: event.createdAt.toISOString()
+    }));
+
+    // Without a budget the response must be byte-identical to what callers got
+    // before this feature existed — same fact order, same count, same events.
+    if (input.maxChars === undefined) {
+      return parseOutput(RetrieveOutput, {
+        digest,
+        events,
+        factRegistry: activeFactRegistry,
+        retrieval: result.retrieval
+      });
+    }
+
+    const query = input.query?.trim();
+    const packed = packWithinBudget({
+      digest,
+      facts: activeFactRegistry,
+      events,
+      maxChars: input.maxChars,
+      // No query means no relevance signal; the packer falls back to confidence
+      // and recency rather than pretending to rank by relevance.
+      scoreFact: query
+        ? (content: string) => this.domain.retrieveService.scoreText(query, content)
+        : undefined
+    });
+
     return parseOutput(RetrieveOutput, {
-      digest: result.digest ? result.digest.summary : null,
-      events: result.events.map((event) => ({
-        id: event.id,
-        content: event.content,
-        createdAt: event.createdAt.toISOString()
-      })),
-      factRegistry: activeFactRegistry,
-      retrieval: result.retrieval
+      digest: packed.digest,
+      events: packed.events,
+      factRegistry: packed.facts,
+      retrieval: { ...result.retrieval, budget: packed.budget }
     });
   }
 
