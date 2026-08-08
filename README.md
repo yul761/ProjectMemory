@@ -162,11 +162,27 @@ Benchmark methodology: `docs/benchmarking.md`
 
 ### LongMemEval
 
-A comparison against mem0 OSS on
-[LongMemEval](https://github.com/xiaowu0162/LongMemEval) is **being re-run**: a
-defect in the benchmark harness truncated retrieved sessions before the answerer
-saw them, which understated StateCore and barely affected mem0. Details and the
-withdrawn figures: `docs/longmemeval.md`.
+Compared against mem0 OSS on
+[LongMemEval](https://github.com/xiaowu0162/LongMemEval) at an **equal context
+budget** — the same number of characters of memory in the answerer's prompt,
+rather than the same number of retrieved items. 194 questions, `gpt-5` answering,
+the official `gpt-4o` judge (2026-08-08):
+
+| system | 4,000 tok | 16,000 tok | 64,000 tok |
+|---|---|---|---|
+| **StateCore** | 51.0% ±7.0 | **80.9% ±5.5** | **87.6% ±4.6** |
+| mem0 OSS | **61.3% ±6.9** | 59.8% ±6.9 | 61.3% ±6.9 |
+| No memory (recency window) | 9.3% ±4.1 | 22.7% ±5.9 | 53.6% ±7.0 |
+
+At 64k, StateCore also beats the **70.1% ±6.4** ceiling of pasting the entire
+corpus into the prompt with no memory layer at all. At 4k it loses to mem0 by 10
+points — a real difference in kind, explained rather than closed, in the full
+write-up.
+
+Numbers, caveats and what the benchmark does *not* measure:
+[`docs/longmemeval.md`](docs/longmemeval.md). Harness, raw retrievals and
+per-question judge verdicts:
+[memory-budget-bench](https://github.com/yul761/memory-budget-bench).
 
 ## Documentation
 
