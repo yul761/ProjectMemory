@@ -135,6 +135,15 @@ export function packWithinBudget<F extends BudgetFact, E extends BudgetEvent>(
   //    caller can verify, then bounded again by what the digest left behind.
   const factShareCap = Math.floor(maxChars * FACT_BUDGET_SHARE);
   let factAllowance = Math.min(factShareCap, remaining);
+
+  // Which constraint actually binds is decided once, here, and holds for every
+  // rejection in the loop below. Deriving it per item from the cap alone would
+  // misreport the common case where a large digest — not the share — is what
+  // starved the facts, and the two reasons carry different advice: hitting the
+  // cap means the share could be raised, running out means the budget must be.
+  const factReason: BudgetDropReason =
+    factShareCap <= remaining ? "fact_share_cap" : "budget_exhausted";
+
   const ranked = rankFacts(facts, scoreFact);
   const keptFacts: F[] = [];
   let factChars = 0;
@@ -146,15 +155,11 @@ export function packWithinBudget<F extends BudgetFact, E extends BudgetEvent>(
       factChars += cost;
       continue;
     }
-    // Distinguishing the two reasons is the point of the report: hitting the cap
-    // means the caller could raise the share, running out means raise the budget.
-    const reason: BudgetDropReason =
-      factChars + cost > factShareCap ? "fact_share_cap" : "budget_exhausted";
     record({
       kind: "fact",
       id: fact.id,
       chars: cost,
-      reason,
+      reason: factReason,
       ...(scoreFact ? { score: scoreFact(fact.content) } : {})
     });
   }
