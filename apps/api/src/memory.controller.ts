@@ -898,11 +898,26 @@ export class MemoryController {
         : undefined
     });
 
+    // `retrieval.matches`/`returnedCount` were computed by retrieve() before the
+    // packer dropped anything, so left untouched they would describe events the
+    // response no longer carries. Recompute both from what the pack actually
+    // kept — `candidateCount` still reports the full pool retrieve() considered,
+    // so nothing is lost by narrowing these two. Guarded because a query-less
+    // retrieve() has no `retrieval` object at all (see budget: top-level, above).
+    const keptEventIds = new Set(packed.events.map((event) => event.id));
+    const retrieval = result.retrieval
+      ? (() => {
+          const matches = result.retrieval.matches.filter((match) => keptEventIds.has(match.id));
+          return { ...result.retrieval, matches, returnedCount: matches.length };
+        })()
+      : result.retrieval;
+
     return parseOutput(RetrieveOutput, {
       digest: packed.digest,
       events: packed.events,
       factRegistry: packed.facts,
-      retrieval: { ...result.retrieval, budget: packed.budget }
+      budget: packed.budget,
+      retrieval
     });
   }
 

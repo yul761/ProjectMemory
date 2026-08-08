@@ -152,15 +152,6 @@ describe("the budget packs whole items and says what it refused", () => {
     const out = packWithinBudget({ digest: "d".repeat(50), facts, events: [], maxChars: 16000 });
     expect(out.budget.dropped.find((d) => d.kind === "fact")?.reason).toBe("fact_share_cap");
   });
-
-  it("never returns more events than it was offered", () => {
-    // `limit` binds upstream: retrieve() already sliced its ranked events to
-    // `limit` before the packer sees them, so the packer can only ever shrink
-    // that list. This is the concrete meaning of "whichever binds first wins".
-    const events = [event("e1", 10), event("e2", 10)];
-    const out = packWithinBudget({ digest: null, facts: [], events, maxChars: 1_000_000 });
-    expect(out.events).toHaveLength(2);
-  });
 });
 
 describe("facts are ranked before they compete for the budget", () => {

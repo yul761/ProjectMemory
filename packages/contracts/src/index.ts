@@ -180,6 +180,14 @@ export const RetrieveOutput = z.object({
     })
   ),
   factRegistry: z.array(FactRegistryEntrySchema),
+  // Top-level, not nested in `retrieval`: the budget is a statement about the
+  // response as a whole (did everything the caller asked for fit?), not a
+  // ranking diagnostic. `retrieval` legitimately does not exist when the caller
+  // sent no query, and `budget` must not depend on a container that can be
+  // absent — see the no-query + maxChars integration test for the failure this
+  // avoids (spreading `undefined` used to produce a `retrieval` object missing
+  // its seven required fields, which parseOutput rejected as a 500).
+  budget: BudgetReportSchema.optional(),
   retrieval: z.object({
     mode: z.enum(["heuristic", "hybrid"]),
     embeddingRequested: z.boolean(),
@@ -197,8 +205,7 @@ export const RetrieveOutput = z.object({
       embeddingScore: z.number().optional(),
       finalScore: z.number(),
       rankingReason: z.string()
-    })),
-    budget: BudgetReportSchema.optional()
+    }))
   }).optional()
 });
 

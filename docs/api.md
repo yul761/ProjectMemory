@@ -106,8 +106,10 @@ dependency of a product demo.
     - `matches[]` with source type, scores, and `rankingReason`
 
 `maxChars`(可选,正整数)声明本次调用愿意在记忆上花费的字符预算。传了它,
-StateCore 会在预算内装填并在 `retrieval.budget` 里交代砍掉了什么;不传则行为
-与本字段引入前完全一致。
+StateCore 会在预算内装填并在响应顶层的 `budget` 字段里交代砍掉了什么;不传则
+行为与本字段引入前完全一致。`budget` 是顶层字段而非嵌套在 `retrieval` 里 ——
+它描述的是整个响应是否装得下,而不是某个排序诊断,而 `retrieval` 在无 `query`
+时本就不存在,预算字段不能依赖一个可能不存在的容器。
 
 装填顺序是 digest → 事实 → events。digest 是原子的(装不下就整个不装)。事实
 最多占 `maxChars` 的 40%,以保证原始证据总有位置;这个比例是常数,不可通过请求
@@ -117,7 +119,7 @@ StateCore 会在预算内装填并在 `retrieval.budget` 里交代砍掉了什�
 事实的排序只在传了 `maxChars` 时发生:有 `query` 时按相关性,无 `query` 时按
 confidence 再按新近度。
 
-`retrieval.budget.droppedCounts` 永远是精确计数;`retrieval.budget.dropped`
+`budget.droppedCounts` 永远是精确计数;`budget.dropped`
 是上限 100 条的明细,被略去的条数写在 `itemsOmitted`。
 
 预算以**字符**而非 token 计:token 数是模型特定的,StateCore 不假装知道调用方

@@ -693,6 +693,116 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                 "schema": {
                   "additionalProperties": true,
                   "properties": {
+                    "budget": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "digestChars": {
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                        "dropped": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "chars": {
+                                "minimum": 0,
+                                "type": "integer",
+                              },
+                              "id": {
+                                "nullable": true,
+                                "type": "string",
+                              },
+                              "kind": {
+                                "enum": [
+                                  "digest",
+                                  "fact",
+                                  "event",
+                                ],
+                                "type": "string",
+                              },
+                              "reason": {
+                                "enum": [
+                                  "budget_exhausted",
+                                  "fact_share_cap",
+                                  "digest_too_large",
+                                ],
+                                "type": "string",
+                              },
+                              "score": {
+                                "type": "number",
+                              },
+                            },
+                            "required": [
+                              "kind",
+                              "id",
+                              "chars",
+                              "reason",
+                            ],
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
+                        "droppedCounts": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "digest": {
+                              "minimum": 0,
+                              "type": "integer",
+                            },
+                            "event": {
+                              "minimum": 0,
+                              "type": "integer",
+                            },
+                            "fact": {
+                              "minimum": 0,
+                              "type": "integer",
+                            },
+                          },
+                          "required": [
+                            "digest",
+                            "fact",
+                            "event",
+                          ],
+                          "type": "object",
+                        },
+                        "eventChars": {
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                        "factChars": {
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                        "factShareCap": {
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                        "itemsOmitted": {
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                        "maxChars": {
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                        "usedChars": {
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                      },
+                      "required": [
+                        "maxChars",
+                        "usedChars",
+                        "digestChars",
+                        "factChars",
+                        "eventChars",
+                        "factShareCap",
+                        "droppedCounts",
+                        "dropped",
+                        "itemsOmitted",
+                      ],
+                      "type": "object",
+                    },
                     "digest": {
                       "nullable": true,
                       "type": "string",
