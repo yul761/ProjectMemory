@@ -508,10 +508,22 @@ Expected: PASS,15 个测试全绿。
 
 - [ ] **Step 5: 从 core 的 barrel 导出**
 
-`packages/core/src/index.ts` 顶部已有一批 `export * from "./xxx"`。在那一组的末尾追加一行:
+`packages/core/src/index.ts` 顶部是一串**具名导出块**(`export { A, type B } from "./xxx";`,约 4–60 行),不是 `export *`。照这个风格在该串的末尾追加:
 
 ```ts
-export * from "./retrieve-budget";
+export {
+  packWithinBudget,
+  rankFacts,
+  FACT_BUDGET_SHARE,
+  MAX_DROP_DETAIL_ITEMS,
+  type BudgetDrop,
+  type BudgetDropReason,
+  type BudgetReport,
+  type BudgetFact,
+  type BudgetEvent,
+  type PackInput,
+  type PackResult
+} from "./retrieve-budget";
 ```
 
 - [ ] **Step 6: 跑 core 全量测试 + 类型检查**
