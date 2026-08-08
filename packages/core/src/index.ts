@@ -53,6 +53,19 @@ export {
   type WorkingMemoryRepo,
   type WorkingMemorySnapshot
 } from "./working-memory.service";
+export {
+  packWithinBudget,
+  rankFacts,
+  FACT_BUDGET_SHARE,
+  MAX_DROP_DETAIL_ITEMS,
+  type BudgetDrop,
+  type BudgetDropReason,
+  type BudgetReport,
+  type BudgetFact,
+  type BudgetEvent,
+  type PackInput,
+  type PackResult
+} from "./retrieve-budget";
 import type { ChatModel, EmbeddingModel } from "./model-provider";
 
 export const logger = pino({ level: process.env.LOG_LEVEL || "info" });
