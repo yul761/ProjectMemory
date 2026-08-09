@@ -74,14 +74,16 @@ export class ScopesController {
     const scope = await this.domain.projectService.getScope(req.userId, id);
     if (!scope) throw new NotFoundException("Scope not found");
     await prisma.$transaction(async (tx) => {
-      await tx.digestStateSnapshot.deleteMany({ where: { scopeId: id } });
-      await tx.digest.deleteMany({ where: { scopeId: id } });
-      await tx.memoryEvent.deleteMany({ where: { scopeId: id } });
-      await tx.workingMemorySnapshot.deleteMany({ where: { scopeId: id } });
-      await tx.reminder.deleteMany({ where: { scopeId: id } });
+      // DigestJobLog and ForgottenFact carry a scopeId but declare no relation, so
+      // no constraint reaches them and nothing cascades. They must go by hand.
       await tx.digestJobLog.deleteMany({ where: { scopeId: id } });
       await tx.forgottenFact.deleteMany({ where: { scopeId: id } });
-      await tx.userState.updateMany({ where: { activeProjectId: id }, data: { activeProjectId: null } });
+      // Everything else is ON DELETE CASCADE (UserState.activeProjectId is SET
+      // NULL) as of 20260809050000_cascade_scope_children. Emptying those tables
+      // here first is what opened the race this delete used to lose: a digest job
+      // landing between the cleanup and this line re-created a Digest row and the
+      // delete died on Digest_scopeId_fkey. No statement order beats a concurrent
+      // writer — the constraint does.
       await tx.projectScope.delete({ where: { id } });
     });
     return { ok: true };

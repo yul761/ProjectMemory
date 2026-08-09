@@ -76,7 +76,7 @@ model UserState {
   activeProjectId String?
 
   user          User          @relation(fields: [userId], references: [id])
-  activeProject ProjectScope? @relation(fields: [activeProjectId], references: [id])
+  activeProject ProjectScope? @relation(fields: [activeProjectId], references: [id], onDelete: SetNull)
 }
 
 model MemoryEvent {
@@ -108,7 +108,7 @@ model MemoryEvent {
   pinned                Boolean      @default(false)
 
   user      User         @relation(fields: [userId], references: [id])
-  scope     ProjectScope @relation(fields: [scopeId], references: [id])
+  scope     ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
   embedding MemoryEventEmbedding?
 
   @@unique([scopeId, key])
@@ -130,7 +130,7 @@ model Digest {
   rebuildGroupId String?
   createdAt      DateTime @default(now())
 
-  scope          ProjectScope        @relation(fields: [scopeId], references: [id])
+  scope          ProjectScope        @relation(fields: [scopeId], references: [id], onDelete: Cascade)
   stateSnapshot  DigestStateSnapshot?
 
   @@index([scopeId, createdAt])
@@ -145,8 +145,8 @@ model DigestStateSnapshot {
   consistency Json?
   createdAt   DateTime @default(now())
 
-  scope  ProjectScope @relation(fields: [scopeId], references: [id])
-  digest Digest       @relation(fields: [digestId], references: [id])
+  scope  ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  digest Digest       @relation(fields: [digestId], references: [id], onDelete: Cascade)
 
   @@index([scopeId, createdAt])
 }
@@ -160,7 +160,7 @@ model WorkingMemorySnapshot {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  scope ProjectScope @relation(fields: [scopeId], references: [id])
+  scope ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
 
   @@index([scopeId, updatedAt])
 }
@@ -175,7 +175,7 @@ model Reminder {
   createdAt DateTime       @default(now())
 
   user  User          @relation(fields: [userId], references: [id])
-  scope ProjectScope? @relation(fields: [scopeId], references: [id])
+  scope ProjectScope? @relation(fields: [scopeId], references: [id], onDelete: Cascade)
 
   @@index([userId, status, dueAt])
 }

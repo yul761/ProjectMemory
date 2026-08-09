@@ -96,6 +96,68 @@ describe("DELETE /v1/scopes/:id", () => {
     expect(scope).toBeNull();
   });
 
+  // The handler deletes children then deletes the scope. A digest job that lands
+  // between those two statements re-creates a Digest row, and the final delete
+  // dies on Digest_scopeId_fkey. Remi swallows that failure
+  // (`deleteScopeById(...).catch(() => undefined)` — best-effort, never blocks
+  // account deletion), so the user's account disappears while their memory stays
+  // behind as an orphan scope nobody knows about. A privacy failure, and a silent
+  // one.
+  //
+  // Deleting the scope directly, with children still present, is that race
+  // reduced to something deterministic: it asks whether the database enforces the
+  // invariant, or whether the handler's statement order is the only thing holding
+  // it up. Only the database can win a race against a concurrent writer.
+  it("the database, not the handler's statement order, removes a scope's children", async () => {
+    const scopeId = await createScopeAs(USER_A, "raced-delete");
+
+    await request(app.getHttpServer())
+      .post("/v1/memory/events")
+      .set("x-user-id", USER_A)
+      .send({ scopeId, type: "stream", source: "api", content: "x" });
+
+    const digest = await prisma.digest.create({
+      data: { scopeId, summary: "s", changes: "c", nextSteps: [] }
+    });
+    await prisma.digestStateSnapshot.create({
+      data: { scopeId, digestId: digest.id, state: {} }
+    });
+    await prisma.workingMemorySnapshot.create({
+      data: { scopeId, state: {}, view: {} }
+    });
+    // `USER_A` is the x-user-id header, i.e. User.identity; the FK wants User.id,
+    // which the auth middleware generated on upsert.
+    const { userId } = await prisma.projectScope.findUniqueOrThrow({
+      where: { id: scopeId },
+      select: { userId: true }
+    });
+    await prisma.reminder.create({
+      data: { userId, scopeId, dueAt: new Date("2030-01-01"), text: "r" }
+    });
+    // Creating a scope already points UserState at it, so upsert rather than create.
+    await prisma.userState.upsert({
+      where: { userId },
+      update: { activeProjectId: scopeId },
+      create: { userId, activeProjectId: scopeId }
+    });
+
+    // No manual cleanup — exactly what the handler is left holding when a writer
+    // repopulates a table it already emptied.
+    await prisma.projectScope.delete({ where: { id: scopeId } });
+
+    expect(await prisma.digest.count({ where: { scopeId } })).toBe(0);
+    expect(await prisma.digestStateSnapshot.count({ where: { scopeId } })).toBe(0);
+    expect(await prisma.memoryEvent.count({ where: { scopeId } })).toBe(0);
+    expect(await prisma.workingMemorySnapshot.count({ where: { scopeId } })).toBe(0);
+    expect(await prisma.reminder.count({ where: { scopeId } })).toBe(0);
+
+    // The user outlives their scope: cascading here would delete a row that
+    // belongs to the user, not to the scope. It must be nulled instead.
+    const userState = await prisma.userState.findUnique({ where: { userId } });
+    expect(userState).not.toBeNull();
+    expect(userState?.activeProjectId).toBeNull();
+  });
+
   it("USER_B cannot delete USER_A's scope — returns 404, scope still exists", async () => {
     const scopeId = await createScopeAs(USER_A, "protected-scope");
 
