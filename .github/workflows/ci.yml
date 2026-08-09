@@ -49,6 +49,12 @@ jobs:
       # prepared the database they were meant to use.
       DATABASE_URL_TEST: postgresql://statecore:statecore@localhost:5432/statecore_test
       REDIS_URL: redis://localhost:6379
+      # Matches the local .env. Endpoints behind this flag reject with 400 before
+      # they ever check scope ownership, so with it off the multi-tenant digest
+      # case passes for the wrong reason — "feature disabled" rather than "not
+      # your scope" — and stops testing isolation at all. Nothing here calls a
+      # model: digest only enqueues, and no worker runs in the test process.
+      FEATURE_LLM: "true"
 
     steps:
       - uses: actions/checkout@v4

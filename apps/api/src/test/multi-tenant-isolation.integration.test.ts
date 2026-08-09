@@ -75,7 +75,16 @@ describe("Multi-tenant isolation", () => {
       .post("/memory/digest")
       .set("x-user-id", USER_B)
       .send({ scopeId });
-    expect(res.status).toBe(404);
+    // 404 specifically, not "any 4xx": the handler rejects with 400 when
+    // FEATURE_LLM is off, before it looks at who owns the scope. Accepting that
+    // 400 would leave this green in an environment where it never once reached
+    // the ownership check — passing for the wrong reason is how it would stop
+    // testing isolation without anyone noticing.
+    expect(
+      res.status,
+      `expected 404 (not your scope); got ${res.status}. A 400 here means ` +
+        `FEATURE_LLM is off and this test never exercised the ownership check.`
+    ).toBe(404);
   });
 
   it("user B cannot set a webhook on user A's scope", async () => {
