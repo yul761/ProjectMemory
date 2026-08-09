@@ -63,6 +63,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `migrate deploy` applies SQL; it does not generate the client. Every other
+      # workflow in this repo had this step and CI did not, so the worker suite
+      # died on "@prisma/client did not initialize yet" the moment CI got far
+      # enough to run it.
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
       - name: Run database migrations
         run: pnpm --filter @statecore/db exec prisma migrate deploy
 
