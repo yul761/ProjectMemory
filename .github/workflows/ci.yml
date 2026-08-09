@@ -13,7 +13,12 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector, not stock postgres: 20260615020000_pgvector_embeddings runs
+        # `CREATE EXTENSION vector`, so migrate deploy died here on every run
+        # with `extension "vector" is not available`. Local (docker-compose.local)
+        # and both droplets already use this image; CI was the only one that
+        # didn't, which is exactly the environment nobody was looking at.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: statecore
           POSTGRES_PASSWORD: statecore
@@ -38,6 +43,11 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://statecore:statecore@localhost:5432/statecore_test
+      # apps/api's integration tests read DATABASE_URL_TEST and fall back to a
+      # local-dev default on port 5434 — a port nothing listens on in CI. Without
+      # this they would connect nowhere while `migrate deploy` above happily
+      # prepared the database they were meant to use.
+      DATABASE_URL_TEST: postgresql://statecore:statecore@localhost:5432/statecore_test
       REDIS_URL: redis://localhost:6379
 
     steps:
