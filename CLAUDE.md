@@ -104,16 +104,44 @@ Git-pull based, from a checkout at `/root/StateCore` on the `statecore` droplet
 `statecore-worker`, `statecore-postgres` [pgvector], `statecore-redis`) **and** the
 statecore-cloud stack (gateway/console/docs/caddy) — the cloud gateway proxies to core
 over the docker bridge. Source of truth: `deploy.md`.
+**⚠️ `-f compose.deploy.yml` is not optional.** It is an untracked host override that
+publishes core's port 3000 to `127.0.0.1:3002` and `172.17.0.1:3002` (the docker0
+bridge). The cloud gateway finds core at `CORE_URL=http://host.docker.internal:3002`,
+which resolves to that bridge IP. Recreate the `api` container without this override
+and the port binding silently disappears: core stays healthy and logs a clean startup,
+the gateway stays up, and **every request through api.statecore.io returns 502**.
+Because the file is untracked, `git pull` does not carry it and nothing fails loudly.
+This is how prod broke on 2026-08-09 (4h outage) — the command block below used to
+omit it, so it is now baked into every line.
+
 ```bash
 ssh statecore
 cd /root/StateCore
 git pull origin main
-docker compose -f docker-compose.prod.yml --env-file .env.production build
-docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate   # one-shot Prisma migrate
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d api worker
+
+# Define once, so no invocation can drift from another.
+DC="docker compose -f docker-compose.prod.yml -f compose.deploy.yml --env-file .env.production"
+
+$DC build
+$DC run --rm migrate            # one-shot Prisma migrate; run before `up` on schema changes
+$DC up -d api worker
 ```
-Notes: there's a dedicated one-shot `migrate` service (run it before `up` on schema
-changes). The live stack was brought up with an extra override
-(`-f docker-compose.prod.yml -f compose.deploy.yml`); keep that override if you rebuild
-the whole stack. Compose files: `docker-compose.prod.yml` (prod), `compose.deploy.yml`
-(host override), `docker-compose.local.yml` (local).
+
+**Verify through the gateway, not just core.** Core's own health passing proves
+nothing about the path Remi actually uses — that was the gap that let the 502 sit
+unnoticed for four hours:
+```bash
+# on the droplet: core is published where the gateway expects it
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/v1/health   # want 200
+docker inspect statecore-api-1 --format '{{json .HostConfig.PortBindings}}'  # must NOT be {}
+
+# end-to-end, from the consumer's side (assistant-backend holds the sc_live_ key):
+ssh remi "cd /root/assistant-backend && docker compose exec -T api node -e '
+  fetch(process.env.STATECORE_BASE_URL + \"/v1/scopes\", {
+    headers: { authorization: \"Bearer \" + process.env.STATECORE_API_KEY }
+  }).then(r => console.log(r.status))'"                                    # want 200
+```
+
+Notes: there's a dedicated one-shot `migrate` service. Compose files:
+`docker-compose.prod.yml` (prod), `compose.deploy.yml` (untracked host override — see
+warning above), `docker-compose.local.yml` (local).
