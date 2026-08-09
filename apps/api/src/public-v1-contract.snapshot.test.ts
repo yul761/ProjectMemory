@@ -11,7 +11,10 @@ const toJsonSchema = zodToJsonSchema as unknown as (
 ) => unknown;
 
 describe("public /v1 contract surface (frozen)", () => {
-  it("has exactly the 15 designated endpoints", () => {
+  // These are 15 *operations* — method plus path. They occupy 13 paths in the
+  // generated OpenAPI document, because /v1/scopes and /v1/reminders each carry
+  // both a GET and a POST. `openapi.test.ts` pins that relationship.
+  it("has exactly the 15 designated operations", () => {
     expect(Object.keys(PublicV1Contracts).sort()).toEqual(
       [
         "GET /health",

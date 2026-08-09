@@ -264,6 +264,11 @@ layers (the hosted version, the GPT-API integration layer) should depend ONLY on
 `/v1`. Every `/v1` endpoint is also served at its legacy unversioned path for
 backward compatibility; existing integrations continue to use the legacy paths.
 
+The subset is **15 operations across 13 paths** — `/v1/scopes` and
+`/v1/reminders` each carry both a `GET` and a `POST`. Count operations when
+checking against `PublicV1Contracts`, and paths when checking against
+`openapi.json`; both tests pin both numbers.
+
 ### Frozen public subset
 
 | Method | `/v1` path |
