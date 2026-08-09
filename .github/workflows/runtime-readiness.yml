@@ -9,7 +9,11 @@ jobs:
   runtime-readiness:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    if: ${{ secrets.OPENAI_API_KEY != '' || secrets.MODEL_API_KEY != '' }}
+    # `secrets` is not a valid context in a job-level `if` — GitHub rejects the
+    # whole workflow file, which is why this showed up as an instant 0-second
+    # "workflow file issue" failure on every push, red on the commit list without
+    # ever running a step. The key check moved into the first step instead, where
+    # `secrets` is allowed; the job then no-ops loudly rather than failing.
     services:
       postgres:
         image: postgres:16
@@ -58,13 +62,21 @@ jobs:
       LOG_LEVEL: info
 
     steps:
+      - name: Check for a model API key
+        id: gate
+        run: |
+          if [ -n "${{ secrets.MODEL_API_KEY }}" ] || [ -n "${{ secrets.OPENAI_API_KEY }}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No MODEL_API_KEY or OPENAI_API_KEY configured — skipping the LLM run."
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -73,12 +85,15 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.gate.outputs.present == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build workspace
+        if: steps.gate.outputs.present == 'true'
         run: pnpm build
 
       - name: Run runtime readiness
+        if: steps.gate.outputs.present == 'true'
         run: ./scripts/ci/runtime-readiness.sh
 
       - name: Upload readiness artifacts

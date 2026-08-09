@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { MemoryFactsService } from "./memory-facts.service";
+import { makeMockPrisma } from "./test-support/mock-prisma";
 
+// A personal-assistant scope: `goals`, `identity` and `relationships` are facets
+// of the `personal` pack, which maps them to the "Projects" and "People" display
+// groups asserted below. The `project` pack defines none of them and would group
+// this same fixture into nothing at all — hence `{ template: "personal" }` on
+// every double here.
 const snapshotState = {
   stableFacts: { decisions: [] },
   workingNotes: {},
@@ -17,10 +23,10 @@ const snapshotState = {
 describe("MemoryFactsService.getFacts", () => {
   it("returns grouped facts and excludes forgotten ones", async () => {
     const forgottenKey = (await import("@statecore/core")).computeFactKey("People", "Call the supplier about Q3");
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue({ state: snapshotState }) },
       forgottenFact: { findMany: vi.fn().mockResolvedValue([{ factKey: forgottenKey }]) }
-    } as any;
+    }, { template: "personal" });
 
     const service = new MemoryFactsService(mockPrisma);
     const groups = await service.getFacts("scope-1", "user-1");
@@ -32,10 +38,10 @@ describe("MemoryFactsService.getFacts", () => {
   });
 
   it("returns empty array when there is no digest snapshot yet", async () => {
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue(null) },
       forgottenFact: { findMany: vi.fn().mockResolvedValue([]) }
-    } as any;
+    }, { template: "personal" });
     const service = new MemoryFactsService(mockPrisma);
     expect(await service.getFacts("scope-empty", "user-1")).toEqual([]);
   });
@@ -45,11 +51,11 @@ describe("MemoryFactsService.forgetFact", () => {
   it("upserts a ForgottenFact and suppresses the evidence event when present", async () => {
     const { computeFactKey } = await import("@statecore/core");
     const goalKey = computeFactKey("Projects", "Launching Remi in July");
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue({ state: snapshotState }) },
       forgottenFact: { upsert: vi.fn().mockResolvedValue({}) },
       memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) }
-    } as any;
+    }, { template: "personal" });
 
     const service = new MemoryFactsService(mockPrisma);
     const result = await service.forgetFact("user-1", "scope-1", goalKey);
@@ -70,11 +76,11 @@ describe("MemoryFactsService.forgetFact", () => {
   it("forgets a bare profile fact (no evidence event) without touching memoryEvent", async () => {
     const { computeFactKey } = await import("@statecore/core");
     const peopleKey = computeFactKey("People", "Call the supplier about Q3");
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue({ state: snapshotState }) },
       forgottenFact: { upsert: vi.fn().mockResolvedValue({}) },
       memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) }
-    } as any;
+    }, { template: "personal" });
 
     const service = new MemoryFactsService(mockPrisma);
     await service.forgetFact("user-1", "scope-1", peopleKey);
@@ -106,12 +112,12 @@ describe("MemoryFactsService.forgetFact", () => {
       ],
       profile: {}
     };
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue({ state: stateWithNote }) },
       forgottenFact: { upsert: vi.fn().mockResolvedValue({}) },
       // updateMany matches 0 rows harmlessly — no throw (unlike update which throws P2025)
       memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) }
-    } as any;
+    }, { template: "personal" });
 
     const service = new MemoryFactsService(mockPrisma);
     const result = await service.forgetFact("user-1", "scope-1", noteKey);

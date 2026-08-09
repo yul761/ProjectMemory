@@ -55,6 +55,29 @@ describe("Multi-tenant isolation", () => {
     expect(res.status).toBe(404);
   });
 
+  // The two cases below came from test/multi-user-isolation.test.ts, which
+  // fetched a server on 127.0.0.1:3002 that no test run ever started. It failed
+  // on connection refused every time, so these assertions had never once
+  // executed — a read is a leak, but a write is someone else's memory rewritten,
+  // and that was the case going unchecked.
+  it("user B cannot ingest events into user A's scope", async () => {
+    const scopeId = await createScopeAs(USER_A, "a-scope");
+    const res = await request(app.getHttpServer())
+      .post("/memory/events")
+      .set("x-user-id", USER_B)
+      .send({ scopeId, type: "stream", source: "api", content: "hostile injection attempt" });
+    expect(res.status).toBe(404);
+  });
+
+  it("user B cannot trigger a digest on user A's scope", async () => {
+    const scopeId = await createScopeAs(USER_A, "a-scope");
+    const res = await request(app.getHttpServer())
+      .post("/memory/digest")
+      .set("x-user-id", USER_B)
+      .send({ scopeId });
+    expect(res.status).toBe(404);
+  });
+
   it("user B cannot set a webhook on user A's scope", async () => {
     const scopeId = await createScopeAs(USER_A, "a-scope");
     const res = await request(app.getHttpServer())

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { DigestState } from "@statecore/core";
 import { MemoryFactsService } from "./memory-facts.service";
+import { makeMockPrisma } from "./test-support/mock-prisma";
 
 const baseState = (): DigestState => ({
   stableFacts: { decisions: [] },
@@ -14,12 +15,12 @@ describe("MemoryFactsService.addNote", () => {
   it("with existing snapshot: updates snapshot and persists the note text", async () => {
     const existingState = baseState();
     const updateMock = vi.fn().mockResolvedValue({});
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: {
         findFirst: vi.fn().mockResolvedValue({ id: "s1", state: existingState }),
         update: updateMock
       }
-    } as any;
+    });
 
     const service = new MemoryFactsService(mockPrisma);
     const result = await service.addNote("user-1", "scope-1", "Remember to check the API limits");
@@ -38,23 +39,23 @@ describe("MemoryFactsService.addNote", () => {
     const updateMock = vi.fn().mockImplementation(async (args: any) => {
       capturedState.current = args.data.state;
     });
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: {
         findFirst: vi.fn().mockResolvedValue({ id: "s1", state: existingState }),
         update: updateMock
       }
-    } as any;
+    });
 
     const service = new MemoryFactsService(mockPrisma);
     await service.addNote("user-1", "scope-1", "Deploy to prod on Friday");
 
     // Now simulate getFacts on the updated state
-    const getFacstPrisma = {
+    const getFacstPrisma = makeMockPrisma({
       digestStateSnapshot: {
         findFirst: vi.fn().mockResolvedValue({ state: capturedState.current })
       },
       forgottenFact: { findMany: vi.fn().mockResolvedValue([]) }
-    } as any;
+    });
     const service2 = new MemoryFactsService(getFacstPrisma);
     const groups = await service2.getFacts("scope-1", "user-1");
 
@@ -73,12 +74,12 @@ describe("MemoryFactsService.addNote", () => {
       .mockResolvedValueOnce({ id: "s1", state: state })
       .mockResolvedValueOnce({ id: "s1", state: state });
 
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: {
         findFirst: findFirstMock,
         update: updateMock
       }
-    } as any;
+    });
 
     const service = new MemoryFactsService(mockPrisma);
     await service.addNote("user-1", "scope-1", "API keys rotate every 90 days");
@@ -103,12 +104,12 @@ describe("MemoryFactsService.addNote", () => {
       await fn(tx);
       return { tx };
     });
-    const mockPrisma = {
+    const mockPrisma = makeMockPrisma({
       digestStateSnapshot: {
         findFirst: vi.fn().mockResolvedValue(null)
       },
       $transaction: txMock
-    } as any;
+    });
 
     const service = new MemoryFactsService(mockPrisma);
     const result = await service.addNote("user-1", "scope-new", "First note ever");

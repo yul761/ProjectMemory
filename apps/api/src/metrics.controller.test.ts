@@ -13,6 +13,10 @@ describe("MetricsService.getDigestMetrics", () => {
           durationMs: 3200,
           status: "success"
         })
+      },
+      // getDigestMetrics folds in getEmbeddingCoverage: 10 live events, 8 embedded.
+      memoryEvent: {
+        count: vi.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(8)
       }
     } as any;
 
@@ -25,6 +29,9 @@ describe("MetricsService.getDigestMetrics", () => {
     expect(result.lastRunAt).toBe("2026-06-15T00:00:00.000Z");
     expect(result.lastDurationMs).toBe(3200);
     expect(result.lastStatus).toBe("success");
+    // Asserted, not merely tolerated: this block was added to the return value
+    // and the test kept passing over it, which is how the mock fell behind.
+    expect(result.embeddings).toEqual({ events: 10, embedded: 8, missing: 2, coverage: 0.8 });
   });
 
   it("returns null successRate and nulls when no jobs logged", async () => {
@@ -32,7 +39,8 @@ describe("MetricsService.getDigestMetrics", () => {
       digestJobLog: {
         count: vi.fn().mockResolvedValue(0),
         findFirst: vi.fn().mockResolvedValue(null)
-      }
+      },
+      memoryEvent: { count: vi.fn().mockResolvedValue(0) }
     } as any;
 
     const service = new MetricsService(mockPrisma);
@@ -42,5 +50,7 @@ describe("MetricsService.getDigestMetrics", () => {
     expect(result.successRate).toBeNull();
     expect(result.lastRunAt).toBeNull();
     expect(result.lastDurationMs).toBeNull();
+    // No events is not 0% coverage — there is nothing to have covered.
+    expect(result.embeddings).toEqual({ events: 0, embedded: 0, missing: 0, coverage: null });
   });
 });

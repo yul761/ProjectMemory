@@ -37,6 +37,29 @@ describe("BullMqQueueAdapter", () => {
     const mockQueue = { add: vi.fn().mockResolvedValue({ id: "1" }) };
     const adapter = new BullMqQueueAdapter(mockQueue as unknown as import("bullmq").Queue);
     await adapter.add("test-job", { x: 1 });
-    expect(mockQueue.add).toHaveBeenCalledWith("test-job", { x: 1 });
+    expect(mockQueue.add).toHaveBeenCalledWith("test-job", { x: 1 }, expect.anything());
+  });
+
+  // BullMQ defaults to a single attempt, and for embed/classify a single
+  // transient failure removes an event from semantic search permanently — the
+  // job never runs again and nothing but a log line records it. The retry policy
+  // is the fix, so it is worth asserting rather than passing through as an
+  // unexamined third argument, which is what let this test drift.
+  it("enqueues with retries and exponential backoff, not BullMQ's single attempt", async () => {
+    const mockQueue = { add: vi.fn().mockResolvedValue({ id: "1" }) };
+    const adapter = new BullMqQueueAdapter(mockQueue as unknown as import("bullmq").Queue);
+
+    await adapter.add("embed", { eventId: "e1" });
+
+    const options = mockQueue.add.mock.calls[0][2];
+    expect(options.attempts).toBeGreaterThan(1);
+    expect(options.backoff).toEqual({ type: "exponential", delay: 5_000 });
+  });
+
+  it("returns the job id as a string", async () => {
+    // BullMQ hands back a numeric id; callers store it as text.
+    const mockQueue = { add: vi.fn().mockResolvedValue({ id: 42 }) };
+    const adapter = new BullMqQueueAdapter(mockQueue as unknown as import("bullmq").Queue);
+    expect(await adapter.add("j", {})).toEqual({ id: "42" });
   });
 });
