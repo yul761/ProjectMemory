@@ -14,7 +14,7 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
   "info": {
     "description": "Frozen public /v1 surface of the StateCore memory runtime.",
     "title": "StateCore API",
-    "version": "1.3.0",
+    "version": "1.4.0",
   },
   "openapi": "3.0.3",
   "paths": {
@@ -614,6 +614,171 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                   },
                   "required": [
                     "ok",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/notes": {
+      "post": {
+        "operationId": "post_memory_notes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "scopeId": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                  "text": {
+                    "maxLength": 500,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "scopeId",
+                  "text",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                    },
+                  },
+                  "required": [
+                    "ok",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/relationship-context/{scopeId}": {
+      "get": {
+        "operationId": "get_memory_relationship-context_scopeId",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "activeGoals": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "currentFeeling": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "durationDays": {
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "pendingFollowUps": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "personalDetails": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "durationDays",
+                    "personalDetails",
+                    "activeGoals",
+                    "currentFeeling",
+                    "pendingFollowUps",
                   ],
                   "type": "object",
                 },
@@ -1520,6 +1685,67 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                     "goal",
                     "stage",
                     "createdAt",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "scopes",
+        ],
+      },
+    },
+    "/v1/scopes/{id}": {
+      "delete": {
+        "operationId": "delete_scopes_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                    },
+                  },
+                  "required": [
+                    "ok",
                   ],
                   "type": "object",
                 },

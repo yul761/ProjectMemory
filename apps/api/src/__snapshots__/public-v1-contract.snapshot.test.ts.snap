@@ -2,6 +2,21 @@
 
 exports[`public /v1 contract surface (frozen) > matches the committed JSON-schema snapshot 1`] = `
 {
+  "DELETE /scopes/:id": {
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "ok",
+      ],
+      "type": "object",
+    },
+  },
   "GET /health": {
     "response": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -170,6 +185,50 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
       },
       "required": [
         "groups",
+      ],
+      "type": "object",
+    },
+  },
+  "GET /memory/relationship-context/:scopeId": {
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "activeGoals": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "currentFeeling": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+        "durationDays": {
+          "minimum": 0,
+          "type": "integer",
+        },
+        "pendingFollowUps": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+        "personalDetails": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "durationDays",
+        "personalDetails",
+        "activeGoals",
+        "currentFeeling",
+        "pendingFollowUps",
       ],
       "type": "object",
     },
@@ -514,6 +573,41 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
       "required": [
         "scopeId",
         "factKey",
+      ],
+      "type": "object",
+    },
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "ok",
+      ],
+      "type": "object",
+    },
+  },
+  "POST /memory/notes": {
+    "request": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "scopeId": {
+          "format": "uuid",
+          "type": "string",
+        },
+        "text": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "scopeId",
+        "text",
       ],
       "type": "object",
     },

@@ -236,6 +236,22 @@ export const AddNoteInput = z.object({
 
 export const ScopeIdQuery = z.object({ scopeId: z.string().uuid() });
 export const MemoryForgetOutput = z.object({ ok: z.boolean() });
+export const AddNoteOutput = z.object({ ok: z.boolean() });
+export const ScopeDeleteOutput = z.object({ ok: z.boolean() });
+
+// What a caller needs to open a conversation that sounds like it remembers the
+// person: how long we have known them, what they are working toward, how they
+// felt recently, and what they said a while ago that nobody has circled back to.
+//
+// `personaPrompt` is deliberately absent from the frozen subset — see the note
+// on the contract registry entry.
+export const RelationshipContextOutput = z.object({
+  durationDays: z.number().int().nonnegative(),
+  personalDetails: z.array(z.string()),
+  activeGoals: z.array(z.string()),
+  currentFeeling: z.string().nullable(),
+  pendingFollowUps: z.array(z.string())
+});
 
 export const AnswerInput = z.object({
   scopeId: z.string().uuid(),
@@ -731,6 +747,17 @@ export const PublicV1Contracts = {
   "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput.pick({ answer: true, answerMode: true, writeTier: true, digestTriggered: true }) },
   "GET /memory/facts": { query: ScopeIdQuery, response: MemoryFactsOutput },
   "POST /memory/facts/forget": { request: ForgetFactInput, response: MemoryForgetOutput },
+  "POST /memory/notes": { request: AddNoteInput, response: AddNoteOutput },
+  // Narrowed like RetrieveOutput above: the live response also carries
+  // `personaPrompt`, a persona string the scope's domain template supplies. That
+  // is a statement about how a client should *speak*, not about what this engine
+  // remembers, and freezing it would cement a product concern into a memory
+  // contract. It keeps being returned; it is just free to change.
+  "GET /memory/relationship-context/:scopeId": { response: RelationshipContextOutput },
+  // Erasure is the one operation a caller cannot verify by asking again later —
+  // if it silently stops working, the data it was supposed to remove is still
+  // there and nobody finds out. It belongs under the guard.
+  "DELETE /scopes/:id": { response: ScopeDeleteOutput },
   "POST /reminders": { request: ReminderCreateInput, response: ReminderOutput },
   "GET /reminders": { response: ReminderListOutput },
   "POST /reminders/:id/cancel": { response: ReminderCancelOutput },

@@ -264,10 +264,17 @@ layers (the hosted version, the GPT-API integration layer) should depend ONLY on
 `/v1`. Every `/v1` endpoint is also served at its legacy unversioned path for
 backward compatibility; existing integrations continue to use the legacy paths.
 
-The subset is **15 operations across 13 paths** — `/v1/scopes` and
+The subset is **18 operations across 16 paths** — `/v1/scopes` and
 `/v1/reminders` each carry both a `GET` and a `POST`. Count operations when
 checking against `PublicV1Contracts`, and paths when checking against
 `openapi.json`; both tests pin both numbers.
+
+> **Serving a path under `/v1` is not the same as freezing it.** Three endpoints
+> ran under the prefix for months without being in `PublicV1Contracts`, so the
+> snapshot guard never saw them — the path advertised a promise the surface did
+> not make, and no caller could tell from the outside. They joined the subset in
+> `1.4.0`. If you dual-mount a handler at `/v1`, either register it here or say
+> plainly why it is exempt.
 
 ### Frozen public subset
 
@@ -275,6 +282,7 @@ checking against `PublicV1Contracts`, and paths when checking against
 |---|---|
 | POST | `/v1/scopes` |
 | GET | `/v1/scopes` |
+| DELETE | `/v1/scopes/:id` |
 | POST | `/v1/scopes/:id/active` |
 | GET | `/v1/state` |
 | POST | `/v1/memory/events` |
@@ -282,13 +290,20 @@ checking against `PublicV1Contracts`, and paths when checking against
 | POST | `/v1/memory/answer` |
 | POST | `/v1/memory/digest` |
 | POST | `/v1/memory/runtime/turn` |
+| GET | `/v1/memory/facts` |
+| POST | `/v1/memory/facts/forget` |
+| POST | `/v1/memory/notes` |
+| GET | `/v1/memory/relationship-context/:scopeId` |
 | POST | `/v1/reminders` |
 | GET | `/v1/reminders` |
 | POST | `/v1/reminders/:id/cancel` |
 | GET | `/v1/health` |
 
 The source of truth is `PublicV1Contracts` in `@statecore/contracts`, guarded by
-the snapshot test `apps/api/src/public-v1-contract.snapshot.test.ts`.
+the snapshot test `apps/api/src/public-v1-contract.snapshot.test.ts`. This table
+is guarded too — `docs-frozen-subset.test.ts` parses it and fails if it drifts
+from the registry, which it silently did for three months after the `1.1.0`
+endpoints landed.
 
 ### Compatibility rules (additively-compatible freeze)
 
@@ -332,9 +347,12 @@ scope, not the runtime. Note it in the changeset instead.
 
 History: `1.0.0` at the freeze, `1.1.0` for `GET /v1/memory/facts` and
 `POST /v1/memory/facts/forget`, `1.2.0` for the optional `pinned` field on event
-input, `1.3.0` for `maxChars` and the top-level `budget` on retrieve. The number
-sat at `1.0.0` through all three before this rule existed, which meant a reader
-could not tell a three-month-old spec from a current one.
+input, `1.3.0` for `maxChars` and the top-level `budget` on retrieve, `1.4.0` for
+`POST /v1/memory/notes`, `GET /v1/memory/relationship-context/:scopeId`, and
+`DELETE /v1/scopes/:id` — three endpoints already live under `/v1` and already
+depended on in production, brought under the guard. The number sat at `1.0.0`
+through the first three before this rule existed, which meant a reader could not
+tell a three-month-old spec from a current one.
 
 > **Diagnostic fields are not frozen.** `POST /v1/memory/retrieve`,
 > `/v1/memory/answer`, and `/v1/memory/runtime/turn` return additional

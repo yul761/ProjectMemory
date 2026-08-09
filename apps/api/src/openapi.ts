@@ -57,7 +57,9 @@ export function buildOpenApiDocument(): JsonObject {
     const rawPath = endpoint.slice(spaceIdx + 1);
     const v1Path = "/v1" + rawPath.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
     const lower = method.toLowerCase();
-    const successCode = method === "GET" ? "200" : "201";
+    // Nest answers 201 for POST and 200 for every other verb. Deriving this from
+    // "is it a GET" was right only while POST and GET were the only verbs here.
+    const successCode = method === "POST" ? "201" : "200";
 
     const op: JsonObject = {
       operationId: operationId(method, rawPath),
@@ -117,7 +119,7 @@ export function buildOpenApiDocument(): JsonObject {
       // which is what /v1 means. It sat at 1.0.0 through three additive changes
       // and so told a reader nothing about whether the spec they were holding
       // was current. See "Compatibility rules" in docs/api.md.
-      version: "1.3.0",
+      version: "1.4.0",
       description: "Frozen public /v1 surface of the StateCore memory runtime."
     },
     servers: [{ url: "/" }],

@@ -13,22 +13,32 @@ describe("buildOpenApiDocument", () => {
     expect(typeof doc.info).toBe("object");
   });
 
-  it("documents exactly the 15 /v1 operations across 13 paths", () => {
+  it("documents exactly the 18 /v1 operations across 16 paths", () => {
     // Two numbers describe this surface and they are not the same number.
-    // `/v1/scopes` and `/v1/reminders` each carry both GET and POST, so 15
-    // operations sit on 13 paths. Anyone counting `Object.keys(doc.paths)`
-    // against the contract registry's 15 entries finds a mismatch that is not
+    // `/v1/scopes` and `/v1/reminders` each carry both GET and POST, so 18
+    // operations sit on 16 paths. Anyone counting `Object.keys(doc.paths)`
+    // against the contract registry's 18 entries finds a mismatch that is not
     // one; pinning both here means the relationship is stated rather than
     // rediscovered. It also catches a real fault the operation count alone
-    // would miss: a path registered twice keeps the operation count at 15
+    // would miss: a path registered twice keeps the operation count at 18
     // while the path count moves.
     const opCount = Object.values(paths).reduce(
       (n, methods) => n + Object.keys(methods).length,
       0
     );
-    expect(opCount).toBe(15);
-    expect(Object.keys(paths)).toHaveLength(13);
+    expect(opCount).toBe(18);
+    expect(Object.keys(paths)).toHaveLength(16);
     expect(Object.keys(paths).every((p) => p.startsWith("/v1/"))).toBe(true);
+  });
+
+  it("gives DELETE its 200, not the 201 that belongs to POST", () => {
+    // The success code used to be derived from "is this a GET", which was
+    // indistinguishable from correct while POST and GET were the only verbs on
+    // this surface. DELETE /v1/scopes/:id arrived and made it wrong.
+    const del = paths["/v1/scopes/{id}"].delete as { responses: Record<string, unknown> };
+    expect(Object.keys(del.responses).sort()).toEqual(["200", "400"]);
+    const post = paths["/v1/scopes"].post as { responses: Record<string, unknown> };
+    expect(Object.keys(post.responses).sort()).toEqual(["201", "400"]);
   });
 
   it("collapses exactly the two paths that carry more than one method", () => {
