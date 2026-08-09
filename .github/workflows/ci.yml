@@ -55,6 +55,14 @@ jobs:
       # your scope" — and stops testing isolation at all. Nothing here calls a
       # model: digest only enqueues, and no worker runs in the test process.
       FEATURE_LLM: "true"
+      # With FEATURE_LLM on, env.ts demands an API key — but only when the base
+      # URL is api.openai.com. Pointing at a dead local port satisfies it without
+      # a placeholder key, and is the safer of the two: a fake key against the
+      # real host would let a stray test actually reach OpenAI and get a 401,
+      # whereas this guarantees CI makes no outbound model calls at all. Any test
+      # that tried would fail loudly on connection refused, which is what we want
+      # to hear about.
+      MODEL_BASE_URL: http://127.0.0.1:9/v1
 
     steps:
       - uses: actions/checkout@v4
