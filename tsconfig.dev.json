@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@statecore/contracts": ["packages/contracts/src/index.ts"],
+      "@statecore/core": ["packages/core/src/index.ts"],
+      "@statecore/db": ["packages/db/src/index.ts"],
+      "@statecore/prompts": ["packages/prompts/src/index.ts"]
+    }
+  }
+}

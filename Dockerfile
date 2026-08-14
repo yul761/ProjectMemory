@@ -41,7 +41,12 @@ WORKDIR /app
 
 COPY --from=build /app /app
 
-RUN node -e "const fs=require('fs'); const path=require('path'); for (const rel of ['packages/core/package.json','packages/contracts/package.json','packages/prompts/package.json','packages/db/package.json']) { const file=path.join('/app', rel); const pkg=JSON.parse(fs.readFileSync(file,'utf8')); pkg.main='dist/index.js'; pkg.types='dist/index.d.ts'; fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n'); }"
+# The workspace packages used to point `main` at `src/index.ts`, so this stage
+# rewrote all four to `dist` before the runtime could start. That made the image
+# the only place a built app was startable, and any other consumer of the built
+# output — the integration smoke workflow — died on `SyntaxError: Unexpected
+# token '{'` from a `.ts` entry. They now ship pointing at `dist`, so nothing
+# needs rewriting here.
 
 FROM runtime-base AS api-runtime
 

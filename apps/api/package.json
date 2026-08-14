@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch --tsconfig ../../tsconfig.dev.json src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "test": "vitest run"
