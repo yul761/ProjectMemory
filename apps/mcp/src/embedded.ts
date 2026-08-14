@@ -173,12 +173,18 @@ function attachFactIds(
   state: DigestState,
   pack: FacetPack
 ): Array<{ group: DisplayGroup; items: Array<{ factKey: string; text: string; createdAt: string | null; factId: string | null }> }> {
+  // First-wins: mirror flattenScopeFacts' dedup order (memory-facts.ts:60-69,
+  // `if (!byKey.has(factKey))` before insert) so a factKey collision — two
+  // sibling facets sharing a displayGroup with identical normalized content —
+  // resolves to the same registry entry `facts()` actually displays. Keep in
+  // sync with that first-wins invariant.
   const idByFactKey = new Map<string, string>();
   for (const entry of getActiveFactRegistry(state)) {
     if (entry.type !== "profile" || !entry.facet) continue;
     const group = factToGroup(entry.facet, pack);
     if (!group) continue;
-    idByFactKey.set(computeFactKey(group, entry.content), entry.id);
+    const factKey = computeFactKey(group, entry.content);
+    if (!idByFactKey.has(factKey)) idByFactKey.set(factKey, entry.id);
   }
   return groups.map((g) => ({
     group: g.group,
