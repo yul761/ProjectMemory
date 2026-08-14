@@ -20,7 +20,13 @@ export function parseArgs(argv: string[]): { dataDir?: string; url?: string } {
 }
 
 function resolveBackend(args: { dataDir?: string; url?: string }, env: NodeJS.ProcessEnv): MemoryBackend {
-  if (args.url) return createHttpBackend({ baseUrl: args.url, env });
+  if (args.url) {
+    return createHttpBackend({
+      baseUrl: args.url,
+      userId: env.STATECORE_USER_ID?.trim() || "local",
+      scopeName: resolveScopeName(process.cwd(), env)
+    });
+  }
   return createEmbeddedBackend({
     dataDir: args.dataDir ?? join(homedir(), ".statecore"),
     scopeName: resolveScopeName(process.cwd(), env),
