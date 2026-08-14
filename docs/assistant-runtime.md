@@ -275,16 +275,32 @@ It is a starting boundary, not a finished runtime surface.
 
 ## Mapping to the Current Repository
 
-The current codebase already contains the pieces needed for an initial runtime:
+The primitives:
 
 - scopes as the session boundary
-- `/memory/events` for ingestion
-- `/memory/retrieve` for baseline recall
-- `/memory/answer` for answer generation
-- `/memory/digest` for digest triggering
+- `/v1/memory/events` for ingestion
+- `/v1/memory/retrieve` for baseline recall, optionally within a `maxChars` budget
+- `/v1/memory/answer` for answer generation
+- `/v1/memory/digest` for digest triggering
 - the HTTP API as the integration boundary
 
-What is missing is a single, documented abstraction that composes these primitives into one coherent developer flow.
+The abstraction that composes them **now exists**: `AssistantSession` in
+`packages/core/src/assistant-runtime.ts`, exposed as
+`POST /v1/memory/runtime/turn`. That endpoint is part of the frozen `/v1`
+contract, narrowed to its stable top-level fields — `answer`, `answerMode`,
+`writeTier`, `digestTriggered`. The diagnostic fields it also returns
+(`layerAlignment`, `retrievalPlan`, `evidence`, `notes`, `warnings`) are
+deliberately outside the promise and may change without notice.
+
+Grounding evidence reports `eventSnippetsTotal` alongside the snippets it shows,
+so an answer displaying 5 of 30 says so rather than implying it had five.
+
+> **Model constraint.** The runtime turn sends `reasoning_effort` on every
+> request — `assistant-runtime.ts` defaults it to `"low"` rather than leaving it
+> unset — so on OpenAI this endpoint requires a model that accepts the parameter.
+> `gpt-4o*` models reject it. Digest and answers do not send it unless
+> `MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT` is set, so a deployment configured
+> with a gpt-4o model looks healthy until its first runtime turn.
 
 ## Runtime Write Policy
 

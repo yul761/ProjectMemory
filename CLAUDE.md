@@ -22,6 +22,29 @@ pnpm changeset        # add a changeset (releases via Changesets)
 pnpm benchmark        # synthetic memory-quality benchmark suite
 ```
 
+`changeset version` needs a token for its changelog generator:
+`GITHUB_TOKEN="$(gh auth token)" pnpm exec changeset version`. Releases are manual
+— version, commit, tag with `apps/api`'s version, `gh release create`. Every
+package is `private: true`; nothing publishes to npm.
+
+## Module resolution — read before touching package.json or tsconfig
+
+The four library packages point `main` at `dist/index.js` and `types` at
+`src/index.ts`. That split is deliberate and load-bearing:
+
+- `main` → `dist` because `node dist/main.js` cannot load a `.ts` entry. The
+  Dockerfile used to rewrite these four package.json files at image build time,
+  which meant the image was the only place a built app could start.
+- `types` → `src` so type-checking and building need no prior build. **Do not
+  "fix" this with tsconfig `paths`** — mapping these names to real paths puts the
+  files under the importing package's `rootDir` and fails every build with
+  TS6059. Resolution through the node_modules symlink is exempt from that check.
+- Vitest reads `main`, so `vitest.shared.ts` aliases the names back to source.
+  A package that runs tests needs a `vitest.config.ts` importing it, or its
+  suite silently runs against stale `dist`.
+- `tsx` reads `main` too, so `pnpm dev:*` and the tsx-run scripts pass
+  `--tsconfig ../../tsconfig.dev.json`, which carries the paths tsc cannot.
+
 ## Running locally
 - API: `http://localhost:3002` (set in `.env`: `PORT=3002`)
 - Auth: `x-user-id: local-dev-user` header (token set in `.env`: `LOCAL_USER_TOKEN=local-dev-user`)
@@ -63,8 +86,38 @@ x-user-id: local-dev-user
 ### Retrieve memory
 ```
 POST /memory/retrieve
-{ "scopeId": "<uuid>", "query": "...", "limit": 20 }
+{ "scopeId": "<uuid>", "query": "...", "limit": 20, "maxChars": 16000 }
 ```
+`maxChars` is optional. With it, the engine packs whole items within the budget
+and reports what it refused in a top-level `budget` field; without it, behaviour
+is unchanged.
+
+### Audit the memory
+```
+GET /v1/memory/facts?scopeId=<uuid>              # grouped displayable facts
+GET /v1/memory/facts/<factId>/provenance?scopeId=<uuid>   # evidence + version chain
+GET /v1/memory/digests/<digestId>/selection      # what a digest kept and dropped
+GET /v1/facet-pack?scopeId=<uuid>                # the active facet ontology
+```
+These are the product's differentiator, not diagnostics. Facts are never deleted:
+a replaced fact carries `supersededBy`, and one evicted or forgotten carries
+`retiredAt`/`retiredReason`.
+
+### Contract rules
+`/v1` is frozen and additive-only — 21 operations across 19 paths, registered in
+`PublicV1Contracts` (`packages/contracts/src/index.ts`). Serving a handler at
+`/v1` without registering it there is the drift that shipped twice;
+`v1-surface-guard.integration.test.ts` now fails on it. Full rules in
+`docs/api.md`.
+
+## Model constraint
+
+On OpenAI, use a model that accepts `reasoning_effort`. `assistant-runtime.ts`
+defaults it to `"low"` rather than leaving it unset, so **every** runtime turn
+sends it and `gpt-4o*` models reject the request. Digest and answers do not send
+it unless `MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT` is set — so a gpt-4o model
+ingests, digests and retrieves fine, then fails on the first
+`POST /v1/memory/runtime/turn`.
 
 ## Bulk document ingest script
 To ingest an entire folder of markdown files into a scope:
@@ -97,6 +150,10 @@ user's scopes via `GET /scopes` (auth header `x-user-id`).
 - `apps/api/src/domain.service.ts` — service orchestration
 - `apps/api/src/auth.middleware.ts` — x-user-id / x-telegram-user-id auth
 - `packages/core/src/index.ts` — MemoryService, DigestService, AnswerService exports
+- `packages/core/src/digest-control.ts` — the digest pipeline and `DigestState`, including `factRegistry` and `retireFact`
+- `packages/core/src/facet-registry.ts` — the facet ontology; **the single source of truth.** Facets carry their own cap, write protection, display group, document authority and stage-1 routing. The engine stores and supersedes without knowing what a facet means, so do not reintroduce a hardcoded facet table
+- `packages/core/src/drop-log.ts` — the fixed set of reasons a fact can be discarded
+- `packages/contracts/src/index.ts` — Zod schemas, and `PublicV1Contracts` (the frozen surface)
 
 ## Deploy (droplet `statecore` → api.statecore.io)
 Git-pull based, from a checkout at `/root/StateCore` on the `statecore` droplet

@@ -9,11 +9,13 @@ StateCore is an OSS, developer-first long-term memory engine (API + worker + ada
 - Core logic lives in `packages/core` and should remain transport/UI independent.
 
 ## Core Capabilities
-1. Ingest memory events (`stream` append, `document` upsert by key)
+1. Ingest memory events (`stream` append, `document` upsert by key; `pinned` keeps durable inputs from losing a budget competition)
 2. Generate layered digests (digest control pipeline)
-3. Retrieve memory (latest digest + recent events)
+3. Retrieve memory (latest digest + recent events + active facts), optionally packed into a caller-declared `maxChars` budget that reports what it refused
 4. Answer from retrieved memory (only if `FEATURE_LLM=true`)
 5. Schedule/send reminders
+6. Audit the memory — a fact's evidence and version chain, and what each digest discarded and why. Facts are never deleted: a replaced one carries `supersededBy`, an evicted or forgotten one carries `retiredAt`
+7. Resolve the facet ontology per tenant and scope from a replaceable pack; the engine stores and protects without knowing what a facet means
 
 ## Key Architecture
 - API: `apps/api` (NestJS REST, auth + validation + queue producer)

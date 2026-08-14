@@ -13,9 +13,9 @@ Thanks for helping improve StateCore.
    cp .env.example .env
    cp .env packages/db/.env
    ```
-3. Start local infra:
+3. Start local infra (Postgres with pgvector + Redis):
    ```bash
-   docker-compose up -d
+   docker compose -f docker-compose.local.yml up -d
    ```
 4. Generate Prisma client and migrate:
    ```bash
@@ -23,14 +23,18 @@ Thanks for helping improve StateCore.
    pnpm db:migrate
    ```
 
+The API integration tests need a separate, migrated test database; see
+`apps/api/src/test/README.md` for the one-time provisioning.
+
 ## Common Commands
 
 - `pnpm dev:api`
 - `pnpm dev:worker`
-- `pnpm dev:telegram`
-- `pnpm dev:cli -- scopes`
 - `pnpm --filter @statecore/core test`
-- `pnpm -r --filter "./apps/**" --filter "./packages/**" build`
+- `pnpm --filter @statecore/api test`
+- `pnpm lint` — `tsc --noEmit` across apps and packages
+- `pnpm format:check`
+- `pnpm build`
 
 ## Pull Request Rules
 
@@ -41,7 +45,15 @@ Thanks for helping improve StateCore.
 
 ## Commit And Release Notes
 
-- Add a short changelog entry in `CHANGELOG.md` for notable changes.
+- Releases run on [Changesets](https://github.com/changesets/changesets). For a
+  notable change run `pnpm changeset` and commit the generated file; the release
+  writes the per-package `CHANGELOG.md` files from it. **Do not hand-edit those.**
+  The root `CHANGELOG.md` is the product-level view and is written at release time.
+- If your change touches the `/v1` surface, read the compatibility rules in
+  `docs/api.md` first. The contract is additive-only: new endpoints and new
+  *optional* fields are fine, and removals, renames, retypes or newly-required
+  fields are not. A handler served at `/v1` must be registered in
+  `PublicV1Contracts`, and a test fails if it is not.
 - If your change affects users, include migration notes in the PR description.
 
 ## Reporting Security Issues

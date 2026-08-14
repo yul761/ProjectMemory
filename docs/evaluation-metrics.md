@@ -401,13 +401,24 @@ Today the repository already measures:
 
 That is a useful base, but it is not yet the full memory-quality evaluation system described in the roadmap.
 
-The main gaps are:
+Partly closed since this list was written:
 
-- retention scoring against labeled memory facts
+- **retention scoring** now has an external number alongside the internal
+  synthetic one — `docs/longmemeval.md` reports ingest completeness and answer
+  accuracy at an equal context budget against another system
+- **state-level drift metrics** observe the fact registry, not only the narrative
+  sections
+
+Still open:
+
 - grounding scoring for answer outputs
 - replay consistency scoring
-- stronger state-level drift metrics
 - developer experience metrics
+- **auditability scoring — the largest gap, because it is the differentiator.**
+  The engine can be asked what a fact's evidence was, what it believed before,
+  and what a digest discarded; none of it is scored. A memory system that cannot
+  demonstrate its audit trail is in the position this document exists to
+  argue against: claiming a property without measuring it.
 
 ## Suggested Rollout Order
 

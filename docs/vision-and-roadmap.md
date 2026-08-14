@@ -61,6 +61,8 @@ Build a memory-first runtime that makes long-term assistant memory:
 - **BYOM**: model choice belongs to the developer; StateCore owns the memory layer.
 - **Low drift over flashy demos**: stability matters more than broad but shallow features.
 - **Evidence over intuition**: memory quality claims should be backed by benchmarks and reproducible methods.
+- **Auditable over merely stored**: a fact keeps its evidence and its version history, a fact that leaves the active set is retired rather than deleted, and every discard is recorded with a reason. Losing information is survivable; losing it silently is not.
+- **Domain-neutral core**: what a facet means comes from a replaceable pack. The engine stores, protects, supersedes and retrieves without knowing the domain.
 - **Developer convenience**: integration cost and setup complexity should stay low.
 
 ## Problem Statement
@@ -155,7 +157,9 @@ Key areas:
 - Memory ingestion for events, documents, and scoped interaction
 - Digest control pipeline
 - Protected state for goals, constraints, decisions, risks, questions, and todos
-- Retrieval based on digest, state, and recent events
+- A replaceable facet ontology, resolved per tenant and scope
+- An audit surface: fact provenance, version chains, and the record of what each digest discarded
+- Retrieval based on digest, state, and recent events, within an optional caller budget
 - Assistant runtime abstractions
 - Benchmark and evaluation tooling
 
@@ -181,6 +185,29 @@ Layered Model above.
 - general-purpose AI operating system ambitions
 
 ## Recommended Roadmap
+
+> **Status as of 2026-08-14.** The five phases below were written before any of
+> them shipped, and their time horizons have passed. All five have delivered
+> their main outputs, so read them as the reasoning behind what exists rather
+> than as a work queue.
+>
+> | Phase | State |
+> |---|---|
+> | 1. Stabilize the low-drift digest core | Delivered — `docs/drift-definition.md`, a first-class `DigestState` with evidence chains and a fact registry, plus property and adversarial tests over the digest-control pure functions. |
+> | 2. Measurable long-term memory evaluation | Delivered internally (`docs/evaluation-metrics.md`, the synthetic eval suite) and externally (`docs/longmemeval.md`, at equal context budget against mem0 OSS). |
+> | 3. Assistant runtime | Delivered — `POST /v1/memory/runtime/turn` and `docs/assistant-runtime.md`. |
+> | 4. Retrieval without losing low drift | Delivered — hybrid keyword + pgvector behind an HNSW index, CJK tokenization, and a caller-declared `maxChars` budget that reports what it refused. |
+> | 5. Pluggable model providers | Delivered — `createModelProvider` and `docs/provider-abstraction.md`. |
+>
+> **What the phases did not anticipate**, and what the engine now also does: the
+> ontology is a replaceable pack rather than a fixed set of facets, and the audit
+> surface — fact provenance, digest selection logs, retirement instead of
+> deletion — is part of the frozen contract. See `docs/philosophy.md`.
+>
+> **The open item is measuring the differentiator.** Retention has an external
+> number; auditability has none. "Can it still explain a fact it superseded a
+> month ago" is not measured by anything here, which the LongMemEval write-up
+> says in as many words.
 
 ### Phase 1: Stabilize the low-drift digest core
 

@@ -67,15 +67,26 @@ why tsconfig `paths` cannot be used for it.
 ```
 docs/start-here.md          Orientation for new contributors
 docs/repo-map.md            This file
-docs/api.md                 Full API reference
-docs/vision-and-roadmap.md  Design philosophy and roadmap
+docs/philosophy.md          What the engine is for, and why auditability is the centre
+docs/glossary.md            Vocabulary: facet, pack, supersession, retirement, drop log
+docs/api.md                 Full API reference and the /v1 contract rules
+docs/vision-and-roadmap.md  Positioning and roadmap (with a status map at the top)
 docs/technical-overview.md  Architecture internals
 docs/digest-state.md        Digest state specification
+docs/protected-state-merge.md  The deterministic merge, field by field
 docs/drift-definition.md    Drift definition and metrics
+docs/assistant-runtime.md   Assistant runtime specification
+docs/provider-abstraction.md   Provider abstraction specification
+docs/llm-context.md         Condensed project context for an LLM
 docs/benchmarking.md        Benchmark methodology
 docs/evaluation-metrics.md  Evaluation metrics specification
-docs/assistant-runtime.md   Assistant runtime specification
-docs/provider-abstraction.md Provider abstraction specification
+docs/evaluation-protocol.md Evaluation protocol
+docs/longmemeval.md         Published LongMemEval results vs mem0 OSS
+docs/runtime-profile-ablation-guide.md  Runtime profile ablations
+docs/research-overview.md   Research framing
+docs/research-questions.md  Open research questions
+docs/audit/                 Dated design audits — historical records, not current state
+docs/superpowers/           Dated specs and plans — historical records, not current state
 ```
 
 ## Where Code Belongs

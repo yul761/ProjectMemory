@@ -237,20 +237,35 @@ The current `DigestState` shape is:
 - `workingNotes.context`
 - `todos`
 
-This is a useful starting point, but not yet the final target model described in the roadmap. In particular, the current state does not yet formally separate:
+The four separations this section once listed as missing now exist in
+`DigestState`:
 
-- stable facts vs volatile context
-- evidence references
-- confidence levels
-- explicit overwrite policy
+- **stable facts vs volatile context** — `volatileContext` is its own field with
+  its own capacity
+- **evidence references** — `evidenceRefs`, plus a per-fact `evidenceId` and
+  `evidenceType` in `factRegistry`
+- **confidence levels** — a `confidence` block for the narrative sections, and a
+  `confidence` on every registry entry
+- **explicit overwrite policy** — facets declare `writeProtected` and
+  `documentAuthority`, and sources carry authority scores, so a lower-authority
+  source cannot silently replace a higher one
+
+Drift metrics observe the fact registry, where user facts actually live, rather
+than only the narrative sections.
 
 ## Operational Rules
 
-The following rules should guide future implementation:
+Rules 1 to 3 are implemented; 4 to 6 remain guidance.
 
-1. Stable facts should not be overwritten by weaker evidence.
-2. Constraint removal should require explicit contrary evidence.
-3. Decisions should prefer append or supersede semantics over silent replacement.
+1. **Implemented.** Stable facts are not overwritten by weaker evidence. Write
+   protection applies on every digest path rather than only the classifier-driven
+   one, and a document-authority facet refuses a fact when the run has no
+   document.
+2. **Implemented.** Constraint removal requires explicit contrary evidence; the
+   consistency gate rejects contradictions against protected facts.
+3. **Implemented.** Facts supersede rather than replace — the old entry keeps
+   `supersededBy`, and one displaced without a replacement keeps `retiredAt` and
+   `retiredReason`. Nothing in the registry is deleted.
 4. Todos should distinguish open, completed, canceled, and duplicate states.
 5. Answers should expose evidence or explicitly signal uncertainty.
 6. Replay should be treated as a first-class check on memory stability.

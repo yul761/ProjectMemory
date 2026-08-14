@@ -209,12 +209,16 @@ per-question judge verdicts:
 ## Documentation
 
 - `docs/start-here.md` — orientation for new contributors
-- `docs/repo-map.md` — repo structure and where code belongs
-- `docs/api.md` — full API reference
-- `docs/vision-and-roadmap.md` — design philosophy and roadmap
+- `docs/repo-map.md` — repo structure, where code belongs, and the full doc index
+- `docs/philosophy.md` — what the engine is for, and why auditability is the centre
+- `docs/glossary.md` — facet, pack, supersession, retirement, drop log
+- `docs/api.md` — full API reference and the `/v1` contract rules
+- `docs/vision-and-roadmap.md` — positioning and roadmap, with a status map
 - `docs/technical-overview.md` — architecture internals
 - `docs/digest-state.md` — digest state specification
+- `docs/protected-state-merge.md` — the deterministic merge, field by field
 - `docs/drift-definition.md` — drift definition and metrics
+- `docs/assistant-runtime.md` — assistant runtime specification
 - `docs/benchmarking.md` — benchmark methodology
 - `docs/longmemeval.md` — LongMemEval results vs mem0 OSS
 - `docs/evaluation-metrics.md` — evaluation metrics specification
