@@ -1,6 +1,14 @@
 # Stability Policy
 
-As of **v1.1.0**, StateCore's `/v1` HTTP API is **frozen**.
+StateCore's `/v1` HTTP API is **frozen**, and currently covers 21 operations
+across 19 paths.
+
+The freeze shipped in the `v1.1.0` release, but do not read a release tag as the
+contract's version. The contract carries its own number — `info.version` in the
+generated OpenAPI document — and that is the one that tells you how current a
+spec you are holding. It is at **`1.5.0`** and moves on every additive change to
+the surface. The rule and the full history are in
+[docs/api.md](docs/api.md#versioning-the-contract).
 
 ## What "frozen" means
 

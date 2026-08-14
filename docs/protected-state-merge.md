@@ -36,8 +36,16 @@ DigestState {
   provenance:       { [field]: ValueProvenance[] }  // per-value source tracking
   recentChanges:    DigestStateChange[]  // what changed in this run
   transitionSummary: Record<string, number>
+  factRegistry?:    FactRegistryEntry[]  // per-fact record: evidence, version chain,
+                                         // retirement. Entries are never deleted.
+  profile?:         Record<string, string[]>  // facet name -> fact lines; the keys
+                                              // come from the active facet pack
 }
 ```
+
+`factRegistry` and `profile` are what the audit endpoints read. See
+[digest-state.md](digest-state.md#current-state-in-the-repository) for their
+semantics, and [glossary.md](glossary.md) for supersession versus retirement.
 
 ---
 

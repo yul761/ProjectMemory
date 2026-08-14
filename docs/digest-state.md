@@ -28,45 +28,44 @@ It is distinct from:
 
 ## Current State in the Repository
 
-The current implementation stores `DigestState` with five top-level sections:
+`DigestState` carries the five original narrative sections plus the record-keeping
+that was added later. `packages/core/src/digest-control.ts` is authoritative;
+`packages/contracts/src/index.ts` holds the schemas the API exposes.
 
-- `stableFacts`
-- `workingNotes`
+The narrative sections:
+
+- `stableFacts` — `goal?`, `constraints?`, `decisions`
+- `workingNotes` — `openQuestions?`, `risks?`, `context?`
 - `todos`
-- `volatileContext`
-- `evidenceRefs`
+- `volatileContext?`
+- `evidenceRefs?` — `{ id, sourceType: "document" | "event", key?, kind? }`
 
-Current shape:
+And the record-keeping, which is what makes the state auditable rather than merely
+stored:
 
-```ts
-interface DigestState {
-  stableFacts: {
-    goal?: string;
-    constraints?: string[];
-    decisions: string[];
-  };
-  workingNotes: {
-    openQuestions?: string[];
-    risks?: string[];
-    context?: string;
-  };
-  todos: string[];
-  volatileContext?: string[];
-  evidenceRefs?: Array<{
-    id: string;
-    sourceType: "document" | "event";
-    key?: string;
-    kind?: MemoryEventKind;
-  }>;
-}
-```
+- `factRegistry?` — the authoritative record of individual facts. Each entry
+  carries `id`, `content`, `type`, `confidence`, `addedAt`, `evidenceId` and
+  `evidenceType`, plus `facet?` and the two ways a fact can leave the active set:
+  `supersededBy` when a newer version replaced it, or `retiredAt` /
+  `retiredReason` when it left without a replacement (capacity eviction, an
+  explicit forget). **Nothing is deleted** — that is what lets
+  `GET /v1/memory/facts/:factId/provenance` answer from any version in a chain.
+  Inactive entries are bounded to the most recent 500.
+- `profile?` — facet name to fact lines. The keys come from the active facet
+  pack, not from this type: the engine stores and protects facts without knowing
+  what a facet means, so a deployment can replace the ontology without a
+  migration. See `packages/core/src/facet-registry.ts`.
+- `confidence?` / `provenance?` — per-value confidence and evidence refs for the
+  narrative sections.
+- `transitionSummary?` / `recentChanges?` — what moved in the last digest, used by
+  drift metrics and replay.
 
-This exists in:
+Facts a digest refused to store are not in the state at all; they are recorded in
+`Digest.selectionLog` with a reason, readable through
+`GET /v1/memory/digests/:digestId/selection`.
 
-- `packages/core/src/digest-control.ts`
-- `packages/contracts/src/index.ts`
-
-This is already useful, but it is still an early State Layer model rather than the final intended state design.
+The narrative sections remain an early State Layer model rather than the final
+intended state design; the sections below describe where they should go.
 
 ## Design Goals
 

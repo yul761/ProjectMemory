@@ -8,7 +8,23 @@ Principles:
 - **Two memory types**: stream (append-only) and document (upsert by key).
 - **Integrations call the API**: external clients call the HTTP API and never touch the database directly.
 - **Replaceable intelligence**: LLM is optional and swappable.
+- **Replaceable ontology**: what a facet *means* comes from a pack, not from the engine. The core stores, protects, supersedes and retrieves without knowing the domain.
 - **Digest control layer**: selection, deltas, protected merge, consistency checks, and retry.
+- **Auditable, not merely stored**: every fact keeps its evidence and its version chain, a fact that leaves the active set is retired rather than deleted, and every discard is recorded with a reason. Losing information is survivable; losing it silently is not.
+
+## Why Auditability Is the Centre
+
+Storing raw context commits the system to nothing, so there is nothing to audit.
+Abstracting events into state is the point at which the system starts making
+claims — and the abstraction step is where errors enter. **Holding state creates
+the need for an audit, and the audit is what makes holding state trustworthy.**
+They arrive together, which is why this is one design rather than a feature
+bolted onto one.
+
+It is also not the axis public memory benchmarks measure. Exhaustive
+needle-in-haystack recall says nothing about contradiction resolution or whether
+state stays stable over time. `docs/longmemeval.md` reports where the engine wins,
+where it loses, and what the score does not cover.
 
 ## Digest Control Layer
 

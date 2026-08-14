@@ -138,7 +138,18 @@ flowchart TD
   - `evidenceRefs`
   - lightweight `provenance`
   - lightweight `recentChanges`
-- Conservative overwrite rules prevent accidental drift.
+  - `factRegistry` — the per-fact record with its evidence and version chain
+  - `profile` — facet name to fact lines, keyed by the active facet pack
+- Conservative overwrite rules prevent accidental drift. A write-protected facet
+  is not overwritten by a lower-authority source, and a document-authority facet
+  takes facts only from documents.
+- Facet routing, capacity and protection come from the pack resolved for the
+  scope, not from a table in the engine (`packages/core/src/facet-registry.ts`).
+- A fact displaced by capacity or by consolidation is **retired, not deleted** —
+  the registry keeps it with `retiredAt` and `retiredReason`, so the audit chain
+  survives a full facet.
+- Anything the merge refuses is appended to a drop log with a reason and
+  persisted to `Digest.selectionLog`.
 
 This layer is authoritative.
 Working Memory may help the next turn quickly, but it does not overwrite this layer by itself.
@@ -151,7 +162,15 @@ Working Memory may help the next turn quickly, but it does not overwrite this la
   - protected state
   - delta candidates
   - latest docs
-- Must output strict JSON `{summary, changes, nextSteps}`.
+- Must output strict JSON `{summary, changes, nextSteps}`, plus the profile facts
+  it extracted. The facet list in the prompt is generated from the active pack.
+- Stage 2 runs one pass per prompt-sized chunk over the whole corpus, threading
+  each pass's output forward as the next pass's previous digest, so a corpus
+  larger than one prompt is fully seen. `STAGE2_MAX_CHUNKS` bounds the work per
+  run; events beyond it wait for the next one.
+- Facets touched by the run are then consolidated by a separate LLM pass, which
+  resolves contradictions in favour of the document-sourced side and retires the
+  loser. It is fail-open: a failed consolidation leaves the facts as they were.
 
 ### 5) Consistency Check + Retry
 

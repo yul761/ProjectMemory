@@ -51,7 +51,16 @@ scripts/ingest-docs.ts  Bulk-ingest markdown/text files into a scope
 docker-compose.local.yml    Local dev stack (Postgres with pgvector, Redis)
 docker-compose.prod.yml     Production stack
 Makefile                    Shortcuts: make start, make stop, make logs, make rebuild
+tsconfig.base.json          Compiler options every package extends
+tsconfig.dev.json           Adds paths mapping @statecore/* to source; the dev
+                            scripts pass it to tsx via --tsconfig
+vitest.shared.ts            Aliases @statecore/* to source for every Vitest run
 ```
+
+Workspace packages point `main` at `dist`, so a built app starts under plain Node,
+and `types` at source, so type-checking needs no build. The last two files above
+are how Vitest and `tsx` get source resolution back; `vitest.shared.ts` records
+why tsconfig `paths` cannot be used for it.
 
 ## Docs
 

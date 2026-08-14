@@ -11,9 +11,12 @@ StateCore is a self-hosted, low-drift long-term memory runtime for AI systems us
 - **Event store** — ingest stream events and keyed documents into per-scope memory
 - **Digest pipeline** — background worker consolidates events into stable state through selection, merge, consistency checks, and retry
 - **Protected state** — goals, constraints, decisions, and todos are gated by a consistency gate; the LLM proposes, the pipeline enforces
-- **Retrieval** — hybrid keyword + optional pgvector semantic search over events and digests
+- **Auditable facts** — every fact carries its evidence and its supersession chain, and a fact that leaves the active set is retired rather than deleted, so "why do you believe this, and what did you believe before" stays answerable
+- **Recorded discards** — the digest logs what it dropped and why, against a fixed set of reasons; losing information is survivable, losing it silently is not
+- **Replaceable ontology** — facets come from a pack resolved per tenant and scope, so the engine stores, protects and supersedes without knowing what a facet means
+- **Retrieval** — hybrid keyword + optional pgvector semantic search over events and digests, packed into a caller-declared character budget that reports what it refused
 - **Reminders** — daily reminder job surfaces follow-up items from active scopes
-- **Benchmarks** — built-in synthetic memory quality suite (fact retention, goal stability, decision continuity, retrieval MRR)
+- **Benchmarks** — built-in synthetic memory quality suite (fact retention, goal stability, decision continuity, retrieval MRR), plus a published LongMemEval comparison
 
 ## Quickstart
 
@@ -45,8 +48,16 @@ FEATURE_LLM=true
 MODEL_PROVIDER=openai-compatible
 MODEL_API_KEY=<your-key>
 MODEL_BASE_URL=https://api.openai.com/v1
-MODEL_NAME=gpt-4o-mini
+MODEL_NAME=gpt-5-mini
 ```
+
+> **On OpenAI, pick a model that accepts `reasoning_effort`.** The runtime turn
+> sends it on every request — `assistant-runtime.ts` defaults it to `low` rather
+> than leaving it unset — so `POST /v1/memory/runtime/turn` fails against a
+> `gpt-4o*` model, which rejects the parameter. Digest and answers do not send it
+> unless `MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT` is set, so a `gpt-4o*` model
+> appears to work right up until the first runtime turn. Any endpoint that
+> accepts the parameter, or ignores unknown ones, is fine.
 
 ### 3. Start infrastructure
 
@@ -104,14 +115,25 @@ Reference documentation: `docs/api.md`
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/v1/memory/events` | Ingest a stream event or document |
-| `POST` | `/v1/memory/retrieve` | Retrieve grounded evidence for a query |
+| `POST` | `/v1/memory/retrieve` | Retrieve grounded evidence for a query, within an optional `maxChars` budget |
 | `POST` | `/v1/memory/digest` | Trigger a State Layer digest job |
+| `GET` | `/v1/memory/facts` | Grouped memory facts for a scope |
+| `GET` | `/v1/memory/facts/:factId/provenance` | A fact's evidence and its full version chain |
+| `GET` | `/v1/memory/digests/:digestId/selection` | What a digest kept, and what it discarded and why |
+| `GET` | `/v1/facet-pack` | The active facet ontology for a scope or account |
 | `GET` | `/v1/scopes` | List scopes |
 | `GET` | `/memory/stable-state` | Current stable-state snapshot ¹ |
 | `GET` | `/memory/working-state` | Current working-memory snapshot ¹ |
 | `GET` | `/memory/layer-status` | Aggregated layer health ¹ |
 
-> **API stability:** the `/v1` API is frozen as of v1.1.0 — see [STABILITY.md](STABILITY.md).
+The three audit readers in the middle are the ones that make the engine's memory
+checkable rather than merely stored; `docs/api.md` lists the full frozen surface.
+
+> **API stability:** the `/v1` contract is frozen and additive-only — see
+> [STABILITY.md](STABILITY.md). It currently covers **21 operations across 19
+> paths**. The contract carries its own version in the generated OpenAPI document
+> (`info.version`, currently `1.5.0`), which is what tells you how current a spec
+> you are holding; it is not the release tag and not any package version.
 
 ¹ Internal read-model endpoints — registered only at `/memory/...`, not under `/v1`, and not part of the frozen `/v1` contract.
 
