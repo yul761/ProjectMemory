@@ -2,6 +2,8 @@
 
 StateCore includes a reproducible benchmark runner for research-facing claims (latency, throughput, reliability, digest consistency).
 
+This page covers the internal synthetic suite. The external comparison — LongMemEval against mem0 OSS at an equal context budget — lives in [longmemeval.md](longmemeval.md), with its harness in a separate repository. The two answer different questions: this suite tracks regressions in one engine across commits; the external run compares systems.
+
 In the three-layer architecture, benchmark output should be read as separating:
 
 - Fast Layer turn latency
@@ -32,6 +34,11 @@ pnpm benchmark
 Reproducible run (fixed seed + fixture):
 ```bash
 BENCH_SEED=42 BENCH_FIXTURE=benchmark-fixtures/basic.json pnpm benchmark
+```
+
+Chinese-language run (`basic-zh.json` is the CJK counterpart of `basic.json`; it exists because both the engine's consistency checks and this harness's own scoring once used English-only regexes, so the Chinese score measured the metric, not the engine):
+```bash
+BENCH_SEED=42 BENCH_FIXTURE=benchmark-fixtures/basic-zh.json pnpm benchmark
 ```
 
 Three-layer runtime scenario:
@@ -217,6 +224,16 @@ Replay reports include category-level state diffs for:
 - `constraints`
 - `decisions`
 - `todos`
+- `volatileContext`
+- `evidenceRefs`
+- `goalProvenance`
+- `constraintProvenance`
+- `decisionProvenance`
+- `todoProvenance`
+- `recentChanges`
+- `openQuestions`
+- `risks`
+- `workingContext`
 - `goalConfidence`
 - `constraintConfidence`
 - `decisionConfidence`
@@ -236,16 +253,6 @@ transition divergence.
 
 The grounded-response view also tracks whether runtime and answer evidence include a
 structured state transition taxonomy, not just plain state summaries.
-- `volatileContext`
-- `evidenceRefs`
-- `goalProvenance`
-- `constraintProvenance`
-- `decisionProvenance`
-- `todoProvenance`
-- `recentChanges`
-- `openQuestions`
-- `risks`
-- `workingContext`
 
 `evidenceRefs` may now contain either legacy string ids or structured refs from newer snapshots; replay and benchmark diffing normalize both forms before comparison.
 

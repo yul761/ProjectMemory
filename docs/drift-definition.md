@@ -216,7 +216,7 @@ The current codebase already contains partial building blocks for this model:
 - digest state snapshots in Prisma schema
 - drift-oriented benchmark runner in `scripts/benchmark/run-drift.mjs`
 
-The current consistency taxonomy now includes omission/contradiction signals across all four protected memory categories:
+The current consistency taxonomy includes omission/contradiction signals across the four narrative memory categories:
 
 - `goal_omission`
 - `constraint_omission`
@@ -227,15 +227,13 @@ The current consistency taxonomy now includes omission/contradiction signals acr
 - `decision_contradiction`
 - `todo_contradiction`
 
-The current `DigestState` shape is:
+plus a dynamic `profile_<facet>_contradiction` signal for each facet of the
+active pack, so write-protected profile facts participate in the contradiction
+gate rather than only `stableFacts`.
 
-- `stableFacts.goal`
-- `stableFacts.constraints`
-- `stableFacts.decisions`
-- `workingNotes.openQuestions`
-- `workingNotes.risks`
-- `workingNotes.context`
-- `todos`
+For the current `DigestState` shape, see
+[digest-state.md](digest-state.md#current-state-in-the-repository) — the list
+that used to sit here went stale once and is not duplicated again.
 
 The four separations this section once listed as missing now exist in
 `DigestState`:

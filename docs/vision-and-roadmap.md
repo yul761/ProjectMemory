@@ -463,6 +463,11 @@ If a proposed feature does not help any of these, it should not be a near-term p
 
 ## 12-Month Direction
 
+This restates the five phases as a timeline, and carries the same status: the
+first three windows have been delivered (see the status map above). What remains
+from the fourth is the adoption work — clearer paths in, and reference
+integrations, of which the deleted CLI/Telegram adapters were the first attempt.
+
 - 0 to 3 months: strengthen digest stability, define drift, and expand memory evaluation.
 - 3 to 6 months: ship the first assistant runtime and neutralize provider configuration.
 - 6 to 9 months: prototype optional vector or hybrid retrieval and deepen replay analysis.

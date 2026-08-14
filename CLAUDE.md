@@ -48,7 +48,7 @@ The four library packages point `main` at `dist/index.js` and `types` at
 ## Running locally
 - API: `http://localhost:3002` (set in `.env`: `PORT=3002`)
 - Auth: `x-user-id: local-dev-user` header (token set in `.env`: `LOCAL_USER_TOKEN=local-dev-user`)
-- Start: `pnpm start` or see `start.ps1`
+- Start: `pnpm dev:api` + `pnpm dev:worker` (there is no root `start` script; `start.ps1` is the Windows wrapper)
 
 ### Enable semantic retrieval (optional)
 Add to `.env`:

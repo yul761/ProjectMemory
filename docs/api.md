@@ -37,8 +37,40 @@ prefer.
   - list scopes
 - `POST /scopes/:id/active`
   - mark a scope as active for the current identity
+- `DELETE /scopes/:id`
+  - cascade-delete a scope and all its data; erasure is frozen because it is the
+    one operation a caller cannot verify by asking again later
 - `GET /state`
   - returns the currently active scope id for the current identity
+
+### Facts, Provenance And Ontology
+
+The audit surface — the endpoints that make the memory checkable rather than
+merely stored. All are frozen under `/v1`.
+
+- `GET /memory/facts?scopeId=`
+  - grouped, displayable, forgotten-filtered facts for a scope
+- `GET /memory/facts/:factId/provenance?scopeId=`
+  - a fact's evidence plus its full version chain, walkable from any version in
+    it — the id from a retrieve response works directly
+- `POST /memory/facts/forget`
+  - body: `{ scopeId, factKey }`
+  - suppresses the fact and soft-suppresses its evidence event; the registry
+    entry is retired, not deleted, and the fact is pruned before the next digest
+    generates so a reworded version cannot resurface
+- `POST /memory/notes`
+  - body: `{ scopeId, text }` (max 500 chars)
+  - deterministic durable note writer with exact-match dedup
+- `GET /memory/digests/:digestId/selection`
+  - what that digest kept, and what it discarded with reasons; `null`-era digests
+    predate the log and return empty arrays
+- `GET /facet-pack?scopeId=`
+  - the active facet ontology. Resolved per scope from its template, overridden
+    by an account-level pack; without `scopeId` it answers for the account
+- `GET /memory/relationship-context/:scopeId`
+  - what a caller needs to open a conversation that sounds like it remembers the
+    person; `personaPrompt` in the live response is deliberately outside the
+    frozen contract
 
 ### Runtime And Layer Inspection
 

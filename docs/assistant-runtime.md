@@ -225,14 +225,12 @@ interface DigestPolicy {
 }
 ```
 
-These are now beginning to exist in the repository as a minimal core runtime abstraction in `packages/core/src/assistant-runtime.ts`.
-
-The current implementation is intentionally small:
+These exist in `packages/core/src/assistant-runtime.ts`:
 
 - `AssistantSession`
-- `DefaultMemoryWritePolicy`
+- `DefaultMemoryWritePolicy` and `ProfiledMemoryWritePolicy`
 - `DefaultRecallPolicy`
-- `ThresholdDigestPolicy`
+- `ThresholdDigestPolicy` and `ProfiledDigestPolicy`
 
 The current runtime output now also exposes lightweight layer metadata:
 
@@ -271,7 +269,10 @@ The current runtime evidence object is also structured enough for lightweight gr
 - event ids plus short event snippets
 - state refs plus a state-summary marker
 
-It is a starting boundary, not a finished runtime surface.
+The turn's stable top-level fields — `answer`, `answerMode`, `writeTier`,
+`digestTriggered` — are part of the frozen `/v1` contract. Everything else on the
+response, including the evidence and alignment objects described above, is
+diagnostic and free to evolve.
 
 ## Mapping to the Current Repository
 

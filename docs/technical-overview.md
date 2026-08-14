@@ -220,24 +220,28 @@ Enable debug details with:
 ## Benchmarking and Scoring
 
 Use `pnpm benchmark` to generate reproducible performance/reliability reports.
-
-The benchmark currently measures:
-- ingest throughput and latency
-- retrieve latency and hit-rate
-- fast-turn latency
-- working-memory update latency
-- State Layer digest success + consistency + latency (when LLM enabled)
-- reminder due-to-sent latency
-
 Reports are written to `benchmark-results/` as JSON and Markdown.
+
+The full list of what a run measures — performance, gold-backed retention,
+drift, grounding, replay, and the `Long-term Memory Reliability` composite —
+lives in [benchmarking.md](benchmarking.md); it is not duplicated here.
 
 ## Current Limitations
 
-- Retrieval is heuristic by default. An optional embedding rerank path can reorder the top heuristic candidates without introducing a vector index.
-- State extraction is rule-based; no semantic entity graph.
+- Retrieval is heuristic when no embedding model is configured. With
+  `MODEL_EMBEDDING_NAME` set, retrieval uses pgvector similarity search behind an
+  HNSW index, plus an optional rerank of heuristic candidates
+  (`RETRIEVE_USE_EMBEDDINGS=true`); the response's `retrieval.mode` reports which
+  path ran.
+- Stage-1 state extraction is classifier-driven per facet pack; there is no
+  semantic entity graph.
+- Todos and working notes are plain strings — the record-per-fact registry
+  covers facts, decisions and constraints, not them.
 
 ## Extension Paths
 
-- Add embedding/vector retrieval behind current interfaces.
-- Add richer state persistence (optional new table) for stronger replay guarantees.
-- Add confidence scoring for facts and automated drift audits.
+- Richer state persistence (an optional new table) for stronger replay
+  guarantees — snapshots are still one JSON column.
+- Extend the fact registry's record model to todos and working notes.
+- Score auditability itself: provenance and selection logs exist, and nothing
+  yet measures them (see `docs/evaluation-metrics.md`).

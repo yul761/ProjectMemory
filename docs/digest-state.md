@@ -152,54 +152,49 @@ This document does not require that exact schema yet, but it defines the intende
 
 ## Why the Current Shape Is Not Enough
 
-The current shape has three practical limitations:
+The narrative sections still have two practical limitations:
 
-1. It still stores most state entries as plain strings.
-2. It does not clearly separate temporary context from longer-lived notes.
-3. It only partially encodes provenance today: `evidenceRefs` are structured, but facts, todos, and notes do not yet carry their own evidence metadata.
+1. They store most entries as plain strings.
+2. They do not clearly separate temporary context from longer-lived notes.
 
-That makes it harder to answer:
+The third limitation this section used to list — "facts do not carry their own
+evidence metadata" — no longer holds. The record-per-fact model exists: every
+`factRegistry` entry carries its content, `evidenceId` and `evidenceType`,
+`confidence`, `addedAt`, its facet, and how it left the active set
+(`supersededBy`, or `retiredAt` with a reason). Registry entries cover decisions
+and constraints as well as profile facts (`type`), so the system can answer
+directly:
 
-- why a fact was added
-- whether a fact can be replaced
-- what evidence justified a state transition
-- whether replay produced the same state for the same reasons
+- why a fact was added (`GET /v1/memory/facts/:factId/provenance`)
+- what it believed before (the version chain)
+- what a digest discarded and why (`GET /v1/memory/digests/:digestId/selection`)
 
-The current codebase has now moved one step beyond this limitation:
-
-- state snapshots carry top-level `provenance`
-- state snapshots carry `recentChanges`
-
-This is still lighter than a full record-per-fact model, but it means the system can now answer:
-
-- which evidence most recently justified a goal or todo
-- which fields changed during the latest protected-state merge
-- whether replay produced the same state with similar recent transitions
+The narrative sections additionally carry top-level `provenance`, `confidence`
+and `recentChanges`, so replay can compare not only final state but how it got
+there. What the registry model has **not** been extended to is todos and working
+notes — those remain plain strings inside the narrative sections.
 
 ## State Record Semantics
 
-Future state elements should carry more than text.
+State elements should carry more than text. For facts, decisions and
+constraints, they now do — via `factRegistry` — while todo and note records
+remain future work.
 
-### Fact Records
+### Fact Records (delivered, as `FactRegistryEntry`)
 
-A stable fact should eventually support fields such as:
+- canonical text — `content`, bounded to statement length
+- source evidence ids — `evidenceId` + `evidenceType`
+- confidence — `confidence`
+- first seen timestamp — `addedAt`
+- superseded or active status — `supersededBy`, or `retiredAt`/`retiredReason`
 
-- canonical text
-- source evidence ids
-- confidence
-- first seen timestamp
-- last reaffirmed timestamp
-- superseded or active status
+The one field from the original sketch that does not exist is a "last reaffirmed
+timestamp"; reaffirmation currently leaves no mark on the entry.
 
-### Decision Records
+### Decision Records (delivered, same registry)
 
-Decisions should eventually support:
-
-- decision text
-- source evidence ids
-- decision status such as active or superseded
-- optional supersedes pointer
-- timestamp metadata
+Decisions and constraints live in the same registry (`type: "decision" | "constraint"`),
+so they carry the same evidence, status, and supersedes pointer as facts.
 
 ### Todo Records
 
@@ -258,14 +253,17 @@ The current `protectedStateMerge()` already applies conservative behavior:
 - todos append uniquely
 - questions and risks accumulate in capped note lists
 
-That is a solid baseline, but the next evolution should formalize four merge outcomes:
+The four merge outcomes this section once proposed all exist now, under these
+names:
 
-1. `append`
-2. `reaffirm`
-3. `supersede`
-4. `reject`
+1. append — recorded in `recentChanges` as `add` (or `set` for the goal)
+2. reaffirm — recorded as `reaffirm`
+3. supersede — the registry marks the old entry `supersededBy`
+4. reject — recorded in the drop log with a reason, persisted to
+   `Digest.selectionLog`
 
-Each important incoming candidate should resolve to one of these outcomes.
+An important incoming candidate resolves to one of these, and the resolution
+leaves a trace.
 
 ## Snapshot Semantics
 
@@ -306,14 +304,18 @@ As the state model becomes richer, consistency checks should use more than plain
 
 ## Implementation Guidance
 
-The next implementation steps should follow this order:
+The ordered steps this section prescribed have mostly run their course:
 
-1. Keep the current `DigestState` shape stable enough for existing code paths.
-2. Define a versioned successor shape before expanding runtime behavior.
-3. Add provenance fields before adding more semantic categories.
-4. Add `volatileContext` and richer todo status handling.
-5. Introduce explicit supersede and rejection semantics in merge logic.
-6. Add replay tests that compare state snapshots, not just digest text.
+1. Keep the current `DigestState` shape stable — held; existing data needs no
+   migration, including for the facet-pack change.
+2. Define a versioned successor shape — not done as a `V2` type; the shape grew
+   additively instead.
+3. Add provenance fields — done (`provenance`, `evidenceRefs`, per-fact evidence).
+4. Add `volatileContext` — done; **richer todo status handling remains open**.
+5. Explicit supersede and rejection semantics — done (registry supersession, drop
+   log).
+6. Replay tests comparing state snapshots, not just digest text — done
+   (`run-replay-check.mjs`, category-level diffs).
 
 ## Migration Strategy
 

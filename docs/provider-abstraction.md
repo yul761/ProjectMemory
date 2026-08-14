@@ -17,27 +17,24 @@ Its goals are:
 
 ## Current State in the Repository
 
-Today the repository is effectively OpenAI-compatible but still OpenAI-named.
+The migration this document once recommended is complete. `MODEL_*` is the
+primary configuration scheme; `OPENAI_API_KEY` / `OPENAI_BASE_URL` /
+`OPENAI_MODEL` survive only as legacy-compatible fallbacks in `env.ts` and should
+not appear in new documentation.
 
-Current configuration uses:
+Configuration resolves per role, each falling back to the generic `MODEL_*`
+values: `MODEL_CHAT_*`, `MODEL_RUNTIME_*` (falls back to chat),
+`MODEL_STRUCTURED_OUTPUT_*`, and `MODEL_EMBEDDING_*`. The runtime and
+structured-output roles also take `*_REASONING_EFFORT` and
+`*_MAX_OUTPUT_TOKENS`.
 
-- `FEATURE_LLM`
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
-- `OPENAI_MODEL`
+An API key is required only when the resolved base URL is `api.openai.com`
+(`requiresApiKeyForBaseUrl` in `apps/api/src/env.ts`); a local endpoint without
+auth is a supported configuration, and the startup errors name the `MODEL_*`
+variables first.
 
-This works for OpenAI and many OpenAI-compatible local endpoints, but it has two problems:
-
-1. it makes the codebase look more provider-specific than it really is
-2. it weakens the project's BYOM and self-hosted positioning
-
-The current code paths that depend on this setup include:
-
-- `apps/api/src/env.ts`
-- `apps/worker/src/env.ts`
-- `apps/api/src/memory.controller.ts`
-- `apps/worker/src/main.ts`
-- `packages/core/src/index.ts`
+The code paths that own this: `apps/api/src/env.ts`, `apps/worker/src/env.ts`,
+and `packages/core/src/model-provider.ts` (`createModelProvider`).
 
 ## Design Principle
 
@@ -69,27 +66,20 @@ Does this make the memory runtime easier to use with local or self-hosted models
 
 If not, it is not a near-term priority.
 
-## Target Configuration Model
+## Configuration Model
 
-The project should evolve toward neutral provider configuration names.
-
-Recommended environment variables:
+The neutral scheme is the shipped scheme. The base variables:
 
 - `MODEL_PROVIDER`
 - `MODEL_BASE_URL`
 - `MODEL_NAME`
 - `MODEL_API_KEY`
-
-Optional future variables:
-
-- `MODEL_TEMPERATURE`
 - `MODEL_TIMEOUT_MS`
-- `EMBEDDING_PROVIDER`
-- `EMBEDDING_BASE_URL`
-- `EMBEDDING_MODEL`
-- `EMBEDDING_API_KEY`
 
-This keeps the current chat and digest use cases compatible with future embedding or structured-output model separation.
+Role separation happened *inside* the `MODEL_*` namespace rather than through a
+parallel `EMBEDDING_*` scheme: `MODEL_CHAT_*`, `MODEL_RUNTIME_*`,
+`MODEL_STRUCTURED_OUTPUT_*`, `MODEL_EMBEDDING_*`, each falling back to the base
+values. The per-variable semantics below remain accurate.
 
 ## Recommended Provider Modes
 
@@ -118,45 +108,32 @@ They should not be added just to expand the provider matrix.
 
 ## Runtime Abstraction Boundaries
 
-The runtime should eventually separate three model roles:
+The runtime separates four model roles, each independently configurable:
 
-- `ChatModel`
-- `StructuredOutputModel`
-- `EmbeddingModel`
+- **chat** — `/memory/answer` and general chat workloads
+- **runtime** — the assistant runtime turn; falls back to the chat configuration.
+  Note this role always sends `reasoning_effort` (defaulted to `low`), so on
+  OpenAI it needs a model that accepts the parameter
+- **structuredOutput** — digest generation and other strict-JSON workloads
+- **embedding** — retrieval embeddings; role stays `null` unless
+  `MODEL_EMBEDDING_NAME` is set
 
-This matters because digest generation, grounded answering, and retrieval embeddings may not share the same optimal model.
+This matters because digest generation, grounded answering, and retrieval embeddings may not share the same optimal model — and in the deployed configuration they do not.
 
-In the near term, one provider client may back more than one role, but the interfaces should still be designed as separate concerns.
+One provider client may back more than one role, but the interfaces are separate concerns.
 
 ## Provider Factory
 
-The repository now includes an initial provider bundle in `packages/core/src/model-provider.ts`, and should continue evolving it instead of falling back to ad hoc client construction.
+`createModelProvider` in `packages/core/src/model-provider.ts` is the factory.
+The API and worker both construct their clients through it; provider-specific
+configuration stays centralized there.
 
-Current behavior:
-
-- API requests a provider bundle and uses its `chat` role
-- worker requests a provider bundle and uses its `structuredOutput` role
-- embedding is not implemented yet and still resolves to `null`
-
-Target behavior:
-
-- API requests a provider client from a factory
-- worker requests a provider client from a factory
-- provider-specific configuration stays centralized
-
-Conceptually:
-
-```ts
-interface ModelProviderFactory {
-  createChatModel(): ChatModel;
-  createStructuredOutputModel(): StructuredOutputModel;
-  createEmbeddingModel?(): EmbeddingModel;
-}
-```
-
-This is no longer purely aspirational. The current repository already exposes a provider bundle with `chat`, `structuredOutput`, and `embedding` roles, but only the first two are backed by a real client today.
-
-This has now advanced one step further: the repository can construct a real embedding client when `MODEL_EMBEDDING_NAME` is configured. Retrieval still defaults to heuristic ranking, but the provider layer is ready for optional embedding-assisted rerank paths.
+All roles are backed by real clients. The embedding client is constructed when
+`MODEL_EMBEDDING_NAME` is set, and retrieval uses it two ways: rerank when
+`RETRIEVE_USE_EMBEDDINGS=true`, and pgvector similarity search over stored
+event embeddings, behind an HNSW index. Retrieval without an embedding
+configuration falls back to heuristic ranking, and the retrieve response's
+`retrieval.mode` field reports which path ran.
 
 ## Compatibility Rule
 
@@ -219,9 +196,13 @@ Optional override for the chat/runtime endpoint. If omitted, the system falls ba
 
 Optional override for the chat/runtime credential. If omitted, the system falls back to `MODEL_API_KEY`.
 
+### `MODEL_RUNTIME_NAME`
+
+Optional override for the assistant runtime turn. If omitted, the system falls back to `MODEL_CHAT_NAME`, then `MODEL_NAME`. The runtime role also reads `MODEL_RUNTIME_BASE_URL`, `MODEL_RUNTIME_API_KEY`, `MODEL_RUNTIME_TIMEOUT_MS`, `MODEL_RUNTIME_REASONING_EFFORT` (default `low` — always sent, so the model must accept it), and `MODEL_RUNTIME_MAX_OUTPUT_TOKENS`.
+
 ### `MODEL_STRUCTURED_OUTPUT_NAME`
 
-Optional override for digest and other structured-output style workloads. If omitted, the system falls back to `MODEL_NAME`.
+Optional override for digest and other structured-output style workloads. If omitted, the system falls back to `MODEL_NAME`. The role also reads `MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT` (sent only when set) and `MODEL_STRUCTURED_OUTPUT_MAX_OUTPUT_TOKENS`.
 
 ### `MODEL_STRUCTURED_OUTPUT_BASE_URL`
 
@@ -253,13 +234,11 @@ For local setups that do not require auth, this may be optional depending on pro
 
 Configuration validation should be explicit.
 
-Examples:
+All three rules are implemented in `apps/api/src/env.ts`:
 
-- If `FEATURE_LLM=true` but no provider configuration is valid, startup should fail clearly.
-- If a provider mode requires auth, the API key should be validated at startup.
-- If a local provider mode does not require auth, the error messaging should not pretend that an OpenAI key is mandatory.
-
-This is important because current error messages still imply that all LLM usage requires `OPENAI_API_KEY`.
+- If `FEATURE_LLM=true` but no provider configuration is valid, startup fails with the missing variable named.
+- The API key is demanded only when the resolved base URL is `api.openai.com`; a local endpoint without auth passes validation.
+- Error messages name `MODEL_*` variables first and mention `OPENAI_API_KEY` only as the legacy alias.
 
 ## Relationship to Evaluation
 
@@ -303,48 +282,37 @@ The provider abstraction should not expand into:
 
 Those directions dilute the memory-first product line.
 
-## Recommended Migration Path
+## Migration Path (completed)
 
-The safest migration path is:
+The migration ran in this order, and every step is done:
 
 1. define neutral configuration names in docs
-2. add support for `MODEL_*` aliases alongside `OPENAI_*`
-3. centralize provider construction behind a factory
+2. add support for `MODEL_*` alongside `OPENAI_*`
+3. centralize provider construction behind a factory (`createModelProvider`)
 4. update API and worker to use the factory
 5. update docs and examples to prefer provider-neutral configuration
-6. later de-emphasize `OPENAI_*` without breaking existing setups
+6. de-emphasize `OPENAI_*` without breaking existing setups — the aliases remain
+   in `env.ts` as silent fallbacks and appear nowhere else
 
-## Suggested Interfaces
+What remains deliberately not done is the "Optional future variables" split
+(`EMBEDDING_PROVIDER` etc. as a separate scheme): the shipped design nests every
+role under `MODEL_*` instead, which proved sufficient.
 
-The provider abstraction can evolve toward boundaries like:
+## Interfaces
 
-```ts
-interface ChatModel {
-  chat(messages: { role: "system" | "user"; content: string }[]): Promise<string>;
-}
+The boundaries this section once sketched now exist in
+`packages/core/src/model-provider.ts`: `ChatModel`, `StructuredOutputModel` and
+`EmbeddingModel`, produced by a `ModelProviderFactory`. The chat-style roles also
+accept per-call `LlmChatOptions` (`maxOutputTokens`, `reasoningEffort`), which is
+how the runtime role's `reasoning_effort` reaches the wire. That file is the
+authority on the exact signatures; this document only records why the roles are
+separate.
 
-interface StructuredOutputModel {
-  chat(messages: { role: "system" | "user"; content: string }[]): Promise<string>;
-}
+## Documentation Rule
 
-interface EmbeddingModel {
-  embed(inputs: string[]): Promise<number[][]>;
-}
-```
-
-These boundaries match the roadmap better than a single catch-all client.
-
-## Documentation Implications
-
-The docs should gradually shift from:
-
-- "set `OPENAI_API_KEY`"
-
-to:
-
-- "set `FEATURE_LLM=true` and configure a compatible provider"
-
-The first supported path can still be OpenAI-compatible, but the wording should match the BYOM product direction.
+Docs say "set `FEATURE_LLM=true` and configure a compatible provider", using
+`MODEL_*` names throughout; `OPENAI_*` appears in no current documentation and
+survives only as a code-level fallback. Keep it that way in new writing.
 
 ## Success Criteria
 

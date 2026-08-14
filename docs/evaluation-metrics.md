@@ -25,7 +25,7 @@ StateCore should track metrics at five layers:
 4. grounding
 5. replay and stability
 
-The current repository already measures much of layer 1 and part of layer 3. The remaining layers should be treated as first-class roadmap work.
+The benchmark now measures all five layers to some depth: layer 1 fully; retention and drift against gold fixture labels; grounding as evidence-coverage rates over runtime turns and answers; replay as rebuild consistency with category-level diffs. `docs/benchmarking.md` lists what each run actually emits. What remains aspirational is noted at the end of this document.
 
 ## 1. System Performance Metrics
 
