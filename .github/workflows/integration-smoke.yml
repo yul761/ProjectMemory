@@ -1,6 +1,11 @@
 name: Integration Smoke
 
 on:
+  # Work lands on this repository by pushing to main, so a pull_request-only
+  # trigger meant this workflow last ran on 2026-06-20 — failing, on a branch,
+  # while the README badge reported that result for the two months since.
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -10,7 +15,11 @@ jobs:
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:16
+        # pgvector, not stock postgres: 20260615020000_pgvector_embeddings runs
+        # `CREATE EXTENSION vector`, and every script this workflow calls runs
+        # `db:deploy`. Stock postgres:16 fails there with `extension "vector" is
+        # not available`, as ci.yml did until it was moved to this image.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

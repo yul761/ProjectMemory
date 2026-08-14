@@ -16,7 +16,11 @@ jobs:
     # `secrets` is allowed; the job then no-ops loudly rather than failing.
     services:
       postgres:
-        image: postgres:16
+        # pgvector, not stock postgres: 20260615020000_pgvector_embeddings runs
+        # `CREATE EXTENSION vector`, and every script this workflow calls runs
+        # `db:deploy`. Stock postgres:16 fails there with `extension "vector" is
+        # not available`, as ci.yml did until it was moved to this image.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
