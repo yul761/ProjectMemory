@@ -1,5 +1,15 @@
 # @statecore/api
 
+## 1.6.1
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @statecore/contracts@1.4.1
+  - @statecore/core@1.4.1
+  - @statecore/db@1.3.1
+  - @statecore/prompts@1.2.2
+
 ## 1.6.0
 
 ### Minor Changes

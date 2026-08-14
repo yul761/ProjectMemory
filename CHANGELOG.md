@@ -18,6 +18,8 @@ surface. `docs/api.md` owns the rule.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-08-14
+
 ### Fixed
 - The built packages start outside the Docker image. All four pointed `main` at
   `src/index.ts`, which Node cannot execute, and the image worked only because a

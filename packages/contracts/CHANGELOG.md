@@ -1,5 +1,29 @@
 # @statecore/contracts
 
+## 1.4.1
+
+### Patch Changes
+
+- Ship `main` pointing at `dist`, so a built app starts anywhere
+
+  All four packages pointed `main` at `src/index.ts`, which Node cannot execute.
+  The Docker image worked only because a stage rewrote those four package.json
+  files to `dist` before the runtime started, which made the image the one place a
+  built app could be started — every other consumer of the same build died on
+  `SyntaxError: Unexpected token '{'` from the `.ts` entry. That is what the
+  integration smoke workflow had been failing on, behind the pgvector failure that
+  hid it.
+
+  `main` is now `dist/index.js` and the rewrite stage is gone. `types` still points
+  at `src/index.ts`: TypeScript resolves it through the node_modules symlink, which
+  is exempt from the importing package's `rootDir` check, and mapping these names
+  through `paths` instead fails every build with TS6059.
+
+  Consumers inside this repository need nothing beyond what already landed with it
+  — Vitest aliases the names back to source through `vitest.shared.ts`, and `tsx`
+  reads `tsconfig.dev.json`. A consumer resolving these packages by `main` now gets
+  built JavaScript and must build first.
+
 ## 1.4.0
 
 ### Minor Changes

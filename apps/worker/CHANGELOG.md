@@ -1,5 +1,14 @@
 # @statecore/worker
 
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @statecore/core@1.4.1
+  - @statecore/db@1.3.1
+  - @statecore/prompts@1.2.2
+
 ## 1.4.1
 
 ### Patch Changes
