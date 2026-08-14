@@ -49,4 +49,32 @@ describe("MCP tool surface, keyless via InMemoryTransport", () => {
     expect(prov.fact.content).toContain("pnpm");
     expect(prov.chain.length).toBeGreaterThanOrEqual(1);
   });
+
+  // The `ToolRegistrar` cast in tools.ts narrows registerTool's *compile-time* view
+  // to sidestep a TS2589 blowup (see tools.ts's doc comment); these cases prove the
+  // real zod schemas registered underneath still enforce their constraints at the
+  // wire boundary. The SDK (mcp.js#validateToolInput) never throws a JSON-RPC error
+  // for a schema failure — it catches the McpError and returns a normal
+  // `CallToolResult` with `isError: true`, so `client.callTool` resolves rather
+  // than rejects; assert that exact shape instead of a generic "was rejected".
+  it("rejects remember with empty text over the protocol (min(1) violation)", async () => {
+    const result = await client.callTool({ name: "remember", arguments: { text: "" } });
+    expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain("Invalid arguments for tool remember");
+  });
+
+  it("rejects remember with text over 2000 chars over the protocol (max(2000) violation)", async () => {
+    const result = await client.callTool({ name: "remember", arguments: { text: "x".repeat(2001) } });
+    expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain("Invalid arguments for tool remember");
+  });
+
+  it("rejects why with a missing factId over the protocol (required field)", async () => {
+    const result = await client.callTool({ name: "why", arguments: {} });
+    expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain("Invalid arguments for tool why");
+  });
 });
