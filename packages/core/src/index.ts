@@ -724,6 +724,7 @@ export async function generateAnswer(input: {
 }
 
 export * from "./digest-control";
+export * from "./provenance";
 export * from "./drift-metrics";
 export * from "./drop-log";
 export * from "./facet-registry";

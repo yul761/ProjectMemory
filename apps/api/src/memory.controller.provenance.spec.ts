@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFactProvenance, normalizeSelectionLog } from "./memory.controller";
-import type { DigestState, FactRegistryEntry } from "@statecore/core";
+import { buildFactProvenance, normalizeSelectionLog, type DigestState, type FactRegistryEntry } from "@statecore/core";
 
 function entry(over: Partial<FactRegistryEntry> = {}): FactRegistryEntry {
   return {
