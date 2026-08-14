@@ -18,6 +18,18 @@ surface. `docs/api.md` owns the rule.
 
 ## [Unreleased]
 
+### Fixed
+- The built packages start outside the Docker image. All four pointed `main` at
+  `src/index.ts`, which Node cannot execute, and the image worked only because a
+  Dockerfile stage rewrote them to `dist` before the runtime started — so the
+  image was the one place a built app could be started, and any other consumer of
+  the same build died on `SyntaxError: Unexpected token '{'`. That is what
+  Integration Smoke had been failing on, behind the pgvector failure that hid it.
+  The packages now ship pointing at `dist` and the rewrite stage is gone.
+  Source-mode consumers are unaffected: `types` still resolves to source through
+  the node_modules symlink, Vitest aliases the names back to source through
+  `vitest.shared.ts`, and `tsx` reads the paths in `tsconfig.dev.json`.
+
 ## [1.6.0] - 2026-08-14
 
 The first release since `1.1.0` whose theme is the promise rather than the
