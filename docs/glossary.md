@@ -54,7 +54,7 @@ A fact leaving the active set **without** a replacement — capacity eviction, c
 A fact's evidence plus its full version chain, readable from any version in it at `GET /v1/memory/facts/:factId/provenance`.
 
 ## Drop Log
-The record of what a digest refused to keep and why, against a fixed set of reasons (facet not registered, capacity, lower authority, missing document evidence, over-length, and so on). Persisted to `Digest.selectionLog` and readable at `GET /v1/memory/digests/:digestId/selection`. Losing information is survivable; losing it silently is not.
+The record of what a digest refused to keep and why, against the fixed set of reasons in `packages/core/src/drop-log.ts`: `facet_not_registered`, `cap_evicted`, `cap_rejected_incoming`, `no_display_group`, `protected_lower_authority`, `no_document_evidence`, `fact_too_long`, `consolidation_skipped`. Persisted to `Digest.selectionLog` and readable at `GET /v1/memory/digests/:digestId/selection`. Losing information is survivable; losing it silently is not. (This list is pinned to the code by a test — a new reason must be documented here.)
 
 ## Pinned Event
 An ingested event marked `pinned`, meaning it must not lose a budget competition. Without it the only tiebreaker among documents is recency, which drops durable inputs first because they are the oldest.
