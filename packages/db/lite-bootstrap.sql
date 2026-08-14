@@ -114,6 +114,16 @@ CREATE TABLE IF NOT EXISTS "ForgottenFact" (
     "forgottenAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- CreateTable
+-- MCP-private: serializes digest runs across processes sharing one SQLite
+-- file. Not part of the engine data model, so it carries no schema.lite.prisma
+-- model — apps/mcp/src/digest-lock.ts reads and writes it with
+-- $executeRawUnsafe/$queryRawUnsafe.
+CREATE TABLE IF NOT EXISTS "DigestLock" (
+    "scopeId" TEXT NOT NULL PRIMARY KEY,
+    "acquiredAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "User_identity_key" ON "User"("identity");
 
