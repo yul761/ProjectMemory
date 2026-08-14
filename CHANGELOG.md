@@ -18,6 +18,13 @@ surface. `docs/api.md` owns the rule.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-14
+
+The first release since `1.1.0` whose theme is the promise rather than the
+engine: everything served under the compatibility prefix is now either frozen or
+explained, and a test enforces that instead of a documented request. Contract
+`info.version` 1.3.0 → 1.5.0 across the two rounds.
+
 ### Added
 - The three audit readers join the frozen `/v1` contract:
   `GET /v1/memory/facts/:factId/provenance`,
@@ -32,6 +39,12 @@ surface. `docs/api.md` owns the rule.
   `DELETE /v1/scopes/:id` join the frozen contract on the same grounds, having
   run under the prefix unguarded for months. Contract `info.version` 1.3.0 →
   1.4.0.
+- A guard checks the frozen registry against the routes Nest actually serves, in
+  both directions. `PublicV1Contracts` drives the snapshot test, the OpenAPI
+  document and the docs table, and all three see only what it declares — so a
+  handler dual-mounted at `/v1` without a registry entry was invisible to every
+  check, which is how the same drift reached two releases running. A registry
+  entry with no route behind it is the mirrored fault and is caught too.
 
 ### Fixed
 - Scope deletion cascades through the database constraint rather than the
@@ -40,6 +53,14 @@ surface. `docs/api.md` owns the rule.
   `DELETE` as 201.
 - CI ran no checks. It now provisions the database its migrations and tests need,
   generates the Prisma client, and the tests it runs pass.
+- The smoke workflows run a Postgres that carries pgvector. Integration Smoke had
+  been failing since 2026-06-20 on `CREATE EXTENSION vector` under stock
+  `postgres:16`, and triggered only on `pull_request` — which this repository
+  does not use — so it never ran again and the README badge reported that result
+  for two months. It now also runs on push to main. Runtime Readiness and Runtime
+  Smoke shared the image; both report success on a schedule only because every
+  step is gated on a `MODEL_API_KEY` secret that is not configured, so neither is
+  currently a signal.
 
 ### Docs
 - `docs/api.md` records why "serving a path under `/v1`" and "freezing it" came
