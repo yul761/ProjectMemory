@@ -64,6 +64,8 @@ interface DigestEnvConfig {
   structuredOutputApiKey?: string;
   structuredOutputBaseUrl?: string;
   structuredOutputModelName?: string;
+  structuredOutputReasoningEffort?: "low" | "medium" | "high";
+  structuredOutputMaxOutputTokens?: number;
   timeoutMs: number;
 }
 
@@ -88,6 +90,13 @@ function readDigestEnv(env: NodeJS.ProcessEnv): DigestEnvConfig {
     structuredOutputApiKey: clean(env.MODEL_STRUCTURED_OUTPUT_API_KEY),
     structuredOutputBaseUrl: clean(env.MODEL_STRUCTURED_OUTPUT_BASE_URL),
     structuredOutputModelName: clean(env.MODEL_STRUCTURED_OUTPUT_NAME),
+    // Unparsed/untrimmed, matching apps/worker/src/env.ts exactly: an unset
+    // reasoning effort must stay unsent (spec guarantee), not fall back to a
+    // default, and the max-output-tokens cast mirrors worker's own `? Number(...) : undefined`.
+    structuredOutputReasoningEffort: env.MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT as "low" | "medium" | "high" | undefined,
+    structuredOutputMaxOutputTokens: env.MODEL_STRUCTURED_OUTPUT_MAX_OUTPUT_TOKENS
+      ? Number(env.MODEL_STRUCTURED_OUTPUT_MAX_OUTPUT_TOKENS)
+      : undefined,
     timeoutMs: Number(env.MODEL_TIMEOUT_MS || 20000)
   };
 }
@@ -144,7 +153,19 @@ async function runDigestPipeline(prisma: LitePrisma, userId: string, scopeId: st
     console.error("[statecore-mcp] digest: model provider unavailable despite FEATURE_LLM=true; skipping");
     return;
   }
-  const llm = { chat: (messages: { role: "system" | "user"; content: string }[]) => provider.structuredOutput.chat(messages) };
+  // Mirrors apps/worker/src/main.ts:204-213's `llm.chat` wrapper: an unset
+  // reasoningEffort/maxOutputTokens must stay absent from the options object
+  // rather than default in, since reasoning_effort's absence is itself a
+  // spec guarantee the wire call relies on.
+  const llm = {
+    chat: (messages: { role: "system" | "user"; content: string }[]) =>
+      provider.structuredOutput.chat(messages, {
+        ...(typeof digestEnv.structuredOutputMaxOutputTokens === "number"
+          ? { maxOutputTokens: digestEnv.structuredOutputMaxOutputTokens }
+          : {}),
+        ...(digestEnv.structuredOutputReasoningEffort ? { reasoningEffort: digestEnv.structuredOutputReasoningEffort } : {})
+      })
+  };
 
   const scope = await prisma.projectScope.findFirst({ where: { id: scopeId, userId } });
   if (!scope) {
@@ -251,40 +272,51 @@ export async function maybeRunDigest(opts: {
   reason: "startup" | "threshold";
 }): Promise<void> {
   const { prisma, userId, scopeId, env, reason } = opts;
-  const digestEnv = readDigestEnv(env);
-  const effectiveApiKey = digestEnv.structuredOutputApiKey ?? digestEnv.apiKey;
-  if (!digestEnv.featureLlm || !effectiveApiKey) return;
-
-  const lastDigest = await prisma.digest.findFirst({
-    where: { scopeId },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { createdAt: true }
-  });
-  const pendingCount = await prisma.memoryEvent.count({
-    where: {
-      scopeId,
-      type: "stream",
-      suppressedAt: null,
-      createdAt: { gt: lastDigest?.createdAt ?? new Date(0) }
-    }
-  });
-  const threshold = reason === "threshold" ? digestEnv.threshold : 1;
-  if (!shouldDigest(pendingCount, threshold)) return;
-
-  if (running) return;
-  const locked = await acquireDigestLock(prisma, scopeId);
-  if (!locked) return; // another process is already catching this scope up; skipping is harmless
-
-  running = true;
   try {
-    await runDigestPipeline(prisma, userId, scopeId, digestEnv);
+    const digestEnv = readDigestEnv(env);
+    const effectiveApiKey = digestEnv.structuredOutputApiKey ?? digestEnv.apiKey;
+    if (!digestEnv.featureLlm || !effectiveApiKey) return;
+
+    const lastDigest = await prisma.digest.findFirst({
+      where: { scopeId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { createdAt: true }
+    });
+    const pendingCount = await prisma.memoryEvent.count({
+      where: {
+        scopeId,
+        type: "stream",
+        suppressedAt: null,
+        createdAt: { gt: lastDigest?.createdAt ?? new Date(0) }
+      }
+    });
+    const threshold = reason === "threshold" ? digestEnv.threshold : 1;
+    if (!shouldDigest(pendingCount, threshold)) return;
+
+    if (running) return;
+    const locked = await acquireDigestLock(prisma, scopeId);
+    if (!locked) return; // another process is already catching this scope up; skipping is harmless
+
+    running = true;
+    try {
+      await runDigestPipeline(prisma, userId, scopeId, digestEnv);
+    } finally {
+      // Always runs once the lock is held, whether runDigestPipeline
+      // resolved or threw — release on failure too, so a crashed run doesn't
+      // strand the scope for the full 30-minute stale-lock reap.
+      running = false;
+      await releaseDigestLock(prisma, scopeId);
+    }
   } catch (err) {
-    // stdout is the MCP protocol channel; diagnostics go to stderr only. The
+    // stdout is the MCP protocol channel; diagnostics go to stderr only.
+    // Every await above this catch — including the pending-count reads and
+    // the lock acquire that run before any lock is held — can reject (e.g. a
+    // SQLite busy-timeout under cross-process DigestLock contention), and
+    // both call sites invoke this fire-and-forget (`void maybeRunDigest(...)`
+    // in embedded.ts). An unhandled rejection there crashes the process on
+    // modern Node, so maybeRunDigest must never let one escape. The
     // triggering events stay in the store, so the next threshold/startup
     // check retries them.
     console.error("[statecore-mcp] digest run failed", err);
-  } finally {
-    running = false;
-    await releaseDigestLock(prisma, scopeId);
   }
 }
