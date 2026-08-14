@@ -14,10 +14,142 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
   "info": {
     "description": "Frozen public /v1 surface of the StateCore memory runtime.",
     "title": "StateCore API",
-    "version": "1.4.0",
+    "version": "1.5.0",
   },
   "openapi": "3.0.3",
   "paths": {
+    "/v1/facet-pack": {
+      "get": {
+        "operationId": "get_facet-pack",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scopeId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "not": {},
+                },
+                {
+                  "format": "uuid",
+                  "type": "string",
+                },
+              ],
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "facets": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "cap": {
+                            "minimum": 0,
+                            "type": "integer",
+                          },
+                          "description": {
+                            "type": "string",
+                          },
+                          "displayGroup": {
+                            "nullable": true,
+                            "type": "string",
+                          },
+                          "documentAuthority": {
+                            "type": "boolean",
+                          },
+                          "name": {
+                            "type": "string",
+                          },
+                          "routesFrom": {
+                            "items": {
+                              "type": "string",
+                            },
+                            "type": "array",
+                          },
+                          "writeProtected": {
+                            "type": "boolean",
+                          },
+                        },
+                        "required": [
+                          "name",
+                          "cap",
+                          "writeProtected",
+                          "documentAuthority",
+                          "displayGroup",
+                          "routesFrom",
+                          "description",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "isDefault": {
+                      "type": "boolean",
+                    },
+                    "name": {
+                      "type": "string",
+                    },
+                    "source": {
+                      "enum": [
+                        "template",
+                        "account",
+                        "deployment-default",
+                      ],
+                      "type": "string",
+                    },
+                    "template": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "isDefault",
+                    "source",
+                    "template",
+                    "facets",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "facet-pack",
+        ],
+      },
+    },
     "/v1/health": {
       "get": {
         "operationId": "get_health",
@@ -285,6 +417,75 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                   },
                   "required": [
                     "jobId",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/digests/{digestId}/selection": {
+      "get": {
+        "operationId": "get_memory_digests_digestId_selection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "digestId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "drops": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "rationale": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "rationale",
+                    "drops",
                   ],
                   "type": "object",
                 },
@@ -614,6 +815,195 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                   },
                   "required": [
                     "ok",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "details": {
+                      "items": {},
+                      "type": "array",
+                    },
+                    "error": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "error",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Validation failed",
+          },
+        },
+        "tags": [
+          "memory",
+        ],
+      },
+    },
+    "/v1/memory/facts/{factId}/provenance": {
+      "get": {
+        "operationId": "get_memory_facts_factId_provenance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "factId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "chain": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "addedAt": {
+                            "type": "string",
+                          },
+                          "confidence": {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number",
+                          },
+                          "content": {
+                            "type": "string",
+                          },
+                          "evidenceId": {
+                            "type": "string",
+                          },
+                          "evidenceType": {
+                            "enum": [
+                              "event",
+                              "document",
+                            ],
+                            "type": "string",
+                          },
+                          "facet": {
+                            "type": "string",
+                          },
+                          "id": {
+                            "type": "string",
+                          },
+                          "retiredAt": {
+                            "type": "string",
+                          },
+                          "retiredReason": {
+                            "type": "string",
+                          },
+                          "supersededBy": {
+                            "type": "string",
+                          },
+                          "type": {
+                            "enum": [
+                              "decision",
+                              "constraint",
+                              "profile",
+                            ],
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "content",
+                          "type",
+                          "confidence",
+                          "addedAt",
+                          "evidenceId",
+                          "evidenceType",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "fact": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "addedAt": {
+                          "type": "string",
+                        },
+                        "confidence": {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number",
+                        },
+                        "content": {
+                          "type": "string",
+                        },
+                        "evidenceId": {
+                          "type": "string",
+                        },
+                        "evidenceType": {
+                          "enum": [
+                            "event",
+                            "document",
+                          ],
+                          "type": "string",
+                        },
+                        "facet": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "retiredAt": {
+                          "type": "string",
+                        },
+                        "retiredReason": {
+                          "type": "string",
+                        },
+                        "supersededBy": {
+                          "type": "string",
+                        },
+                        "type": {
+                          "enum": [
+                            "decision",
+                            "constraint",
+                            "profile",
+                          ],
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "content",
+                        "type",
+                        "confidence",
+                        "addedAt",
+                        "evidenceId",
+                        "evidenceType",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "fact",
+                    "chain",
                   ],
                   "type": "object",
                 },

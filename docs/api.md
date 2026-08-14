@@ -264,17 +264,23 @@ layers (the hosted version, the GPT-API integration layer) should depend ONLY on
 `/v1`. Every `/v1` endpoint is also served at its legacy unversioned path for
 backward compatibility; existing integrations continue to use the legacy paths.
 
-The subset is **18 operations across 16 paths** — `/v1/scopes` and
+The subset is **21 operations across 19 paths** — `/v1/scopes` and
 `/v1/reminders` each carry both a `GET` and a `POST`. Count operations when
 checking against `PublicV1Contracts`, and paths when checking against
 `openapi.json`; both tests pin both numbers.
 
-> **Serving a path under `/v1` is not the same as freezing it.** Three endpoints
-> ran under the prefix for months without being in `PublicV1Contracts`, so the
-> snapshot guard never saw them — the path advertised a promise the surface did
-> not make, and no caller could tell from the outside. They joined the subset in
-> `1.4.0`. If you dual-mount a handler at `/v1`, either register it here or say
-> plainly why it is exempt.
+> **Serving a path under `/v1` is not the same as freezing it.** This has now
+> happened twice: three endpoints joined the subset in `1.4.0` after months under
+> the prefix without being in `PublicV1Contracts`, and three more — the audit
+> readers — in `1.5.0`. The snapshot guard sees only what the registry declares,
+> so an unregistered handler at `/v1` advertises a promise the surface does not
+> make, and no caller can tell from the outside. If you dual-mount a handler at
+> `/v1`, either register it here or say plainly why it is exempt.
+>
+> "Free to evolve while the design is young" is the reasoning that produced both
+> rounds, and it expires quietly: by the time a consumer ships against the
+> endpoint the shape is load-bearing whether or not anything says so. Freezing
+> late costs a version bump; freezing never costs a caller a silent break.
 
 ### Frozen public subset
 
@@ -289,9 +295,12 @@ checking against `PublicV1Contracts`, and paths when checking against
 | POST | `/v1/memory/retrieve` |
 | POST | `/v1/memory/answer` |
 | POST | `/v1/memory/digest` |
+| GET | `/v1/memory/digests/:digestId/selection` |
 | POST | `/v1/memory/runtime/turn` |
 | GET | `/v1/memory/facts` |
+| GET | `/v1/memory/facts/:factId/provenance` |
 | POST | `/v1/memory/facts/forget` |
+| GET | `/v1/facet-pack` |
 | POST | `/v1/memory/notes` |
 | GET | `/v1/memory/relationship-context/:scopeId` |
 | POST | `/v1/reminders` |
@@ -350,9 +359,11 @@ History: `1.0.0` at the freeze, `1.1.0` for `GET /v1/memory/facts` and
 input, `1.3.0` for `maxChars` and the top-level `budget` on retrieve, `1.4.0` for
 `POST /v1/memory/notes`, `GET /v1/memory/relationship-context/:scopeId`, and
 `DELETE /v1/scopes/:id` — three endpoints already live under `/v1` and already
-depended on in production, brought under the guard. The number sat at `1.0.0`
-through the first three before this rule existed, which meant a reader could not
-tell a three-month-old spec from a current one.
+depended on in production, brought under the guard. `1.5.0` brings in the three
+audit readers on the same grounds: `GET /v1/memory/facts/:factId/provenance`,
+`GET /v1/memory/digests/:digestId/selection`, and `GET /v1/facet-pack`. The
+number sat at `1.0.0` through the first three before this rule existed, which
+meant a reader could not tell a three-month-old spec from a current one.
 
 > **Diagnostic fields are not frozen.** `POST /v1/memory/retrieve`,
 > `/v1/memory/answer`, and `/v1/memory/runtime/turn` return additional
@@ -363,7 +374,12 @@ tell a three-month-old spec from a current one.
 ### Not part of `/v1`
 
 All other endpoints (diagnostics, `fast-view`, `layer-status`, `working-state`,
-`stable-state`, `state/history`, `relationship-context`, `check-contradiction`,
-`embed/backfill`, `digest/rebuild`, `digests`, the `GET /memory/events` list,
+`stable-state`, `state/history`, `check-contradiction`, `embed/backfill`,
+`digest/rebuild`, the `GET /memory/digests` list, the `GET /memory/events` list,
 `scopes/:id/webhook`, demo, metrics) are **internal**: unversioned, legacy-path
 only, and may change without notice.
+
+Note that `GET /memory/digests` is internal while
+`GET /v1/memory/digests/:digestId/selection` is frozen. Listing digests is a
+diagnostic view of pipeline history; asking one digest what it discarded is the
+auditability claim, and a caller has to be able to rely on the answer.

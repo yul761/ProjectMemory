@@ -235,8 +235,54 @@ export const AddNoteInput = z.object({
 });
 
 export const ScopeIdQuery = z.object({ scopeId: z.string().uuid() });
+// `GET /facet-pack` answers for the account when no scope is named, so its
+// scopeId is optional where every other reader's is required.
+export const OptionalScopeIdQuery = z.object({ scopeId: z.string().uuid().optional() });
 export const MemoryForgetOutput = z.object({ ok: z.boolean() });
 export const AddNoteOutput = z.object({ ok: z.boolean() });
+
+// One facet of the active pack, as the engine will treat it: how many facts it
+// holds, whether conversation may overwrite them, whether it takes facts only
+// from documents, and which classifier types route into it. A caller reading
+// `GET /memory/facts` needs this to know why a fact is where it is — or missing.
+export const FacetDefinitionOutput = z.object({
+  name: z.string(),
+  cap: z.number().int().min(0),
+  writeProtected: z.boolean(),
+  documentAuthority: z.boolean(),
+  // null means the facet is never surfaced through the display API.
+  displayGroup: z.string().nullable(),
+  routesFrom: z.array(z.string()),
+  description: z.string()
+});
+
+export const FacetPackOutput = z.object({
+  name: z.string(),
+  // True when the account has installed no pack of its own.
+  isDefault: z.boolean(),
+  // Which layer decided the ontology. An open set per compatibility rule 3: a
+  // future resolution layer adds a value here without breaking `/v1`.
+  source: z.enum(["template", "account", "deployment-default"]),
+  template: z.string().nullable(),
+  facets: z.array(FacetDefinitionOutput)
+});
+
+// A fact's evidence plus every version of it, oldest first. `FactRegistryEntrySchema`
+// is the same entry shape `RetrieveOutput.factRegistry` already froze, so a caller
+// holding an id from a retrieval can hand it straight back here.
+export const FactProvenanceOutput = z.object({
+  fact: FactRegistryEntrySchema,
+  chain: z.array(FactRegistryEntrySchema)
+});
+
+export const DigestSelectionOutput = z.object({
+  rationale: z.array(z.string()),
+  // Deliberately unshaped. The handler reads JSON written by whichever version of
+  // the digest pipeline ran, and normalises only the two top-level arrays; drop
+  // records carry an open `reason` set and a free-form `detail`. Declaring a shape
+  // here would promise validation the endpoint does not perform.
+  drops: z.array(z.unknown())
+});
 export const ScopeDeleteOutput = z.object({ ok: z.boolean() });
 
 // What a caller needs to open a conversation that sounds like it remembers the
@@ -744,9 +790,22 @@ export const PublicV1Contracts = {
   "POST /memory/retrieve": { request: RetrieveInput, response: RetrieveOutput.omit({ retrieval: true }) },
   "POST /memory/answer": { request: AnswerInput, response: AnswerOutput.pick({ answer: true }) },
   "POST /memory/digest": { request: DigestRequestInput, response: DigestEnqueueOutput },
+  // What a digest kept and what it threw away. Only the two top-level arrays are
+  // frozen; see the note on DigestSelectionOutput for why `drops` items are not.
+  "GET /memory/digests/:digestId/selection": { response: DigestSelectionOutput },
   "POST /memory/runtime/turn": { request: RuntimeTurnInput, response: RuntimeTurnOutput.pick({ answer: true, answerMode: true, writeTier: true, digestTriggered: true }) },
   "GET /memory/facts": { query: ScopeIdQuery, response: MemoryFactsOutput },
+  // "Why do you believe this, and what did you believe before" is the question
+  // this engine exists to answer. Leaving its only external interface outside the
+  // promise made the auditability claim unverifiable from the one side that counts.
+  "GET /memory/facts/:factId/provenance": { query: ScopeIdQuery, response: FactProvenanceOutput },
   "POST /memory/facts/forget": { request: ForgetFactInput, response: MemoryForgetOutput },
+  // The ontology a caller needs to interpret `GET /memory/facts` at all: which
+  // facets exist, what they hold, and what may write to them. Held out of the
+  // registry at 1.3.0 to keep a young pack model free to move; the console and
+  // gateway have since shipped against it, so the shape is load-bearing either
+  // way and is better stated than assumed.
+  "GET /facet-pack": { query: OptionalScopeIdQuery, response: FacetPackOutput },
   "POST /memory/notes": { request: AddNoteInput, response: AddNoteOutput },
   // Narrowed like RetrieveOutput above: the live response also carries
   // `personaPrompt`, a persona string the scope's domain template supplies. That

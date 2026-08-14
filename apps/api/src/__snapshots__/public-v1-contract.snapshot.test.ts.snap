@@ -17,6 +17,88 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
       "type": "object",
     },
   },
+  "GET /facet-pack": {
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "facets": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cap": {
+                "minimum": 0,
+                "type": "integer",
+              },
+              "description": {
+                "type": "string",
+              },
+              "displayGroup": {
+                "type": [
+                  "string",
+                  "null",
+                ],
+              },
+              "documentAuthority": {
+                "type": "boolean",
+              },
+              "name": {
+                "type": "string",
+              },
+              "routesFrom": {
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
+              "writeProtected": {
+                "type": "boolean",
+              },
+            },
+            "required": [
+              "name",
+              "cap",
+              "writeProtected",
+              "documentAuthority",
+              "displayGroup",
+              "routesFrom",
+              "description",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "isDefault": {
+          "type": "boolean",
+        },
+        "name": {
+          "type": "string",
+        },
+        "source": {
+          "enum": [
+            "template",
+            "account",
+            "deployment-default",
+          ],
+          "type": "string",
+        },
+        "template": {
+          "type": [
+            "string",
+            "null",
+          ],
+        },
+      },
+      "required": [
+        "name",
+        "isDefault",
+        "source",
+        "template",
+        "facets",
+      ],
+      "type": "object",
+    },
+  },
   "GET /health": {
     "response": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -135,6 +217,29 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
       "type": "object",
     },
   },
+  "GET /memory/digests/:digestId/selection": {
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "drops": {
+          "items": {},
+          "type": "array",
+        },
+        "rationale": {
+          "items": {
+            "type": "string",
+          },
+          "type": "array",
+        },
+      },
+      "required": [
+        "rationale",
+        "drops",
+      ],
+      "type": "object",
+    },
+  },
   "GET /memory/facts": {
     "response": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -185,6 +290,84 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
       },
       "required": [
         "groups",
+      ],
+      "type": "object",
+    },
+  },
+  "GET /memory/facts/:factId/provenance": {
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "chain": {
+          "items": {
+            "$ref": "#/properties/fact",
+          },
+          "type": "array",
+        },
+        "fact": {
+          "additionalProperties": false,
+          "properties": {
+            "addedAt": {
+              "type": "string",
+            },
+            "confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number",
+            },
+            "content": {
+              "type": "string",
+            },
+            "evidenceId": {
+              "type": "string",
+            },
+            "evidenceType": {
+              "enum": [
+                "event",
+                "document",
+              ],
+              "type": "string",
+            },
+            "facet": {
+              "type": "string",
+            },
+            "id": {
+              "type": "string",
+            },
+            "retiredAt": {
+              "type": "string",
+            },
+            "retiredReason": {
+              "type": "string",
+            },
+            "supersededBy": {
+              "type": "string",
+            },
+            "type": {
+              "enum": [
+                "decision",
+                "constraint",
+                "profile",
+              ],
+              "type": "string",
+            },
+          },
+          "required": [
+            "id",
+            "content",
+            "type",
+            "confidence",
+            "addedAt",
+            "evidenceId",
+            "evidenceType",
+          ],
+          "type": "object",
+        },
+      },
+      "required": [
+        "fact",
+        "chain",
       ],
       "type": "object",
     },

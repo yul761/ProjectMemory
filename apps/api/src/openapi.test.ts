@@ -13,21 +13,21 @@ describe("buildOpenApiDocument", () => {
     expect(typeof doc.info).toBe("object");
   });
 
-  it("documents exactly the 18 /v1 operations across 16 paths", () => {
+  it("documents exactly the 21 /v1 operations across 19 paths", () => {
     // Two numbers describe this surface and they are not the same number.
-    // `/v1/scopes` and `/v1/reminders` each carry both GET and POST, so 18
-    // operations sit on 16 paths. Anyone counting `Object.keys(doc.paths)`
-    // against the contract registry's 18 entries finds a mismatch that is not
+    // `/v1/scopes` and `/v1/reminders` each carry both GET and POST, so 21
+    // operations sit on 19 paths. Anyone counting `Object.keys(doc.paths)`
+    // against the contract registry's 21 entries finds a mismatch that is not
     // one; pinning both here means the relationship is stated rather than
     // rediscovered. It also catches a real fault the operation count alone
-    // would miss: a path registered twice keeps the operation count at 18
+    // would miss: a path registered twice keeps the operation count at 21
     // while the path count moves.
     const opCount = Object.values(paths).reduce(
       (n, methods) => n + Object.keys(methods).length,
       0
     );
-    expect(opCount).toBe(18);
-    expect(Object.keys(paths)).toHaveLength(16);
+    expect(opCount).toBe(21);
+    expect(Object.keys(paths)).toHaveLength(19);
     expect(Object.keys(paths).every((p) => p.startsWith("/v1/"))).toBe(true);
   });
 
@@ -54,6 +54,31 @@ describe("buildOpenApiDocument", () => {
     const scopeId = op.parameters?.find((p) => p.name === "scopeId" && p.in === "query");
     expect(scopeId).toBeDefined();
     expect(scopeId?.required).toBe(true);
+  });
+
+  it("emits scopeId as an optional query parameter on GET /v1/facet-pack", () => {
+    // The required/optional distinction is derived from the query schema, and
+    // every query in the registry was required until this one: `/v1/facet-pack`
+    // answers for the account when no scope is named. A document that marked it
+    // required would describe a call the endpoint does not demand.
+    const op = paths["/v1/facet-pack"].get as { parameters?: Array<{ name: string; in: string; required?: boolean }> };
+    const scopeId = op.parameters?.find((p) => p.name === "scopeId" && p.in === "query");
+    expect(scopeId).toBeDefined();
+    expect(scopeId?.required).toBe(false);
+  });
+
+  it("emits both the path and query parameters of GET /v1/memory/facts/{factId}/provenance", () => {
+    // The only operation carrying both kinds. A fact id alone does not locate a
+    // fact: provenance is read out of one scope's digest state.
+    const op = paths["/v1/memory/facts/{factId}/provenance"].get as {
+      parameters?: Array<{ name: string; in: string; required?: boolean }>;
+    };
+    expect(op.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "factId", in: "path", required: true }),
+        expect.objectContaining({ name: "scopeId", in: "query", required: true })
+      ])
+    );
   });
 
   it("declares the x-user-id apiKey security scheme, applied globally", () => {
