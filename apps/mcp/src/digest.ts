@@ -293,9 +293,14 @@ async function runDigestPipeline(prisma: LitePrisma, userId: string, scopeId: st
  * lock + pipeline path `maybeRunDigest` uses, against an injected chat model
  * instead of one constructed from env. For a caller that has already decided
  * a digest should run (e.g. a threshold check owned outside this package);
- * it does not itself re-check pending-event thresholds. Returns without
- * running the pipeline if another process already holds the scope's
+ * it does not itself re-check pending-event thresholds. Skips digesting and
+ * returns (does not throw) if another process already holds the scope's
  * `DigestLock`, the same as `maybeRunDigest`'s lock-contention path.
+ *
+ * Unlike `maybeRunDigest`, this function does not catch errors: any failure
+ * from the pipeline (provider/network/validation) rejects the returned
+ * promise. A fire-and-forget caller must wrap this call itself; use
+ * `maybeRunDigest` where a never-rejecting call is required.
  *
  * @param opts.prisma - Lite client for the scope's SQLite file, typed
  *   `unknown` at this public surface (the concrete generated-client type is
@@ -306,6 +311,8 @@ async function runDigestPipeline(prisma: LitePrisma, userId: string, scopeId: st
  * @param opts.env - Unused by this path; kept for signature parity with
  *   `maybeRunDigest`. The injected `llm` replaces every env-derived
  *   `MODEL_*` field the env-configured path would otherwise need.
+ * @throws Whatever the pipeline throws (e.g. a provider call failure or an
+ *   invalid model response) — propagated uncaught.
  */
 export async function runScopeDigest(opts: {
   prisma: unknown;
