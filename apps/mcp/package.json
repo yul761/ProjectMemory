@@ -5,17 +5,20 @@
   "license": "MIT",
   "main": "dist/main.js",
   "bin": { "statecore-mcp": "dist/main.js" },
-  "files": ["dist", "schema.lite.prisma", "lite-bootstrap.sql", "README.md"],
+  "files": ["dist", "schema.lite.prisma", "lite-bootstrap.sql", "README.md", "scripts/postinstall.mjs"],
   "scripts": {
     "dev": "tsx --tsconfig ../../tsconfig.dev.json src/main.ts",
     "build": "tsc -p tsconfig.json",
     "prebundle": "pnpm --filter @statecore/core --filter @statecore/prompts --filter @statecore/db run build",
     "bundle": "tsup",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "node scripts/prepare-publish.mjs && pnpm run bundle",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@prisma/client": "^6.2.1",
+    "prisma": "^6.2.1",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -23,7 +26,6 @@
     "@statecore/db": "workspace:*",
     "@statecore/prompts": "workspace:*",
     "@types/node": "^22.0.0",
-    "prisma": "^6.2.1",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",

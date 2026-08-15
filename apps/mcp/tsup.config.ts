@@ -13,9 +13,10 @@ import { defineConfig } from "tsup";
 // Node's normal module resolution (relative to `dist/main.js`, walking up
 // `node_modules`) finds it instead — correct in this workspace (where
 // `node_modules/@statecore/db` symlinks to `packages/db`) and, for the npm
-// package, the reason `apps/mcp`'s published form needs a postinstall step that
-// generates this client into its own `node_modules` (tracked for Task 9, not
-// solved here).
+// package, the reason `apps/mcp`'s published form generates this client into
+// its own tree at install time (package.json `postinstall`, gated by
+// scripts/postinstall.mjs's presence check on `schema.lite.prisma`) and
+// `store.ts`'s runtime loader looks for it there first.
 export default defineConfig({
   entry: ["src/main.ts"],
   format: ["cjs"],

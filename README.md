@@ -17,6 +17,7 @@ StateCore is a self-hosted, low-drift long-term memory runtime for AI systems us
 - **Retrieval** — hybrid keyword + optional pgvector semantic search over events and digests, packed into a caller-declared character budget that reports what it refused
 - **Reminders** — daily reminder job surfaces follow-up items from active scopes
 - **Benchmarks** — built-in synthetic memory quality suite (fact retention, goal stability, decision continuity, retrieval MRR), plus a published LongMemEval comparison
+- **MCP server** — `statecore-mcp`, a zero-deploy [Model Context Protocol](https://modelcontextprotocol.io) front end for coding agents; keyless by default, one SQLite file, no infrastructure
 
 ## Quickstart
 
@@ -137,11 +138,28 @@ checkable rather than merely stored; `docs/api.md` lists the full frozen surface
 
 ¹ Internal read-model endpoints — registered only at `/memory/...`, not under `/v1`, and not part of the frozen `/v1` contract.
 
+## Use it from your coding agent (MCP)
+
+`statecore-mcp` is a separately published npm package that fronts this engine
+over the [Model Context Protocol](https://modelcontextprotocol.io) — no
+running server required. It runs the engine embedded (one process, one SQLite
+file), keylessly by default:
+
+```bash
+npx -y statecore-mcp --data ~/.statecore
+```
+
+Point any MCP client at it (dsh, Claude Code, Cursor configs included), or run
+it against a full StateCore deployment via `--url` for shared/multi-agent
+memory. Full docs, host configs, and the keyless/keyed capability matrix:
+[`apps/mcp/README.md`](apps/mcp/README.md).
+
 ## Architecture
 
 ```
 apps/api        NestJS HTTP server — ingestion, retrieval, runtime turns, diagnostics
 apps/worker     BullMQ background workers — digest, working-memory updates, reminders
+apps/mcp        statecore-mcp — MCP server, embedded or thin client against apps/api
 
 packages/core       Memory engine (MemoryService, DigestService, RetrieveService, AssistantSession)
 packages/contracts  Zod schemas for all API I/O

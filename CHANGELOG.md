@@ -18,6 +18,15 @@ surface. `docs/api.md` owns the rule.
 
 ## [Unreleased]
 
+### Added
+- `statecore-mcp` — a zero-deploy [Model Context Protocol](https://modelcontextprotocol.io)
+  server for coding agents: one npm package, one SQLite file, no infrastructure
+  and no model key required. Runs the engine embedded by default (`remember` →
+  `facts` → `why` → `forget` all work keyless, with a full evidence and
+  supersession chain), or as a thin client against a full StateCore deployment
+  via `--url`. `apps/mcp/README.md` has host configs for dsh, Claude Code, and
+  Cursor.
+
 ## [1.6.1] - 2026-08-14
 
 ### Fixed

@@ -96,6 +96,9 @@ importers:
       '@prisma/client':
         specifier: ^6.2.1
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
+      prisma:
+        specifier: ^6.2.1
+        version: 6.19.2(typescript@5.9.3)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
@@ -112,9 +115,6 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.7
-      prisma:
-        specifier: ^6.2.1
-        version: 6.19.2(typescript@5.9.3)
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.15)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)

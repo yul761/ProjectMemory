@@ -22,8 +22,7 @@ import {
   type FacetPack,
   type DisplayGroup
 } from "@statecore/core";
-import { Prisma } from "@statecore/db/generated/client-lite";
-import { openStore, type Store, type LitePrisma } from "./store";
+import { openStore, Prisma, type Store, type LitePrisma } from "./store";
 import type { MemoryBackend } from "./backend";
 import { maybeRunDigest } from "./digest";
 

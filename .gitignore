@@ -6,6 +6,9 @@ mcp-usage-log/
 dist/
 benchmark-results/
 packages/db/generated/
+apps/mcp/schema.lite.prisma
+apps/mcp/lite-bootstrap.sql
+apps/mcp/generated/
 .tmp-*.log
 .tmp-mcp-*.txt
 .tmp-benchmark-results/
