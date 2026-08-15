@@ -22,6 +22,11 @@ export default defineConfig({
   format: ["cjs"],
   platform: "node",
   target: "node20",
+  // dist/main.js is the package's `bin`. npm's .bin shim execs the file
+  // directly, so without a shebang the shell interprets JavaScript as shell
+  // ("use strict: command not found") — shipped broken in 0.1.0, where every
+  // test ran `node dist/main.js` and nothing exercised the bin path itself.
+  banner: { js: "#!/usr/bin/env node" },
   // Named explicitly rather than a single `/^@statecore\//` prefix regex: a
   // negative-lookahead regex meant to except only the `.../generated/client-lite`
   // subpath from `noExternal` (leaving it to `external` below) was verified by

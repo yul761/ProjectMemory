@@ -79,8 +79,12 @@ describe("built binary, keyless end-to-end over stdio", () => {
     dataDir = mkdtempSync(join(tmpdir(), "sc-mcp-e2e-"));
     client = new Client({ name: "e2e-test-client", version: "0.0.0-test" });
     transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [distEntry, "--data", dataDir],
+      // Exec the built file DIRECTLY, exactly as npm's .bin shim does. 0.1.0
+      // shipped without a shebang and every test ran `node dist/main.js`, so the
+      // one path real npx users take was the one path nothing exercised — the
+      // shell parsed JavaScript and printed "use strict: command not found".
+      command: distEntry,
+      args: ["--data", dataDir],
       // getDefaultEnvironment() carries PATH/HOME/etc. so `node` and its own
       // subprocess lookups (e.g. `git`, which scope.ts falls back to) still
       // work; STATECORE_SCOPE overrides that git lookup outright and no
@@ -94,6 +98,12 @@ describe("built binary, keyless end-to-end over stdio", () => {
   afterAll(async () => {
     await client?.close();
     if (dataDir) rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it("ships an executable entry: shebang first line", async () => {
+    const { readFileSync } = await import("node:fs");
+    const firstLine = readFileSync(distEntry, "utf8").split("\n", 1)[0];
+    expect(firstLine).toBe("#!/usr/bin/env node");
   });
 
   it("lists exactly the five memory tools", async () => {
