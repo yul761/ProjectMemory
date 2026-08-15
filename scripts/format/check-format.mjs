@@ -1,28 +1,34 @@
 #!/usr/bin/env node
-import { readFileSync, readdirSync, statSync } from "fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "fs";
 import path from "path";
 
 const root = process.cwd();
 const exts = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".md", ".yml", ".yaml"]);
-const skipDirs = new Set(["node_modules", ".git", "dist", "coverage", "benchmark-results"]);
 
-function walk(dir, acc) {
-  for (const name of readdirSync(dir)) {
-    const full = path.join(dir, name);
-    const rel = path.relative(root, full);
-    const st = statSync(full);
-    if (st.isDirectory()) {
-      if (skipDirs.has(name)) continue;
-      walk(full, acc);
-      continue;
-    }
-    if (!exts.has(path.extname(name))) continue;
-    acc.push(rel);
-  }
-}
+// Enumerating through `git ls-files` rather than walking the filesystem keeps
+// this gate's coverage identical to the repo's own definition of "tracked or
+// about-to-be-tracked" content: `--cached` covers committed files, `--others
+// --exclude-standard` covers new-but-unstaged files while still honoring
+// .gitignore, so generated/vendored output (e.g. packages/db/generated/) is
+// excluded exactly when git itself excludes it, with no hand-kept skip list.
+// benchmark-results/ was added to .gitignore after historical run output was
+// already committed; `--exclude-standard` only screens `--others` (untracked)
+// entries, so those already-`--cached` files still surface here. Excluding
+// the directory by name is the one remaining hand-kept exception — every
+// other legacy skip (node_modules, dist, coverage, .git) is never tracked, so
+// git's own enumeration already excludes it.
+const trackedButIgnored = new Set(["benchmark-results"]);
 
-const files = [];
-walk(root, files);
+const files = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
+  cwd: root,
+  encoding: "utf8",
+  maxBuffer: 64 * 1024 * 1024
+})
+  .split("\0")
+  .filter(Boolean)
+  .filter((rel) => !trackedButIgnored.has(rel.split("/")[0]))
+  .filter((rel) => exts.has(path.extname(rel)));
 
 const violations = [];
 for (const rel of files) {
