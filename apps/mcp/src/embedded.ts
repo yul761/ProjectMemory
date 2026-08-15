@@ -192,6 +192,27 @@ function attachFactIds(
 }
 
 /**
+ * Startup digest catch-up, across every scope the user has, not just the one
+ * this process's `--data`/cwd resolved to (`opts.scopeName`). One SQLite file
+ * holds every project's scope, and each scope carries its own backlog and its
+ * own `DigestLock` row, so limiting catch-up to the current scope stranded a
+ * foreign scope's backlog until something else happened to touch it — the
+ * spec asks for catch-up across 各 scope (every scope with backlog).
+ * Serialized (each `maybeRunDigest` call completes before the next starts)
+ * because this is a fire-and-forget background pass with nothing waiting on
+ * its result; running scopes concurrently would only mean acquiring several
+ * `DigestLock` rows in parallel for no benefit this process could use.
+ * `maybeRunDigest` never rejects (it catches internally), so no scope's
+ * failure can stop the ones after it.
+ */
+async function runStartupDigestCatchUp(prisma: LitePrisma, env: NodeJS.ProcessEnv): Promise<void> {
+  const scopes = await prisma.projectScope.findMany({ where: { userId: USER }, select: { id: true } });
+  for (const scope of scopes) {
+    await maybeRunDigest({ prisma, userId: USER, scopeId: scope.id, env, reason: "startup" });
+  }
+}
+
+/**
  * The keyless, in-process `MemoryBackend`: five memory operations over an
  * embedded SQLite store, with no LLM key required. `remember`/`facts`/`why`/
  * `forget` mirror the Nest-free equivalents in `apps/api/src`, cited at each
@@ -231,7 +252,7 @@ export function createEmbeddedBackend(opts: { dataDir: string; scopeName: string
           undefined,
           "project"
         )).id;
-      void maybeRunDigest({ prisma: store.prisma, userId: USER, scopeId, env: opts.env, reason: "startup" });
+      void runStartupDigestCatchUp(store.prisma, opts.env);
     },
 
     async remember({ text, consolidate }) {
@@ -275,14 +296,17 @@ export function createEmbeddedBackend(opts: { dataDir: string; scopeName: string
       const result = await retrieve.retrieve(scopeId, 20, query);
       const digest = result.digest ? result.digest.summary : null;
       const events = result.events.map((event) => ({ id: event.id, content: event.content, createdAt: event.createdAt.toISOString() }));
+      // frozen /v1's RetrieveOutput.factRegistry is unconditional (present
+      // whether or not the caller sent maxChars) — computed here too so both
+      // branches match it, not just the maxChars one.
+      const snap = await latestState();
+      const activeFactRegistry = snap ? getActiveFactRegistry(snap.state) : [];
 
       if (maxChars === undefined) {
-        return { digest, events, retrieval: (result as { retrieval?: unknown }).retrieval ?? null };
+        return { digest, events, factRegistry: activeFactRegistry, retrieval: (result as { retrieval?: unknown }).retrieval ?? null };
       }
 
       // Mirrors apps/api/src/memory.controller.ts#retrieve (maxChars branch); keep in sync.
-      const snap = await latestState();
-      const activeFactRegistry = snap ? getActiveFactRegistry(snap.state) : [];
       const trimmedQuery = query?.trim();
       const packed = packWithinBudget({
         digest,

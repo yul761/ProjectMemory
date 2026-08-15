@@ -70,6 +70,27 @@ interface DigestEnvConfig {
 }
 
 /**
+ * Parses `STATECORE_DIGEST_THRESHOLD`. Unset falls back to
+ * {@link DEFAULT_THRESHOLD} silently — that is normal, not a misconfiguration.
+ * A value that parses to `NaN` or to `<= 0`, though, would otherwise silently
+ * disable distillation forever (`NaN` makes every `shouldDigest` comparison
+ * false; `<= 0` makes it always true, i.e. no threshold at all) — both fall
+ * back to the same default, but log the bad value so the operator can fix it.
+ */
+function parseDigestThreshold(raw: string | undefined): number {
+  const trimmed = clean(raw);
+  if (!trimmed) return DEFAULT_THRESHOLD;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    console.error(
+      `[statecore-mcp] digest: invalid STATECORE_DIGEST_THRESHOLD ${JSON.stringify(trimmed)} (must be a positive number); falling back to ${DEFAULT_THRESHOLD}`
+    );
+    return DEFAULT_THRESHOLD;
+  }
+  return parsed;
+}
+
+/**
  * Small local reader for the env fields the digest path needs. Mirrors
  * apps/worker/src/env.ts's MODEL_ and FEATURE_LLM semantics, but the embedded
  * backend is a single in-process backend, not a queue worker, so it skips
@@ -82,7 +103,7 @@ function readDigestEnv(env: NodeJS.ProcessEnv): DigestEnvConfig {
   const apiKey = clean(env.MODEL_API_KEY) || clean(env.OPENAI_API_KEY) || "";
   return {
     featureLlm: env.FEATURE_LLM === "true",
-    threshold: Number(env.STATECORE_DIGEST_THRESHOLD || DEFAULT_THRESHOLD),
+    threshold: parseDigestThreshold(env.STATECORE_DIGEST_THRESHOLD),
     provider: clean(env.MODEL_PROVIDER) || "openai-compatible",
     apiKey,
     baseUrl,
@@ -282,12 +303,19 @@ export async function maybeRunDigest(opts: {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: { createdAt: true }
     });
+    // Same either-clock condition as the lookback window this trigger feeds
+    // (selectDigestEventWindow, digest-lookback.ts): an event is "pending"
+    // if it is new by either createdAt (occurredAt-overridden "when it
+    // happened") or ingestedAt (never overwritten "when we learned it"), so
+    // an event that would be selected into the run also counts toward
+    // triggering it.
+    const sinceLastDigest = lastDigest?.createdAt ?? new Date(0);
     const pendingCount = await prisma.memoryEvent.count({
       where: {
         scopeId,
         type: "stream",
         suppressedAt: null,
-        createdAt: { gt: lastDigest?.createdAt ?? new Date(0) }
+        OR: [{ createdAt: { gt: sinceLastDigest } }, { ingestedAt: { gt: sinceLastDigest } }]
       }
     });
     const threshold = reason === "threshold" ? digestEnv.threshold : 1;

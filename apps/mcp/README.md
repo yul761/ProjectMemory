@@ -44,7 +44,15 @@ Both modes resolve **scope** — the memory partition a project's facts live in 
 
 ### dsh
 
-dsh's harness spawns MCP subprocesses with credential-shaped environment variables stripped from the inherited environment. `MODEL_API_KEY` will not reach the subprocess unless it is written explicitly into the overlay's `config.env` — omitting it silently keeps the server keyless (note-path memory still works; distillation does not).
+dsh starts a configured command; it does not download or install MCP servers. Install the pinned executable first:
+
+```sh
+npm install --global statecore-mcp@<version>
+```
+
+<!-- Pin <version> to the tested release once published, and add its npm
+     tarball SHA (or a source commit SHA) here, matching the per-server pin
+     style of deepseek-harness's examples/mcp-memory README. -->
 
 ```yaml
 # statecore.cordis.yml — a dsh --patch overlay, applied via:
@@ -55,20 +63,22 @@ dsh's harness spawns MCP subprocesses with credential-shaped environment variabl
       config:
         serverName: statecore
         transport: stdio
-        command: npx
-        args: ['-y', 'statecore-mcp']
+        command: statecore-mcp
+        args: []
         cwd: !!js process.cwd()
         env:
           FEATURE_LLM: 'true'
-          # dsh strips ambient credential-shaped env vars before spawning MCP
-          # subprocesses — MODEL_API_KEY must be written here explicitly, or
-          # this server stays keyless (no automatic distillation).
-          MODEL_API_KEY: '<your-deepseek-or-openai-compatible-key>'
+          # dsh strips ambient credential-shaped vars from the CHILD's
+          # environment before spawning it; config.env with !!js reads dsh's
+          # own process env explicitly instead, so this forwards the key
+          # without the child-env stripping ever seeing it and without
+          # writing the secret into this YAML file.
+          MODEL_API_KEY: !!js process.env.MODEL_API_KEY
           MODEL_BASE_URL: 'https://api.deepseek.com/v1'
           MODEL_NAME: 'deepseek-chat'
 ```
 
-The digest path never sends `reasoning_effort` unless `MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT` is set explicitly, so a DeepSeek key (or any OpenAI-compatible endpoint that rejects the parameter) works with this config as written.
+Omitting `MODEL_API_KEY` (running dsh with it unset in its own environment) silently keeps the server keyless — note-path memory still works; distillation does not. The digest path never sends `reasoning_effort` unless `MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT` is set explicitly, so a DeepSeek key (or any OpenAI-compatible endpoint that rejects the parameter) works with this config as written.
 
 ### Claude Code
 

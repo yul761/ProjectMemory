@@ -28,8 +28,23 @@ function loadLiteClient(): typeof LiteClientTypes {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require(join(__dirname, "../generated/client-lite")) as typeof LiteClientTypes;
   } catch {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require("@statecore/db/generated/client-lite") as typeof LiteClientTypes;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require("@statecore/db/generated/client-lite") as typeof LiteClientTypes;
+    } catch {
+      // Both candidates failed — most commonly a blocked postinstall: pnpm >=
+      // 10 blocks dependency lifecycle scripts by default, and `--ignore-scripts`
+      // is common in CI, so the `prisma generate` this package's own
+      // `postinstall` runs (scripts/postinstall.mjs) never ran. An end user who
+      // installed `statecore-mcp` from npm has no use for the internal
+      // workspace package name a raw MODULE_NOT_FOUND would name here — this
+      // names the remedy instead.
+      throw new Error(
+        "statecore-mcp: the generated database client is missing, which usually means this " +
+          "package's postinstall script did not run. Fix: re-run `npm rebuild statecore-mcp` " +
+          "(or reinstall), or, on pnpm >= 10, run `pnpm approve-builds` and reinstall."
+      );
+    }
   }
 }
 

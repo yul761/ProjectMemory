@@ -8,7 +8,7 @@
   "files": ["dist", "schema.lite.prisma", "lite-bootstrap.sql", "README.md", "scripts/postinstall.mjs"],
   "scripts": {
     "dev": "tsx --tsconfig ../../tsconfig.dev.json src/main.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "prebundle": "pnpm --filter @statecore/core --filter @statecore/prompts --filter @statecore/db run build",
     "bundle": "tsup",
     "test": "vitest run",
