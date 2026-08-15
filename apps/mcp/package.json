@@ -1,11 +1,41 @@
 {
   "name": "statecore-mcp",
   "version": "0.1.0",
-  "description": "Zero-deploy MCP memory server backed by the StateCore engine — auditable facts with evidence chains",
+  "description": "Zero-deploy MCP memory server backed by the StateCore engine \u2014 auditable facts with evidence chains",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yul761/StateCore.git",
+    "directory": "apps/mcp"
+  },
+  "homepage": "https://github.com/yul761/StateCore/tree/main/apps/mcp#readme",
+  "bugs": {
+    "url": "https://github.com/yul761/StateCore/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "memory",
+    "agent-memory",
+    "provenance",
+    "audit",
+    "sqlite",
+    "claude",
+    "cursor",
+    "deepseek-harness",
+    "statecore"
+  ],
   "main": "dist/main.js",
-  "bin": { "statecore-mcp": "dist/main.js" },
-  "files": ["dist", "schema.lite.prisma", "lite-bootstrap.sql", "README.md", "scripts/postinstall.mjs"],
+  "bin": {
+    "statecore-mcp": "dist/main.js"
+  },
+  "files": [
+    "dist",
+    "schema.lite.prisma",
+    "lite-bootstrap.sql",
+    "README.md",
+    "scripts/postinstall.mjs"
+  ],
   "scripts": {
     "dev": "tsx --tsconfig ../../tsconfig.dev.json src/main.ts",
     "build": "tsup",
