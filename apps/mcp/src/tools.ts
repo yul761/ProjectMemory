@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryBackend } from "./backend";
 
-type ToolResult = { content: Array<{ type: "text"; text: string }> };
+type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
 /**
  * `McpServer.registerTool`'s generic overload combines the SDK's dual zod v3/v4 compatibility
@@ -21,6 +21,34 @@ interface ToolRegistrar {
   ): unknown;
 }
 
+// Shared between the wire-level `inputSchema` raw shape (below) and
+// `rememberSchema`'s cross-field refinement: both must accept the same
+// field-level constraints so the refinement only ever narrows arguments that
+// already passed SDK-level validation.
+const rememberShape = { text: z.string().min(1).max(2000), consolidate: z.boolean().optional() };
+
+// Enforces the note-path cap (500 chars) that HTTP mode's server already
+// enforces via `AddNoteInput.max(500)` (packages/contracts/src/index.ts),
+// which the embedded note path (embedded.ts's `addNoteFact`) has no
+// equivalent check for — without this, the same `remember` call behaved
+// differently per backend. Applied as a second, manual `safeParse` inside the
+// handler rather than attached to the wire-level `inputSchema` object below:
+// a `.superRefine()`'d `z.object(...)` is a `ZodEffects` with no `.shape`
+// property, which the SDK's `normalizeObjectSchema` (zod-compat.js) cannot
+// normalize back to an object schema, so `listTools()` would report an empty
+// `{}` JSON schema for `remember` instead of its real `text`/`consolidate`
+// parameters — breaking client-visible parameter introspection. Keeping the
+// refinement here preserves that introspection while still rejecting the
+// oversized note before it reaches the backend.
+const rememberSchema = z.object(rememberShape).superRefine((value, ctx) => {
+  if (!value.consolidate && value.text.length > 500) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "notes are capped at 500 characters; pass consolidate: true for longer conversational content"
+    });
+  }
+});
+
 /** Registers the five memory verbs — remember/recall/facts/why/forget — as MCP tools backed by `backend`. */
 export function registerTools(server: McpServer, backend: MemoryBackend): void {
   const registrar = server as unknown as ToolRegistrar;
@@ -29,10 +57,16 @@ export function registerTools(server: McpServer, backend: MemoryBackend): void {
     "remember",
     {
       description:
-        "Store a durable fact about this project or user. Use for preferences, decisions, constraints, and anything worth knowing next session. Deterministic and audit-tracked; set consolidate=true only for long conversational context that should be distilled in the background.",
-      inputSchema: { text: z.string().min(1).max(2000), consolidate: z.boolean().optional() }
+        "Store a durable fact about this project or user. Use for preferences, decisions, constraints, and anything worth knowing next session. Deterministic and audit-tracked. Notes (the default path) are capped at 500 characters; pass consolidate=true for longer conversational context, accepted up to 2000 characters and distilled in the background.",
+      inputSchema: rememberShape
     },
-    async (args) => json(await backend.remember(args as { text: string; consolidate?: boolean }))
+    async (args) => {
+      const parsed = rememberSchema.safeParse(args);
+      if (!parsed.success) {
+        return { content: [{ type: "text", text: parsed.error.issues.map((issue) => issue.message).join("; ") }], isError: true };
+      }
+      return json(await backend.remember(parsed.data));
+    }
   );
   registrar.registerTool(
     "recall",

@@ -77,4 +77,23 @@ describe("MCP tool surface, keyless via InMemoryTransport", () => {
     const text = (result.content as Array<{ type: string; text: string }>)[0].text;
     expect(text).toContain("Invalid arguments for tool why");
   });
+
+  // Uniformity fix: HTTP mode's server enforces a 500-char cap on the note path
+  // (AddNoteInput.max(500), packages/contracts/src/index.ts) that the embedded
+  // note path had no equivalent for, so the same `remember` call used to behave
+  // differently per backend. `rememberSchema`'s `superRefine` in tools.ts now
+  // rejects it uniformly, before either backend is ever called.
+  it("rejects remember with 600-char text and no consolidate flag: note path is capped at 500", async () => {
+    const result = await client.callTool({ name: "remember", arguments: { text: "n".repeat(600) } });
+    expect(result.isError).toBe(true);
+    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    expect(text).toContain("notes are capped at 500 characters; pass consolidate: true for longer conversational content");
+  });
+
+  it("accepts remember with 600-char text when consolidate: true (event path has no 500-char cap)", async () => {
+    const result = await client.callTool({ name: "remember", arguments: { text: "n".repeat(600), consolidate: true } });
+    expect(result.isError).toBeFalsy();
+    const remembered = JSON.parse((result.content as Array<{ type: string; text: string }>)[0].text);
+    expect(remembered).toEqual({ ok: true, mode: "event" });
+  });
 });
