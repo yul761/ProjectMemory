@@ -26,13 +26,6 @@ surface. `docs/api.md` owns the rule.
   Harness memory plugin, which embeds the engine in-process instead of talking
   MCP over stdio.
 
-### Fixed
-- Library logs go to stderr, never stdout. `@statecore/core`'s pino logger wrote
-  to fd 1, which corrupts any consumer whose stdout is a protocol channel — the
-  MCP server's stdio transport included. Now bound to `pino.destination(2)`,
-  with a spawn-based regression test.
-
-### Added
 - `statecore-mcp` — a zero-deploy [Model Context Protocol](https://modelcontextprotocol.io)
   server for coding agents: one npm package, one SQLite file, no infrastructure
   and no model key required. Runs the engine embedded by default (`remember` →
@@ -40,6 +33,12 @@ surface. `docs/api.md` owns the rule.
   supersession chain), or as a thin client against a full StateCore deployment
   via `--url`. `apps/mcp/README.md` has host configs for dsh, Claude Code, and
   Cursor.
+
+### Fixed
+- Library logs go to stderr, never stdout. `@statecore/core`'s pino logger wrote
+  to fd 1, which corrupts any consumer whose stdout is a protocol channel — the
+  MCP server's stdio transport included. Now bound to `pino.destination(2)`,
+  with a spawn-based regression test.
 
 ## [1.6.1] - 2026-08-14
 
