@@ -24,7 +24,7 @@ import {
 } from "@statecore/core";
 import { openStore, Prisma, type Store, type LitePrisma } from "./store";
 import type { MemoryBackend } from "./backend";
-import { maybeRunDigest } from "./digest";
+import { maybeRunDigest, type DigestChatModel } from "./digest";
 
 const USER = "local";
 
@@ -205,10 +205,10 @@ function attachFactIds(
  * `maybeRunDigest` never rejects (it catches internally), so no scope's
  * failure can stop the ones after it.
  */
-async function runStartupDigestCatchUp(prisma: LitePrisma, env: NodeJS.ProcessEnv): Promise<void> {
+async function runStartupDigestCatchUp(prisma: LitePrisma, env: NodeJS.ProcessEnv, digestLlm: DigestChatModel | undefined): Promise<void> {
   const scopes = await prisma.projectScope.findMany({ where: { userId: USER }, select: { id: true } });
   for (const scope of scopes) {
-    await maybeRunDigest({ prisma, userId: USER, scopeId: scope.id, env, reason: "startup" });
+    await maybeRunDigest({ prisma, userId: USER, scopeId: scope.id, env, reason: "startup", digestLlm });
   }
 }
 
@@ -217,8 +217,19 @@ async function runStartupDigestCatchUp(prisma: LitePrisma, env: NodeJS.ProcessEn
  * embedded SQLite store, with no LLM key required. `remember`/`facts`/`why`/
  * `forget` mirror the Nest-free equivalents in `apps/api/src`, cited at each
  * replicated block.
+ *
+ * `opts.digestLlm`, when provided, replaces the env-derived model provider
+ * `maybeRunDigest` would otherwise construct for both digest call sites below
+ * (startup catch-up and the post-`remember` threshold check) — the seam a
+ * caller supplying its own LLM client (e.g. the dsh-statecore plugin) uses
+ * instead of `FEATURE_LLM`/`MODEL_*` env vars.
  */
-export function createEmbeddedBackend(opts: { dataDir: string; scopeName: string; env: NodeJS.ProcessEnv }): MemoryBackend {
+export function createEmbeddedBackend(opts: {
+  dataDir: string;
+  scopeName: string;
+  env: NodeJS.ProcessEnv;
+  digestLlm?: DigestChatModel;
+}): MemoryBackend {
   let store: Store;
   let scopeId: string;
 
@@ -252,7 +263,7 @@ export function createEmbeddedBackend(opts: { dataDir: string; scopeName: string
           undefined,
           "project"
         )).id;
-      void runStartupDigestCatchUp(store.prisma, opts.env);
+      void runStartupDigestCatchUp(store.prisma, opts.env, opts.digestLlm);
     },
 
     async remember({ text, consolidate }) {
@@ -287,7 +298,7 @@ export function createEmbeddedBackend(opts: { dataDir: string; scopeName: string
         source: "api",
         content: text
       });
-      void maybeRunDigest({ prisma: store.prisma, userId: USER, scopeId, env: opts.env, reason: "threshold" });
+      void maybeRunDigest({ prisma: store.prisma, userId: USER, scopeId, env: opts.env, reason: "threshold", digestLlm: opts.digestLlm });
       return { ok: true, mode: "event" };
     },
 

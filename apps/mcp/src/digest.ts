@@ -23,6 +23,17 @@ import { createDigestWithSnapshot } from "./digest-write";
 export { acquireDigestLock, releaseDigestLock };
 
 /**
+ * Chat-model seam the digest pipeline calls for stage 1/2 classification and
+ * consolidation. `runDigestPipeline` (env-configured path) builds one from
+ * `MODEL_*` env fields; {@link runScopeDigest} takes one directly, letting a
+ * caller outside this package (e.g. the dsh-statecore plugin) supply its own
+ * LLM client instead of an env-derived provider.
+ */
+export interface DigestChatModel {
+  chat(messages: { role: "system" | "user"; content: string }[]): Promise<string>;
+}
+
+/**
  * Fixed digest-pipeline tuning. Copied from apps/worker/src/env.ts's
  * `DIGEST_*` defaults — the embedded backend has no deployment operator to
  * expose these to, so they are constants rather than env-configurable knobs.
@@ -153,41 +164,15 @@ function toCoreDigest(row: DigestRow): Digest {
 }
 
 /**
- * Runs the digest pipeline for one scope: resolve the tenant's facet pack,
- * select the lookback event window, run stage 1/2 + consolidation, and
- * persist the result. Mirrors apps/worker/src/main.ts#runDigestScopeJob minus
- * Telegram delivery, working-memory refresh, BullMQ job logging, and drift
- * metrics — none of which the embedded backend has anywhere to send.
+ * Digest-pipeline body shared by the env-configured path
+ * ({@link runDigestPipeline}) and the injected-llm path ({@link runScopeDigest}):
+ * resolves the tenant's facet pack, selects the lookback event window, runs
+ * stage 1/2 + consolidation against `llm`, and persists the result. Mirrors
+ * apps/worker/src/main.ts#runDigestScopeJob minus Telegram delivery,
+ * working-memory refresh, BullMQ job logging, and drift metrics — none of
+ * which the embedded backend has anywhere to send.
  */
-async function runDigestPipeline(prisma: LitePrisma, userId: string, scopeId: string, digestEnv: DigestEnvConfig): Promise<void> {
-  const provider = createModelProvider({
-    provider: digestEnv.provider,
-    apiKey: digestEnv.apiKey,
-    baseUrl: digestEnv.baseUrl,
-    model: digestEnv.modelName,
-    structuredOutputApiKey: digestEnv.structuredOutputApiKey,
-    structuredOutputBaseUrl: digestEnv.structuredOutputBaseUrl,
-    structuredOutputModel: digestEnv.structuredOutputModelName,
-    timeoutMs: digestEnv.timeoutMs
-  });
-  if (!provider) {
-    console.error("[statecore-mcp] digest: model provider unavailable despite FEATURE_LLM=true; skipping");
-    return;
-  }
-  // Mirrors apps/worker/src/main.ts:204-213's `llm.chat` wrapper: an unset
-  // reasoningEffort/maxOutputTokens must stay absent from the options object
-  // rather than default in, since reasoning_effort's absence is itself a
-  // spec guarantee the wire call relies on.
-  const llm = {
-    chat: (messages: { role: "system" | "user"; content: string }[]) =>
-      provider.structuredOutput.chat(messages, {
-        ...(typeof digestEnv.structuredOutputMaxOutputTokens === "number"
-          ? { maxOutputTokens: digestEnv.structuredOutputMaxOutputTokens }
-          : {}),
-        ...(digestEnv.structuredOutputReasoningEffort ? { reasoningEffort: digestEnv.structuredOutputReasoningEffort } : {})
-      })
-  };
-
+async function runDigestPipelineCore(prisma: LitePrisma, userId: string, scopeId: string, llm: DigestChatModel): Promise<void> {
   const scope = await prisma.projectScope.findFirst({ where: { id: scopeId, userId } });
   if (!scope) {
     console.error(`[statecore-mcp] digest: scope ${scopeId} not found for user ${userId}; skipping`);
@@ -267,6 +252,78 @@ async function runDigestPipeline(prisma: LitePrisma, userId: string, scopeId: st
   });
 }
 
+/**
+ * Env-configured entry: builds a chat model from `digestEnv`'s `MODEL_*`
+ * fields and delegates to {@link runDigestPipelineCore}. Used by
+ * `maybeRunDigest`'s default (non-injected) path.
+ */
+async function runDigestPipeline(prisma: LitePrisma, userId: string, scopeId: string, digestEnv: DigestEnvConfig): Promise<void> {
+  const provider = createModelProvider({
+    provider: digestEnv.provider,
+    apiKey: digestEnv.apiKey,
+    baseUrl: digestEnv.baseUrl,
+    model: digestEnv.modelName,
+    structuredOutputApiKey: digestEnv.structuredOutputApiKey,
+    structuredOutputBaseUrl: digestEnv.structuredOutputBaseUrl,
+    structuredOutputModel: digestEnv.structuredOutputModelName,
+    timeoutMs: digestEnv.timeoutMs
+  });
+  if (!provider) {
+    console.error("[statecore-mcp] digest: model provider unavailable despite FEATURE_LLM=true; skipping");
+    return;
+  }
+  // Mirrors apps/worker/src/main.ts:204-213's `llm.chat` wrapper: an unset
+  // reasoningEffort/maxOutputTokens must stay absent from the options object
+  // rather than default in, since reasoning_effort's absence is itself a
+  // spec guarantee the wire call relies on.
+  const llm: DigestChatModel = {
+    chat: (messages) =>
+      provider.structuredOutput.chat(messages, {
+        ...(typeof digestEnv.structuredOutputMaxOutputTokens === "number"
+          ? { maxOutputTokens: digestEnv.structuredOutputMaxOutputTokens }
+          : {}),
+        ...(digestEnv.structuredOutputReasoningEffort ? { reasoningEffort: digestEnv.structuredOutputReasoningEffort } : {})
+      })
+  };
+  await runDigestPipelineCore(prisma, userId, scopeId, llm);
+}
+
+/**
+ * Public wrapper: runs one digest attempt for a scope through the same
+ * lock + pipeline path `maybeRunDigest` uses, against an injected chat model
+ * instead of one constructed from env. For a caller that has already decided
+ * a digest should run (e.g. a threshold check owned outside this package);
+ * it does not itself re-check pending-event thresholds. Returns without
+ * running the pipeline if another process already holds the scope's
+ * `DigestLock`, the same as `maybeRunDigest`'s lock-contention path.
+ *
+ * @param opts.prisma - Lite client for the scope's SQLite file, typed
+ *   `unknown` at this public surface (the concrete generated-client type is
+ *   internal to this package) and cast back before use.
+ * @param opts.userId - Owning user id.
+ * @param opts.scopeId - Scope to digest.
+ * @param opts.llm - Chat model the pipeline calls for stage 1/2 + consolidation.
+ * @param opts.env - Unused by this path; kept for signature parity with
+ *   `maybeRunDigest`. The injected `llm` replaces every env-derived
+ *   `MODEL_*` field the env-configured path would otherwise need.
+ */
+export async function runScopeDigest(opts: {
+  prisma: unknown;
+  userId: string;
+  scopeId: string;
+  llm: DigestChatModel;
+  env?: NodeJS.ProcessEnv;
+}): Promise<void> {
+  const prisma = opts.prisma as LitePrisma;
+  const locked = await acquireDigestLock(prisma, opts.scopeId);
+  if (!locked) return;
+  try {
+    await runDigestPipelineCore(prisma, opts.userId, opts.scopeId, opts.llm);
+  } finally {
+    await releaseDigestLock(prisma, opts.scopeId);
+  }
+}
+
 // In-process single-flight guard: a second call for a scope this process is
 // already digesting bails before touching the DigestLock table at all. The
 // lock table (digest-lock.ts) is the cross-process guarantee; this is the
@@ -284,6 +341,10 @@ let running = false;
  * @param opts.scopeId - Scope to consider for a digest run.
  * @param opts.env - Process env carrying `FEATURE_LLM`/`MODEL_*`/`STATECORE_DIGEST_THRESHOLD`.
  * @param opts.reason - `"threshold"` (post-ingest check) or `"startup"` (catch-up on boot).
+ * @param opts.digestLlm - Optional injected chat model. When present, the
+ *   `FEATURE_LLM`/API-key env gate and env-derived provider construction are
+ *   both skipped, and the pipeline runs against this model instead — the
+ *   embedded backend's opt-in for a caller supplying its own LLM client.
  */
 export async function maybeRunDigest(opts: {
   prisma: LitePrisma;
@@ -291,12 +352,15 @@ export async function maybeRunDigest(opts: {
   scopeId: string;
   env: NodeJS.ProcessEnv;
   reason: "startup" | "threshold";
+  digestLlm?: DigestChatModel;
 }): Promise<void> {
-  const { prisma, userId, scopeId, env, reason } = opts;
+  const { prisma, userId, scopeId, env, reason, digestLlm } = opts;
   try {
     const digestEnv = readDigestEnv(env);
-    const effectiveApiKey = digestEnv.structuredOutputApiKey ?? digestEnv.apiKey;
-    if (!digestEnv.featureLlm || !effectiveApiKey) return;
+    if (!digestLlm) {
+      const effectiveApiKey = digestEnv.structuredOutputApiKey ?? digestEnv.apiKey;
+      if (!digestEnv.featureLlm || !effectiveApiKey) return;
+    }
 
     const lastDigest = await prisma.digest.findFirst({
       where: { scopeId },
@@ -327,11 +391,15 @@ export async function maybeRunDigest(opts: {
 
     running = true;
     try {
-      await runDigestPipeline(prisma, userId, scopeId, digestEnv);
+      if (digestLlm) {
+        await runDigestPipelineCore(prisma, userId, scopeId, digestLlm);
+      } else {
+        await runDigestPipeline(prisma, userId, scopeId, digestEnv);
+      }
     } finally {
-      // Always runs once the lock is held, whether runDigestPipeline
-      // resolved or threw — release on failure too, so a crashed run doesn't
-      // strand the scope for the full 30-minute stale-lock reap.
+      // Always runs once the lock is held, whether the pipeline resolved or
+      // threw — release on failure too, so a crashed run doesn't strand the
+      // scope for the full 30-minute stale-lock reap.
       running = false;
       await releaseDigestLock(prisma, scopeId);
     }

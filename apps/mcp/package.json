@@ -30,6 +30,20 @@
   "bin": {
     "statecore-mcp": "dist/main.js"
   },
+  "exports": {
+    ".": "./dist/main.js",
+    "./lib": {
+      "import": {
+        "types": "./dist/lib.d.mts",
+        "default": "./dist/lib.mjs"
+      },
+      "require": {
+        "types": "./dist/lib.d.ts",
+        "default": "./dist/lib.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "schema.lite.prisma",
