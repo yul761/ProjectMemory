@@ -145,6 +145,8 @@ over the [Model Context Protocol](https://modelcontextprotocol.io) — no
 running server required. It runs the engine embedded (one process, one SQLite
 file), keylessly by default:
 
+![statecore-mcp demo: remember, facts, why, forget — all keyless](https://raw.githubusercontent.com/yul761/StateCore/main/apps/mcp/demo/statecore-demo.gif)
+
 ```bash
 npx -y statecore-mcp --data ~/.statecore
 ```

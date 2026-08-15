@@ -6,6 +6,10 @@ Auditable memory for coding agents, over the [Model Context Protocol](https://mo
 
 ## 30-second keyless demo
 
+![statecore-mcp demo: remember, facts, why, forget — all keyless](https://raw.githubusercontent.com/yul761/StateCore/main/apps/mcp/demo/statecore-demo.gif)
+
+Every result in the recording is live tool output — [demo/driver.mjs](demo/driver.mjs) drives a real server over stdio, and `demo/statecore-demo.cast` is the asciinema source.
+
 ```bash
 npx -y statecore-mcp --data /tmp/statecore-demo
 ```
