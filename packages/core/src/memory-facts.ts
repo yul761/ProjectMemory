@@ -69,10 +69,13 @@ export function flattenScopeFacts(state: DigestState, dropLog?: DropRecord[], pa
     }
   }
 
-  // 2) Bare profile facet strings (no id, no timestamp).
+  // 2) Bare profile facet strings (no id, no timestamp). Resolved against the
+  // same `pack` as source 1 above (previously defaulted, silently dropping
+  // every facet from a non-default pack that the default pack has no group
+  // for — see the regression test for the concrete case).
   const profile = state.profile ?? {};
   for (const [facet, values] of Object.entries(profile)) {
-    const group = factToGroup(facet);
+    const group = factToGroup(facet, pack);
     if (!group || !Array.isArray(values)) continue;
     for (const text of values) {
       const factKey = computeFactKey(group, text);

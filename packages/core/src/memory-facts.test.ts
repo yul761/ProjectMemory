@@ -7,6 +7,7 @@ import {
   pruneForgottenFacts
 } from "./memory-facts";
 import type { DigestState } from "./digest-control";
+import type { FacetPack } from "./facet-registry";
 
 describe("computeFactKey", () => {
   it("is stable across case and whitespace differences", () => {
@@ -71,6 +72,44 @@ describe("flattenScopeFacts", () => {
     const supplier = facts.find((f) => f.text === "Call the supplier about Q3")!;
     expect(supplier.group).toBe("People");
     expect(supplier.createdAt).toBeNull();
+  });
+
+  // Regression: source 1 (factRegistry entries, above) resolved a facet's
+  // display group against the `pack` argument; source 2 (bare `state.profile`
+  // strings) called `factToGroup(facet)` with no pack, silently defaulting to
+  // `getDefaultFacetPack()`. Invisible while every deployment used the
+  // default pack (facet lookup landed in the same pack either way); apps/mcp
+  // selects a non-default "project" pack, so a bare profile-facet fact whose
+  // facet exists only in that pack was silently dropped — `factToGroup`
+  // found no such facet in the default pack and returned null, and the
+  // `!group` branch discards with no drop-log entry. Fixed by passing `pack`
+  // through, matching source 1.
+  it("resolves bare profile-facet strings against a non-default pack, not the default pack", () => {
+    const projectPack: FacetPack = {
+      name: "project",
+      facets: [
+        { name: "milestone", cap: 8, writeProtected: false, displayGroup: "Milestones", description: "Project milestones" }
+      ]
+    };
+    const state: DigestState = {
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      factRegistry: [],
+      profile: { milestone: ["Ship v1 by end of quarter"] }
+    };
+
+    // "milestone" has no group in the default pack — the pre-fix behavior
+    // silently dropped it.
+    expect(factToGroup("milestone")).toBeNull();
+    expect(flattenScopeFacts(state)).toEqual([]);
+
+    // Resolved against the pack it actually belongs to, the fact survives and
+    // lands in the pack's own display group.
+    const facts = flattenScopeFacts(state, undefined, projectPack);
+    expect(facts).toHaveLength(1);
+    expect(facts[0].text).toBe("Ship v1 by end of quarter");
+    expect(facts[0].group).toBe("Milestones");
   });
 
   it("dedups a fact present in both factRegistry and profile, preferring the factRegistry entry", () => {
