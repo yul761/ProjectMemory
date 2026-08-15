@@ -47,22 +47,25 @@ Both modes resolve **scope** — the memory partition a project's facts live in 
 dsh's harness spawns MCP subprocesses with credential-shaped environment variables stripped from the inherited environment. `MODEL_API_KEY` will not reach the subprocess unless it is written explicitly into the overlay's `config.env` — omitting it silently keeps the server keyless (note-path memory still works; distillation does not).
 
 ```yaml
-# statecore.cordis.yml — a dsh --profile overlay
-plugins:
-  mcp-client:
-    config:
-      servers:
-        statecore:
-          command: npx
-          args: ["-y", "statecore-mcp"]
-          env:
-            # dsh strips ambient credential-shaped env vars before spawning MCP
-            # subprocesses — MODEL_API_KEY must be written here explicitly, or
-            # this server stays keyless (no automatic distillation).
-            FEATURE_LLM: "true"
-            MODEL_API_KEY: "<your-deepseek-or-openai-compatible-key>"
-            MODEL_BASE_URL: "https://api.deepseek.com/v1"
-            MODEL_NAME: "deepseek-chat"
+# statecore.cordis.yml — a dsh --patch overlay, applied via:
+#   dsh web --patch "$PWD/statecore.cordis.yml"
+- insert:
+    - id: memory-statecore
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: statecore
+        transport: stdio
+        command: npx
+        args: ['-y', 'statecore-mcp']
+        cwd: !!js process.cwd()
+        env:
+          FEATURE_LLM: 'true'
+          # dsh strips ambient credential-shaped env vars before spawning MCP
+          # subprocesses — MODEL_API_KEY must be written here explicitly, or
+          # this server stays keyless (no automatic distillation).
+          MODEL_API_KEY: '<your-deepseek-or-openai-compatible-key>'
+          MODEL_BASE_URL: 'https://api.deepseek.com/v1'
+          MODEL_NAME: 'deepseek-chat'
 ```
 
 The digest path never sends `reasoning_effort` unless `MODEL_STRUCTURED_OUTPUT_REASONING_EFFORT` is set explicitly, so a DeepSeek key (or any OpenAI-compatible endpoint that rejects the parameter) works with this config as written.
