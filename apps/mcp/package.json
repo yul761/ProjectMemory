@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "tsx --tsconfig ../../tsconfig.dev.json src/main.ts",
     "build": "tsc -p tsconfig.json",
+    "prebundle": "pnpm --filter @statecore/core --filter @statecore/prompts --filter @statecore/db run build",
     "bundle": "tsup",
     "test": "vitest run"
   },
