@@ -25,7 +25,8 @@ pnpm benchmark        # synthetic memory-quality benchmark suite
 `changeset version` needs a token for its changelog generator:
 `GITHUB_TOKEN="$(gh auth token)" pnpm exec changeset version`. Releases are manual
 — version, commit, tag with `apps/api`'s version, `gh release create`. Every
-package is `private: true`; nothing publishes to npm.
+package is `private: true` except `apps/mcp` (`statecore-mcp`), the one package
+that publishes to npm — see `apps/mcp/README.md`.
 
 ## Module resolution — read before touching package.json or tsconfig
 
@@ -140,6 +141,7 @@ user's scopes via `GET /scopes` (auth header `x-user-id`).
 ## Architecture quick-ref
 - `apps/api` (`@statecore/api`) — NestJS HTTP server, port 3002; serves the stable `/v1` API
 - `apps/worker` (`@statecore/worker`) — BullMQ background workers (digest, working memory, reminders)
+- `apps/mcp` (`statecore-mcp`) — MCP front end; embedded (SQLite, keyless) by default, or a thin client against `/v1` via `--url`. The one package published to npm
 - `packages/core` — MemoryService, DigestService, RetrieveService, AnswerService, AssistantSession, digest-control pipeline
 - `packages/db` — Prisma schema, migrations, client (Postgres + pgvector)
 - `packages/contracts` — Zod schemas for all API I/O
