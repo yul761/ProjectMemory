@@ -1,6 +1,7 @@
 {
   "name": "statecore-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "mcpName": "io.github.yul761/statecore-mcp",
   "description": "Zero-deploy MCP memory server backed by the StateCore engine \u2014 auditable facts with evidence chains",
   "license": "MIT",
   "repository": {
@@ -34,7 +35,8 @@
     "schema.lite.prisma",
     "lite-bootstrap.sql",
     "README.md",
-    "scripts/postinstall.mjs"
+    "scripts/postinstall.mjs",
+    "server.json"
   ],
   "scripts": {
     "dev": "tsx --tsconfig ../../tsconfig.dev.json src/main.ts",

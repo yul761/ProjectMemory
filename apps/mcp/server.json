@@ -1,0 +1,57 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.yul761/statecore-mcp",
+  "description": "Auditable memory for coding agents: deterministic facts with evidence chains and supersession history, embedded SQLite, keyless by default",
+  "repository": {
+    "url": "https://github.com/yul761/StateCore",
+    "source": "github"
+  },
+  "version": "0.1.2",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "statecore-mcp",
+      "version": "0.1.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "STATECORE_SCOPE",
+          "description": "Override the memory scope name (defaults to the git repository root, else the working directory)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "FEATURE_LLM",
+          "description": "Set to 'true' together with MODEL_* variables to enable background distillation of conversational events; everything else works without it",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "MODEL_API_KEY",
+          "description": "OpenAI-compatible API key for background distillation (DeepSeek, OpenAI, Ollama, ...); not required for core memory, audit, and recall",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "MODEL_BASE_URL",
+          "description": "OpenAI-compatible base URL for the distillation model (e.g. https://api.deepseek.com/v1)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "MODEL_NAME",
+          "description": "Model used for background distillation (e.g. deepseek-chat)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
