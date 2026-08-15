@@ -68,7 +68,9 @@ export {
 } from "./retrieve-budget";
 import type { ChatModel, EmbeddingModel } from "./model-provider";
 
-export const logger = pino({ level: process.env.LOG_LEVEL || "info" });
+// Library code never writes to stdout: stdout is a protocol channel for hosts
+// (MCP stdio, dsh ACP/JSON-RPC). Route all log output to stderr (fd 2).
+export const logger = pino({ level: process.env.LOG_LEVEL || "info" }, pino.destination(2));
 
 export type ProjectStage = "idea" | "build" | "test" | "launch";
 export type MemoryType = "stream" | "document";
