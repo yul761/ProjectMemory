@@ -338,35 +338,53 @@ export async function runScopeDigest(opts: {
 let running = false;
 
 /**
- * Digest trigger: threshold-based on new stream events, plus a startup
- * catch-up (threshold of 1 — any backlog is worth digesting once). No-ops
- * gracefully whenever the LLM isn't configured, so keyless embedded callers
- * never pay for a lock or a query they can't use the result of.
+ * How one `maybeRunDigest` invocation ended: `"ran"` means the pipeline
+ * completed and wrote a digest; each `"skipped-*"` names the gate that
+ * stopped the run before the pipeline started; `"failed"` means a read, the
+ * lock, or the pipeline threw — the error is logged to stderr and the
+ * triggering events remain pending for the next attempt.
+ */
+export type DigestRunOutcome =
+  | "ran"
+  | "skipped-no-llm"
+  | "skipped-below-threshold"
+  | "skipped-locked"
+  | "failed";
+
+/**
+ * Digest trigger: threshold-based on new stream events, plus threshold-1
+ * catch-up paths (`"startup"` on boot, `"explicit"` on caller demand — any
+ * backlog is worth digesting once). No-ops gracefully whenever the LLM isn't
+ * configured, so keyless embedded callers never pay for a lock or a query
+ * they can't use the result of.
  *
  * @param opts.prisma - Lite client for the scope's SQLite file.
  * @param opts.userId - Owning user id.
  * @param opts.scopeId - Scope to consider for a digest run.
  * @param opts.env - Process env carrying `FEATURE_LLM`/`MODEL_*`/`STATECORE_DIGEST_THRESHOLD`.
- * @param opts.reason - `"threshold"` (post-ingest check) or `"startup"` (catch-up on boot).
+ * @param opts.reason - `"threshold"` (post-ingest check), `"startup"`
+ *   (catch-up on boot), or `"explicit"` (caller-demanded catch-up — e.g. a
+ *   host about to compact conversation context out of a model's view).
  * @param opts.digestLlm - Optional injected chat model. When present, the
  *   `FEATURE_LLM`/API-key env gate and env-derived provider construction are
  *   both skipped, and the pipeline runs against this model instead — the
  *   embedded backend's opt-in for a caller supplying its own LLM client.
+ * @returns how the invocation ended; never rejects.
  */
 export async function maybeRunDigest(opts: {
   prisma: LitePrisma;
   userId: string;
   scopeId: string;
   env: NodeJS.ProcessEnv;
-  reason: "startup" | "threshold";
+  reason: "startup" | "threshold" | "explicit";
   digestLlm?: DigestChatModel;
-}): Promise<void> {
+}): Promise<DigestRunOutcome> {
   const { prisma, userId, scopeId, env, reason, digestLlm } = opts;
   try {
     const digestEnv = readDigestEnv(env);
     if (!digestLlm) {
       const effectiveApiKey = digestEnv.structuredOutputApiKey ?? digestEnv.apiKey;
-      if (!digestEnv.featureLlm || !effectiveApiKey) return;
+      if (!digestEnv.featureLlm || !effectiveApiKey) return "skipped-no-llm";
     }
 
     const lastDigest = await prisma.digest.findFirst({
@@ -390,11 +408,11 @@ export async function maybeRunDigest(opts: {
       }
     });
     const threshold = reason === "threshold" ? digestEnv.threshold : 1;
-    if (!shouldDigest(pendingCount, threshold)) return;
+    if (!shouldDigest(pendingCount, threshold)) return "skipped-below-threshold";
 
-    if (running) return;
+    if (running) return "skipped-locked";
     const locked = await acquireDigestLock(prisma, scopeId);
-    if (!locked) return; // another process is already catching this scope up; skipping is harmless
+    if (!locked) return "skipped-locked"; // another process is already catching this scope up; skipping is harmless
 
     running = true;
     try {
@@ -410,6 +428,7 @@ export async function maybeRunDigest(opts: {
       running = false;
       await releaseDigestLock(prisma, scopeId);
     }
+    return "ran";
   } catch (err) {
     // stdout is the MCP protocol channel; diagnostics go to stderr only.
     // Every await above this catch — including the pending-count reads and
@@ -421,5 +440,6 @@ export async function maybeRunDigest(opts: {
     // triggering events stay in the store, so the next threshold/startup
     // check retries them.
     console.error("[statecore-mcp] digest run failed", err);
+    return "failed";
   }
 }

@@ -19,6 +19,15 @@ surface. `docs/api.md` owns the rule.
 ## [Unreleased]
 
 ### Added
+- `statecore-mcp@0.3.0` — `MemoryBackend.digestNow()`: a caller-demanded,
+  threshold-1 digest pass with an honest outcome union
+  (`{ ran } | { ran: false, reason }`), for hosts at a moment when raw context
+  is about to leave a model's view (the dsh-statecore compaction consumer is
+  the motivating caller). Embedded mode waits out the startup catch-up pass
+  first instead of reporting a spurious lock collision; remote mode reports
+  `unsupported` because the server deployment's worker owns digest scheduling.
+  `maybeRunDigest` now returns a `DigestRunOutcome` instead of `void` and
+  accepts an `"explicit"` reason.
 - `statecore-mcp@0.2.0` — a public library entry, `statecore-mcp/lib`, exposing
   the embedded and HTTP memory backends, scope resolution, and an
   injectable-LLM digest runner. Built for

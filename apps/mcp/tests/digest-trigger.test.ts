@@ -47,7 +47,7 @@ describe("digest trigger", () => {
           env: { FEATURE_LLM: "true", MODEL_API_KEY: "test-key" } as any,
           reason: "threshold"
         })
-      ).resolves.toBeUndefined();
+      ).resolves.toBe("failed"); // resolves (never rejects), reporting the failure as an outcome
 
       expect(errorSpy).toHaveBeenCalledWith("[statecore-mcp] digest run failed", expect.any(Error));
     } finally {

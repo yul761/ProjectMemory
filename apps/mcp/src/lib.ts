@@ -8,6 +8,6 @@
  */
 export { createEmbeddedBackend } from "./embedded";
 export { createHttpBackend } from "./http-backend";
-export type { MemoryBackend } from "./backend";
+export type { MemoryBackend, DigestNowResult } from "./backend";
 export { resolveScopeName } from "./scope";
-export { runScopeDigest, type DigestChatModel } from "./digest";
+export { runScopeDigest, type DigestChatModel, type DigestRunOutcome } from "./digest";

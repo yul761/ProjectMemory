@@ -232,6 +232,10 @@ export function createEmbeddedBackend(opts: {
 }): MemoryBackend {
   let store: Store;
   let scopeId: string;
+  // Held so digestNow can wait out the startup pass instead of colliding
+  // with its threshold-1 runs on the shared in-process digest lock and
+  // reporting a spurious "locked" for what is really "already being handled".
+  let startupCatchUp: Promise<void> = Promise.resolve();
 
   async function latestState(): Promise<{ id: string; state: DigestState } | null> {
     const snap = await store.prisma.digestStateSnapshot.findFirst({ where: { scopeId }, orderBy: { createdAt: "desc" } });
@@ -263,7 +267,7 @@ export function createEmbeddedBackend(opts: {
           undefined,
           "project"
         )).id;
-      void runStartupDigestCatchUp(store.prisma, opts.env, opts.digestLlm);
+      startupCatchUp = runStartupDigestCatchUp(store.prisma, opts.env, opts.digestLlm);
     },
 
     async remember({ text, consolidate }) {
@@ -367,6 +371,33 @@ export function createEmbeddedBackend(opts: {
     async why({ factId }) {
       const snap = await latestState();
       return snap ? buildFactProvenance(snap.state, factId) : null;
+    },
+
+    async digestNow() {
+      // Wait out the startup pass first: colliding with its threshold-1 runs
+      // would report "locked" for a backlog that pass is already digesting.
+      // runStartupDigestCatchUp never rejects, so this await cannot throw.
+      await startupCatchUp;
+      const outcome = await maybeRunDigest({
+        prisma: store.prisma,
+        userId: USER,
+        scopeId,
+        env: opts.env,
+        reason: "explicit",
+        digestLlm: opts.digestLlm
+      });
+      switch (outcome) {
+        case "ran":
+          return { ran: true };
+        case "skipped-no-llm":
+          return { ran: false, reason: "no-llm" };
+        case "skipped-below-threshold":
+          return { ran: false, reason: "below-threshold" };
+        case "skipped-locked":
+          return { ran: false, reason: "locked" };
+        case "failed":
+          return { ran: false, reason: "failed" };
+      }
     },
 
     async forget({ factKey }) {

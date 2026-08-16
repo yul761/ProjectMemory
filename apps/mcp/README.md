@@ -119,6 +119,15 @@ Add to `.cursor/mcp.json` (project) or your global MCP settings:
 
 Drop the `env` block entirely to run keyless.
 
+## Library entry (`statecore-mcp/lib`)
+
+For embedding the engine in-process instead of talking MCP over stdio — the surface [dsh-statecore](https://github.com/yul761/dsh-statecore) is built on:
+
+- `createEmbeddedBackend` / `createHttpBackend` — the two `MemoryBackend` implementations, with an injectable `digestLlm` (a `DigestChatModel`) replacing the env-derived model on the embedded path
+- `resolveScopeName` — the git-root/cwd project-scope rule, shared so co-installed front ends land in the same scope
+- `runScopeDigest` — one locked digest pass against an injected chat model
+- `MemoryBackend.digestNow()` — a caller-demanded, threshold-1 digest pass with an honest outcome (`{ ran: true }` or `{ ran: false, reason }`), for moments when raw context is about to leave a model's view (a host compacting its conversation). Embedded mode waits out startup catch-up first; `--url` mode reports `unsupported` because the server deployment's worker owns digest scheduling.
+
 ## Limitations
 
 - **Lite retrieval is keyword + CJK bigram, not semantic.** The embedded backend runs on SQLite and has no pgvector. `recall` still returns a budgeted digest, believed facts, and matching events, but it will not find a paraphrase with no matching tokens the way the full stack's semantic search can.

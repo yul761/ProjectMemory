@@ -1,6 +1,6 @@
 {
   "name": "statecore-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "mcpName": "io.github.yul761/statecore-mcp",
   "description": "Zero-deploy MCP memory server backed by the StateCore engine — auditable facts with evidence chains",
   "license": "MIT",

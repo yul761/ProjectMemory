@@ -96,6 +96,13 @@ export function createHttpBackend(opts: { baseUrl: string; userId: string; scope
       return call("POST", "/v1/memory/facts/forget", { scopeId, factKey });
     },
 
+    async digestNow() {
+      // The server deployment's worker (apps/worker) owns digest scheduling
+      // for every scope it knows, and the frozen /v1 surface exposes no
+      // trigger endpoint — report that honestly instead of pretending to run.
+      return { ran: false, reason: "unsupported" } as const;
+    },
+
     async close() {
       // Nothing to release: every call above is a one-shot fetch, no held connection.
     }

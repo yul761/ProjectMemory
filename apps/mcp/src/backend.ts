@@ -15,8 +15,29 @@ export interface MemoryBackend {
   why(input: { factId: string }): Promise<unknown>;
   /** Retires a fact by its `factKey` and suppresses its evidence event; the record is kept, not deleted. */
   forget(input: { factKey: string }): Promise<{ ok: true }>;
+  /**
+   * Demands a digest pass now, regardless of the pending-event threshold —
+   * for callers at a moment when raw context is about to disappear from a
+   * model's view (e.g. a host compacting its conversation). Never rejects.
+   * Embedded mode reports how the run ended; remote mode reports
+   * `{ ran: false, reason: "unsupported" }` because the server deployment's
+   * worker owns digest scheduling and the frozen `/v1` surface exposes no
+   * trigger.
+   */
+  digestNow(): Promise<DigestNowResult>;
   /** Ensures the backend's scope exists and kicks off startup digest catch-up. */
   init(): Promise<void>;
   /** Releases the backend's resources (its store connection). */
   close(): Promise<void>;
 }
+
+/**
+ * Outcome of one {@link MemoryBackend.digestNow} demand. `ran: true` means a
+ * digest pipeline completed and wrote its result; otherwise `reason` names
+ * why nothing was written: no usable LLM, nothing pending, another run
+ * holding the lock, a failed pipeline (logged to stderr, events left pending
+ * for retry), or a backend mode with no digest trigger at all.
+ */
+export type DigestNowResult =
+  | { ran: true }
+  | { ran: false; reason: "no-llm" | "below-threshold" | "locked" | "failed" | "unsupported" };
