@@ -69,6 +69,12 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
+      # apps/mcp's dts build types its store against the lite client
+      # (@statecore/db/generated/client-lite); without it the Prisma delegate
+      # callbacks degrade to implicit any and `pnpm build` fails with TS7006.
+      - name: Generate Prisma lite client
+        run: pnpm db:generate:lite
+
       - name: Build workspace
         run: pnpm build
 

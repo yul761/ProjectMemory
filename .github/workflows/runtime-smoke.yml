@@ -92,6 +92,12 @@ jobs:
         if: steps.gate.outputs.present == 'true'
         run: pnpm db:generate
 
+      # apps/mcp's dts build needs the lite client or `pnpm build` fails
+      # with TS7006 (see integration-smoke.yml).
+      - name: Generate Prisma lite client
+        if: steps.gate.outputs.present == 'true'
+        run: pnpm db:generate:lite
+
       - name: Build workspace
         if: steps.gate.outputs.present == 'true'
         run: pnpm build

@@ -92,6 +92,17 @@ jobs:
         if: steps.gate.outputs.present == 'true'
         run: pnpm install --frozen-lockfile
 
+      # Both generated Prisma clients must exist before a repo-wide build:
+      # packages/db needs the full client, apps/mcp's dts build needs the
+      # lite client (missing either fails `pnpm build`).
+      - name: Generate Prisma client
+        if: steps.gate.outputs.present == 'true'
+        run: pnpm db:generate
+
+      - name: Generate Prisma lite client
+        if: steps.gate.outputs.present == 'true'
+        run: pnpm db:generate:lite
+
       - name: Build workspace
         if: steps.gate.outputs.present == 'true'
         run: pnpm build

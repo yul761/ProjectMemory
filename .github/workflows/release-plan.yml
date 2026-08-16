@@ -25,6 +25,11 @@ jobs:
       - name: Generate Prisma client
         run: pnpm db:generate
 
+      # apps/mcp's dts build needs the lite client or `pnpm build` fails
+      # with TS7006 (see integration-smoke.yml).
+      - name: Generate Prisma lite client
+        run: pnpm db:generate:lite
+
       - name: Build workspace
         run: pnpm build
 
