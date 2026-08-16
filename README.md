@@ -156,6 +156,8 @@ it against a full StateCore deployment via `--url` for shared/multi-agent
 memory. Full docs, host configs, and the keyless/keyed capability matrix:
 [`apps/mcp/README.md`](apps/mcp/README.md).
 
+**Team memory:** one self-hosted deployment as the shared project brain for every agent your team runs — dsh sessions, Claude Code, CI — with one audit trail across all of them: [`docs/team-memory.md`](docs/team-memory.md).
+
 ## Architecture
 
 ```
