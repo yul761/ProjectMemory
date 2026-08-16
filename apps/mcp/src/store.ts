@@ -99,3 +99,21 @@ export async function openStore(dataDir: string): Promise<Store> {
   }
   return { prisma, close: () => prisma.$disconnect() };
 }
+
+/**
+ * All project scopes in the embedded store at `dataDir`, sorted by name —
+ * the store-level view a memory admin surface lists before drilling into one
+ * scope's facts. Opens its own short-lived connection (WAL + busy timeout
+ * make the concurrent read safe next to live per-scope backends) and always
+ * closes it.
+ * @param dataDir - directory holding the embedded SQLite store.
+ * @returns scope rows, `id` for API calls and `name` (the project path) for display.
+ */
+export async function listScopes(dataDir: string): Promise<Array<{ id: string; name: string }>> {
+  const store = await openStore(dataDir);
+  try {
+    return await store.prisma.projectScope.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  } finally {
+    await store.close();
+  }
+}

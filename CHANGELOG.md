@@ -27,7 +27,9 @@ surface. `docs/api.md` owns the rule.
   first instead of reporting a spurious lock collision; remote mode reports
   `unsupported` because the server deployment's worker owns digest scheduling.
   `maybeRunDigest` now returns a `DigestRunOutcome` instead of `void` and
-  accepts an `"explicit"` reason.
+  accepts an `"explicit"` reason. Also adds `listScopes(dataDir)` — the
+  store-level scope listing a memory admin surface (dsh-statecore's settings
+  panel) enumerates before drilling into one scope's facts.
 - `statecore-mcp@0.2.0` — a public library entry, `statecore-mcp/lib`, exposing
   the embedded and HTTP memory backends, scope resolution, and an
   injectable-LLM digest runner. Built for

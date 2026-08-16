@@ -132,3 +132,29 @@ describe("statecore-mcp/lib export surface", () => {
     }
   });
 });
+
+describe("listScopes", () => {
+  it("lists every scope in the store by name, and an empty store yields []", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { listScopes } = await import("../src/lib");
+    const dataDir = mkdtempSync(join(tmpdir(), "sc-mcp-listscopes-"));
+    try {
+      expect(await listScopes(dataDir)).toEqual([]);
+
+      const store = await openStore(dataDir);
+      try {
+        await store.prisma.user.upsert({ where: { identity: USER }, update: {}, create: { id: USER, identity: USER } });
+        await store.prisma.projectScope.create({ data: { userId: USER, name: "/proj/beta", template: "project" } });
+        await store.prisma.projectScope.create({ data: { userId: USER, name: "/proj/alpha", template: "project" } });
+      } finally {
+        await store.close();
+      }
+
+      const scopes = await listScopes(dataDir);
+      expect(scopes.map((scope) => scope.name)).toEqual(["/proj/alpha", "/proj/beta"]);
+      expect(scopes.every((scope) => typeof scope.id === "string" && scope.id.length > 0)).toBe(true);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+});
