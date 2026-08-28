@@ -4,7 +4,31 @@
 [![Integration Smoke](https://github.com/yul761/StateCore/actions/workflows/integration-smoke.yml/badge.svg)](https://github.com/yul761/StateCore/actions/workflows/integration-smoke.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-StateCore is a self-hosted, low-drift long-term memory runtime for AI systems using local or BYO models. It turns memory from accumulated text into controlled state: events are ingested, run through a digest control pipeline, merged into protected stable state, and retrieved with grounded evidence — all over a stable HTTP API you can deploy yourself.
+**Auditable memory for coding agents and AI systems.** Every fact StateCore holds carries its evidence, its version chain, and a recorded reason for every discard — so "why do you believe this, and what did you believe before?" always has an answer.
+
+StateCore is a self-hosted, low-drift long-term memory runtime for local or BYO models. It turns memory from accumulated text into governed state: events are ingested, run through a deterministic digest pipeline, and merged into protected stable state. **The LLM proposes; the pipeline decides.**
+
+## Try it in 30 seconds
+
+No server, no signup, no model key — one SQLite file over MCP:
+
+```bash
+claude mcp add statecore -- npx -y statecore-mcp     # Claude Code
+```
+
+![statecore-mcp demo: remember, facts, why, forget — all keyless](https://raw.githubusercontent.com/yul761/StateCore/main/apps/mcp/demo/statecore-demo.gif)
+
+`remember` a decision in one session, ask `why` in the next: you get the fact, the evidence behind it, and its version history — superseded and retired facts stay on the record, marked, never deleted. Configs for Cursor, dsh, and every other MCP host: [`apps/mcp/README.md`](apps/mcp/README.md).
+
+## Capture is easy. Trust is hard.
+
+Most agent-memory tools compete on capturing more — hook every event, compress the transcript, inject it back. Capture is the solved half of the problem. The unsolved half is what those tools' own issue trackers are full of: memories that silently stop being written, stale decisions injected as if still current, cross-project leakage, and no way to audit or repair what the store believes.
+
+StateCore is built for that second half:
+
+- **Nothing is silently lost.** Every discard is logged against a fixed set of reasons; every replaced fact keeps a `supersededBy` chain; retired facts are marked, never deleted.
+- **Nothing is silently believed.** Writes go through a deterministic pipeline with consistency gates — an LLM proposal alone cannot promote itself into stable state.
+- **Everything is checkable.** `why` returns a fact's evidence and full version history; a digest's selection report shows exactly what it kept and dropped.
 
 ## Features
 

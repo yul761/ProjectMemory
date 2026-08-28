@@ -119,6 +119,24 @@ Add to `.cursor/mcp.json` (project) or your global MCP settings:
 
 Drop the `env` block entirely to run keyless.
 
+### Troubleshooting: `command not found` from inside a monorepo
+
+`npx -y statecore-mcp` resolves through the **current working directory's** npm
+workspace before it falls back to the registry. Launched from the root of a
+monorepo whose `package.json` declares `workspaces`, npm may resolve the name
+locally, find no bin link, and fail with `sh: statecore-mcp: command not found`
+— while the same command works from any other directory. The symptom in an MCP
+client is a silent `CONNECTION_CLOSED` at startup.
+
+If you hit this (or want startup that never touches the npm registry), install
+globally and point your MCP config at the bare command instead of npx:
+
+```bash
+npm install -g statecore-mcp
+claude mcp remove statecore
+claude mcp add statecore -- statecore-mcp
+```
+
 ## Library entry (`statecore-mcp/lib`)
 
 For embedding the engine in-process instead of talking MCP over stdio — the surface [dsh-statecore](https://github.com/yul761/dsh-statecore) is built on:
