@@ -58,7 +58,7 @@ describe("docs state the surface the registry defines", () => {
 
 describe("docs describe the data model the code declares", () => {
   it("digest-state.md names every top-level DigestState field", () => {
-    const source = read("packages/core/src/digest-control.ts");
+    const source = read("packages/core/src/digest/types.ts");
     const start = source.indexOf("export interface DigestState {");
     expect(start).toBeGreaterThan(-1);
     const body = source.slice(start, source.indexOf("\n}", start));
