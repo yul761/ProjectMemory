@@ -4,6 +4,8 @@ StateCore includes a reproducible benchmark runner for research-facing claims (l
 
 This page covers the internal synthetic suite. The external comparison — LongMemEval against mem0 OSS at an equal context budget — lives in [longmemeval.md](longmemeval.md), with its harness in a separate repository. The two answer different questions: this suite tracks regressions in one engine across commits; the external run compares systems.
 
+The synthetic suite is **saturated by design**: every scenario scores 1.000 on the current engine. Read it as a tripwire, not a scoreboard — a run below 1.000 means a change broke retention, stability, or retrieval; a run at 1.000 carries no further information. Do not cite its scores as evidence of capability; cite LongMemEval.
+
 In the three-layer architecture, benchmark output should be read as separating:
 
 - Fast Layer turn latency

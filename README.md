@@ -40,7 +40,7 @@ StateCore is built for that second half:
 - **Replaceable ontology** — facets come from a pack resolved per tenant and scope, so the engine stores, protects and supersedes without knowing what a facet means
 - **Retrieval** — hybrid keyword + optional pgvector semantic search over events and digests, packed into a caller-declared character budget that reports what it refused
 - **Reminders** — daily reminder job surfaces follow-up items from active scopes
-- **Benchmarks** — built-in synthetic memory quality suite (fact retention, goal stability, decision continuity, retrieval MRR), plus a published LongMemEval comparison
+- **Benchmarks** — a published [LongMemEval comparison](docs/longmemeval.md) against mem0 OSS at an equal context budget, plus a built-in synthetic regression suite that guards fact retention, goal stability, decision continuity, and retrieval MRR across commits
 - **MCP server** — `statecore-mcp`, a zero-deploy [Model Context Protocol](https://modelcontextprotocol.io) front end for coding agents; keyless by default, one SQLite file, no infrastructure
 
 ## Quickstart
@@ -220,11 +220,16 @@ Run the full latency + memory quality benchmark:
 pnpm benchmark
 ```
 
-Run the synthetic memory quality evaluation (no LLM required):
+Run the synthetic regression suite (no LLM required):
 
 ```bash
 pnpm --filter @statecore/core eval
 ```
+
+The synthetic suite is a regression guard, not a capability benchmark: every
+scenario scores 1.000 on the current engine, deliberately — its job is to fail
+when a change breaks retention, stability, or retrieval, not to rank systems.
+The comparison that ranks systems is LongMemEval, below.
 
 Benchmark methodology: `docs/benchmarking.md`
 

@@ -1,3 +1,11 @@
+// REGRESSION GUARD, not a capability benchmark. Every scenario scores 1.000 on
+// the current engine — the suite is saturated, deliberately. A score below
+// 1.000 means a change broke fact retention, goal stability, decision
+// continuity, or retrieval ranking; a score at 1.000 proves nothing beyond
+// "still not broken". The digest here (`runMiniDigest`) is deterministic — no
+// LLM — and `containsFact` matches at 70% token overlap, so these scenarios
+// cannot rank systems or demonstrate quality. The comparison that ranks
+// systems is docs/longmemeval.md.
 import { protectedStateMerge, extractKind, importanceForKind, type DigestState, type MemoryEventKind } from "../digest-control";
 import { RetrieveService } from "../index";
 import type { MemoryEvent } from "../index";
