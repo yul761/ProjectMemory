@@ -82,6 +82,7 @@ docs/benchmarking.md        Benchmark methodology
 docs/evaluation-metrics.md  Evaluation metrics specification
 docs/evaluation-protocol.md Evaluation protocol
 docs/longmemeval.md         Published LongMemEval results vs mem0 OSS
+docs/team-memory.md         One shared deployment as the team's agent memory
 docs/runtime-profile-ablation-guide.md  Runtime profile ablations
 docs/research-overview.md   Research framing
 docs/research-questions.md  Open research questions
