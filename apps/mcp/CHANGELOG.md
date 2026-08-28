@@ -1,5 +1,30 @@
 # statecore-mcp
 
+## 0.4.0
+
+### Minor Changes
+
+- `remember` now supersedes revisions instead of accumulating near-duplicates.
+  When a new note reads as a revision of an active one — most of the note
+  matches and only a value moved, "API v1 key…" → "API v2 key…" — it replaces
+  that note in the active set and the registry chains old → new via
+  `supersededBy`; the old version stays on the record, marked, never deleted,
+  and `why` shows the full chain. The matcher keeps short numeric tokens, so
+  genuinely distinct short notes ("note-0" vs "note-1") still coexist, and a
+  note whose ASCII payload diverges (PostgreSQL vs MySQL behind similar CJK
+  context) is treated as a different fact. The `remember` result reports
+  `superseded: <old content>` when a chain was created. Exact re-remembers
+  remain idempotent no-ops.
+
+- Ship system-prompt instructions in the MCP initialize response. Hosts that
+  support the field (Claude Code among them) inject them into the model's
+  system prompt every session, so a bare `mcp add` install now teaches the
+  model when to act without any extra configuration: call `recall` at session
+  start, call `remember` unprompted at the trigger moments (a preference
+  stated, a decision made, a gotcha discovered, session-end state worth
+  keeping), store the corrected version when a fact changes and let the engine
+  chain revisions, and never store secrets. Tool behavior is unchanged.
+
 ## 0.2.0
 
 > Housekeeping note: 0.1.0–0.1.2 were versioned by hand before Changesets

@@ -19,6 +19,14 @@ surface. `docs/api.md` owns the rule.
 ## [Unreleased]
 
 ### Added
+- `statecore-mcp@0.4.0` — the initialize response now ships system-prompt
+  `instructions` (hosts inject them each session: recall at session start,
+  remember at named trigger moments, never store secrets), and `remember`
+  supersedes note revisions deterministically — the old version stays on the
+  auditable chain and the result reports `superseded`. Engine-side change in
+  `@statecore/core`'s `addNoteFact` (short-token-preserving revision matcher),
+  shipped to keyless installs through the bundle. Details:
+  `apps/mcp/CHANGELOG.md`.
 - `statecore-mcp@0.3.0` — `MemoryBackend.digestNow()`: a caller-demanded,
   threshold-1 digest pass with an honest outcome union
   (`{ ran } | { ran: false, reason }`), for hosts at a moment when raw context
