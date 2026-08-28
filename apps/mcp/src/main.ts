@@ -1,12 +1,11 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import pkg from "../package.json";
 import { createEmbeddedBackend } from "./embedded";
 import { createHttpBackend } from "./http-backend";
 import { resolveScopeName } from "./scope";
-import { registerTools } from "./tools";
+import { createServer } from "./server";
 import type { MemoryBackend } from "./backend";
 
 /** `--data <dir>` and `--url <base>` from `argv` (already sliced past node/script). Missing flags resolve to defaults, not this parser. */
@@ -39,8 +38,7 @@ async function main(): Promise<void> {
   const backend = resolveBackend(args, process.env);
   await backend.init();
 
-  const server = new McpServer({ name: "statecore", version: pkg.version });
-  registerTools(server, backend);
+  const server = createServer(backend, pkg.version);
 
   await server.connect(new StdioServerTransport());
   console.error(`[statecore-mcp] ready over stdio (${args.url ? `remote ${args.url}` : `embedded ${args.dataDir ?? join(homedir(), ".statecore")}`})`);

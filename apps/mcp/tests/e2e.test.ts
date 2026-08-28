@@ -111,6 +111,13 @@ describe("built binary, keyless end-to-end over stdio", () => {
     expect(tools.map((t) => t.name).sort()).toEqual(["facts", "forget", "recall", "remember", "why"]);
   });
 
+  it("initialize ships the system-prompt instructions (hosts inject them per session)", () => {
+    const instructions = client.getInstructions();
+    expect(instructions).toBeTruthy();
+    expect(instructions).toMatch(/recall/);
+    expect(instructions).toMatch(/remember/);
+  });
+
   it("walks remember → facts → why → forget → facts as a real evidence-chain lifecycle", async () => {
     const rememberResult = await client.callTool({ name: "remember", arguments: { text: "The e2e binary works" } });
     const remembered = JSON.parse((rememberResult.content as Array<{ type: string; text: string }>)[0].text);
