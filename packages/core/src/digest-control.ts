@@ -529,6 +529,52 @@ export function sameFactCjkAware(a: string, b: string, threshold: number): boole
   return jaccardSimilarity(a, b) >= threshold && !asciiContentDiverges(a, b);
 }
 
+/**
+ * Note-revision matcher: like tokenize(), but KEEPS short ASCII tokens.
+ * tokenize()'s `length > 2` filter strips version/index tokens ("v1", "90",
+ * "0"), which is exactly the information that distinguishes a revision
+ * ("API v1 key…" → "API v2 key…", most tokens shared) from a genuinely
+ * distinct short note ("note-0" vs "note-1", almost nothing shared). Dedup
+ * must never fuzzy-match notes (data loss); supersession may, because the
+ * matched note survives on the chain.
+ */
+function tokenizeKeepingShortTokens(value: string) {
+  const lower = value.toLowerCase();
+  const cjkTokens: string[] = [];
+  const runs = lower.match(/[一-鿿぀-ヿ가-힯]+/g) ?? [];
+  for (const run of runs) {
+    if (run.length === 1) {
+      cjkTokens.push(run);
+      continue;
+    }
+    for (let i = 0; i < run.length - 1; i += 1) {
+      cjkTokens.push(run.slice(i, i + 2));
+    }
+  }
+  const asciiTokens = normalizeText(value)
+    .split(" ")
+    .map((token) => token.replace(/:+$/g, ""))
+    .filter((token) => token.length > 0);
+  return [...asciiTokens, ...cjkTokens];
+}
+
+const NOTE_REVISION_THRESHOLD = 0.7;
+
+/**
+ * True iff `candidate` reads as a revision of `existing`: the shared portion
+ * dominates (short-token-preserving Jaccard ≥ 0.7) and the ASCII payloads do
+ * not diverge outright (PostgreSQL vs MySQL behind shared CJK context is a
+ * different fact, not a revision).
+ */
+function isNoteRevision(existing: string, candidate: string): boolean {
+  const tokensA = new Set(tokenizeKeepingShortTokens(existing));
+  const tokensB = new Set(tokenizeKeepingShortTokens(candidate));
+  if (tokensA.size === 0 || tokensB.size === 0) return false;
+  const intersection = [...tokensA].filter((token) => tokensB.has(token)).length;
+  const union = new Set([...tokensA, ...tokensB]).size;
+  return union > 0 && intersection / union >= NOTE_REVISION_THRESHOLD && !asciiContentDiverges(existing, candidate);
+}
+
 function evidenceWeight(ref: DigestEvidenceRef) {
   return ref.sourceType === "document" ? 1 : 0.7;
 }
@@ -1498,19 +1544,31 @@ export function applyProfileFactsFromDigest(
   }
 }
 
+/** Result of `addNoteFact`: whether the state changed, and — when the note
+ * superseded an active revision — the content of the note it replaced. */
+export interface AddNoteResult {
+  changed: boolean;
+  superseded?: string;
+}
+
 /**
- * Deterministically appends a user-supplied note to `state.profile.notes`.
+ * Deterministically writes a user-supplied note to `state.profile.notes`.
  *
- * - Returns `false` (no-op) when an exactly-identical (normalized) note already exists.
- *   Explicit notes use EXACT normalized match (trim + collapse whitespace + lowercase)
- *   rather than fuzzy Jaccard dedup. The fuzzy tokenizer strips short numeric tokens
+ * - No-op (`changed: false`) when an exactly-identical (normalized) note already exists.
+ *   Dedup uses EXACT normalized match (trim + collapse whitespace + lowercase),
+ *   never fuzzy Jaccard: the fuzzy tokenizer strips short numeric tokens
  *   (< 3 digits), so "API v1 key…" and "API v2 key…" would otherwise collapse to the
  *   same token set and be silently merged — losing user data.
- * - Enforces the `notes` cap (30); evicts the oldest entry (index 0) plus its
- *   factRegistry record when the cap is reached.
+ * - Supersession: when the note reads as a REVISION of an active note
+ *   (`isNoteRevision`: short-token-preserving Jaccard ≥ 0.7 with the ASCII-divergence
+ *   guard), it replaces that note in the active set and the registry chains
+ *   old → new via `supersededBy`. This is the deterministic write-path
+ *   counterpart of the digest path's `supersedeFact`, and it is safe where fuzzy
+ *   dedup was not: the superseded note stays on the record, marked, never deleted.
+ * - Enforces the `notes` cap (30); evicts the oldest entry (index 0) and retires
+ *   its factRegistry record when the cap is reached.
  * - Promotes the note to the factRegistry as a `profile/notes` entry with
  *   confidence 0.9 so it surfaces via `flattenScopeFacts` with its timestamp.
- * - Returns `true` when the note was successfully added.
  */
 export function addNoteFact(
   state: DigestState,
@@ -1518,9 +1576,9 @@ export function addNoteFact(
   makeId: () => string,
   makeNow: () => string = createDefaultNowFactory(),
   pack: FacetPack = getDefaultFacetPack()
-): boolean {
+): AddNoteResult {
   const value = text.trim();
-  if (!value) return false;
+  if (!value) return { changed: false };
 
   // Normalize helper: trim, collapse internal whitespace, lowercase.
   const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
@@ -1529,13 +1587,46 @@ export function addNoteFact(
   // Explicit notes must use exact match — fuzzy dedup would silently merge notes
   // differing only by short numeric tokens (e.g. "API v1 key…" vs "API v2 key…").
   const existingNotes = state.profile?.notes ?? [];
-  if (existingNotes.some((note) => norm(note) === norm(value))) return false;
+  if (existingNotes.some((note) => norm(note) === norm(value))) return { changed: false };
 
   // Lazy-init profile and notes array.
   if (!state.profile) state.profile = {};
   const profileMap = state.profile as Record<string, string[]>;
   if (!profileMap.notes) profileMap.notes = [];
   const notes = profileMap.notes;
+  if (!state.factRegistry) state.factRegistry = [];
+
+  const registerNote = (supersedes?: FactRegistryEntry): string => {
+    const id = makeId();
+    const entry: FactRegistryEntry = {
+      id,
+      content: value,
+      type: "profile" as const,
+      confidence: 0.9,
+      addedAt: makeNow(),
+      evidenceId: makeId(),
+      evidenceType: "event" as const,
+      facet: "notes"
+    };
+    state.factRegistry!.push(entry);
+    if (supersedes) supersedes.supersededBy = id;
+    return id;
+  };
+
+  // Supersession: a new note that reads as a revision of an active note replaces
+  // it in place instead of accumulating beside it. Matching runs over
+  // `profile.notes` (the active set by construction), so retired and superseded
+  // versions can never be matched again.
+  const revisionIdx = notes.findIndex((note) => isNoteRevision(note, value));
+  if (revisionIdx !== -1) {
+    const superseded = notes[revisionIdx];
+    notes[revisionIdx] = value;
+    const oldEntry = state.factRegistry.find(
+      (e) => !e.supersededBy && !e.retiredAt && e.facet === "notes" && norm(e.content) === norm(superseded)
+    );
+    registerNote(oldEntry);
+    return { changed: true, superseded };
+  }
 
   // Cap enforcement: evict the oldest entry (index 0) and retire its registry
   // record. Retiring rather than deleting keeps the audit chain intact — the
@@ -1553,25 +1644,12 @@ export function addNoteFact(
   // helper calls isInFactRegistry which uses fuzzy Jaccard, which would prevent distinct
   // notes like "note-1" from being registered if a fuzzy-similar "note-0" already exists.
   // Instead, push directly with a facet-scoped exact-match guard.
-  if (!state.factRegistry) state.factRegistry = [];
   const alreadyRegistered = state.factRegistry.some(
     (e) => !e.supersededBy && e.facet === "notes" && norm(e.content) === norm(value)
   );
-  if (!alreadyRegistered) {
-    const evidenceId = makeId();
-    state.factRegistry.push({
-      id: makeId(),
-      content: value,
-      type: "profile" as const,
-      confidence: 0.9,
-      addedAt: makeNow(),
-      evidenceId,
-      evidenceType: "event" as const,
-      facet: "notes"
-    });
-  }
+  if (!alreadyRegistered) registerNote();
 
-  return true;
+  return { changed: true };
 }
 
 function mergeGoalUpdate(next: DigestState, goal: string, evidence: DigestEvidenceRef) {

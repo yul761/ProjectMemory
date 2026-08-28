@@ -60,7 +60,11 @@ describe("fact retirement", () => {
     const cap = 30;
 
     for (let i = 0; i < cap + 1; i++) {
-      addNoteFact(state, `第 ${i} 条互不相同的长期笔记内容`, () => `id-${n++}`, NOW);
+      // Each note gets its own CJK topic character: notes differing only by an
+      // index amid identical context would (correctly) supersede each other
+      // under note-revision matching, and this test needs cap+1 distinct notes.
+      const topic = String.fromCharCode(0x4e00 + i * 13);
+      addNoteFact(state, `主题${topic}的笔记`, () => `id-${n++}`, NOW);
     }
 
     const retired = state.factRegistry!.filter((e) => e.retiredAt);

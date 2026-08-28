@@ -275,8 +275,11 @@ export function createEmbeddedBackend(opts: {
         // Mirrors apps/api/src/memory-facts.service.ts#addNote; keep in sync.
         const snap = await latestState();
         const pack = await packFor();
+        let superseded: string | undefined;
         if (snap) {
-          if (addNoteFact(snap.state, text, () => randomUUID(), () => new Date().toISOString(), pack)) {
+          const result = addNoteFact(snap.state, text, () => randomUUID(), () => new Date().toISOString(), pack);
+          superseded = result.superseded;
+          if (result.changed) {
             await store.prisma.digestStateSnapshot.update({
               where: { id: snap.id },
               data: { state: snap.state as any }
@@ -292,7 +295,7 @@ export function createEmbeddedBackend(opts: {
             });
           });
         }
-        return { ok: true, mode: "note" };
+        return superseded !== undefined ? { ok: true, mode: "note", superseded } : { ok: true, mode: "note" };
       }
 
       await new MemoryService(makeMemoryRepo(store.prisma)).ingestEvent({

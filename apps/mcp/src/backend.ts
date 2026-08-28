@@ -6,7 +6,8 @@
  */
 export interface MemoryBackend {
   /** Records a fact. Without `consolidate`, upserts into the active facts snapshot; with it, appends a stream event for later digesting. */
-  remember(input: { text: string; consolidate?: boolean }): Promise<{ ok: true; mode: "note" | "event" }>;
+  /** `superseded`: content of the active note this one replaced (note-revision supersession). */
+  remember(input: { text: string; consolidate?: boolean }): Promise<{ ok: true; mode: "note" | "event"; superseded?: string }>;
   /** The engine's retrieve result for `query`, passed through with an added `budget` reporting the requested `maxChars`. */
   recall(input: { query?: string; maxChars?: number }): Promise<unknown>;
   /** Active facts grouped for display, each item carrying `factKey` and `factId` (the latter for `why`). */

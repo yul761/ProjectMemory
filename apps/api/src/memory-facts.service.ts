@@ -64,7 +64,7 @@ export class MemoryFactsService {
 
     if (snap) {
       const state = snap.state as unknown as DigestState;
-      if (addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString(), await this.packFor(userId, scopeId))) {
+      if (addNoteFact(state, text, () => randomUUID(), () => new Date().toISOString(), await this.packFor(userId, scopeId)).changed) {
         await this.prisma.digestStateSnapshot.update({
           where: { id: snap.id },
           data: { state: state as any }

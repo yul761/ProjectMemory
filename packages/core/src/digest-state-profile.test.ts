@@ -179,7 +179,8 @@ describe("addNoteFact", () => {
   it("adds a note that surfaces under Notes with the given timestamp", () => {
     const s = emptyState();
     const added = addNoteFact(s, "API keys rotate every 90 days", ids(), () => "2026-06-29T00:00:00.000Z");
-    expect(added).toBe(true);
+    expect(added.changed).toBe(true);
+    expect(added.superseded).toBeUndefined();
     const fact = flattenScopeFacts(s).find((f) => f.group === "Notes");
     expect(fact?.text).toBe("API keys rotate every 90 days");
     expect(fact?.createdAt).toBe("2026-06-29T00:00:00.000Z");
@@ -188,7 +189,7 @@ describe("addNoteFact", () => {
     const s = emptyState();
     addNoteFact(s, "API keys rotate every 90 days", ids(), () => "t1");
     const again = addNoteFact(s, "API keys rotate every 90 days", ids(), () => "t2");
-    expect(again).toBe(false);
+    expect(again.changed).toBe(false);
     expect(flattenScopeFacts(s).filter((f) => f.group === "Notes")).toHaveLength(1);
     expect(s.factRegistry!.filter((e) => e.facet === "notes")).toHaveLength(1);
   });
@@ -228,24 +229,98 @@ describe("addNoteFact", () => {
     const make = ids();
     addNoteFact(s, "API v1 key rotates every 90 days", make, () => "t0");
     for (let i = 1; i <= 30; i++) {
-      addNoteFact(s, `unrelated note number ${i} about something else entirely`, make, () => `t${i}`);
+      addNoteFact(s, `note about word${i}x`, make, () => `t${i}`);
     }
     const retired = s.factRegistry!.filter((e) => e.retiredAt);
     expect(retired).toHaveLength(1);
     expect(retired[0].content).toBe("API v1 key rotates every 90 days");
   });
 
-  it("keeps near-but-not-equal notes as distinct entries (exact-match dedup fix)", () => {
-    // Before the fix, fuzzy tokenisation stripped the 1-2 digit version numbers,
-    // so "API v1 key…" and "API v2 key…" collapsed to the same token set and the
-    // second note was silently dropped. Exact-match dedup preserves both.
+  it("supersedes a high-overlap revision and keeps the old version on the chain", () => {
+    // "API v1 key…" → "API v2 key…" is a revision, not a second fact: almost all
+    // context tokens are shared, only the version number moved. The new note
+    // replaces the old one in the active set, and the old one stays on the
+    // record with a supersededBy pointer — nothing is lost, the chain is the point.
     const s = emptyState();
     const make = ids();
     const r1 = addNoteFact(s, "API v1 key rotates every 90 days", make, () => "t1");
     const r2 = addNoteFact(s, "API v2 key rotates every 90 days", make, () => "t2");
-    expect(r1).toBe(true);
-    expect(r2).toBe(true);
+    expect(r1.changed).toBe(true);
+    expect(r2.changed).toBe(true);
+    expect(r2.superseded).toBe("API v1 key rotates every 90 days");
+
+    expect(s.profile!.notes).toEqual(["API v2 key rotates every 90 days"]);
+
+    const entries = s.factRegistry!.filter((e) => e.facet === "notes");
+    expect(entries).toHaveLength(2);
+    const oldEntry = entries.find((e) => e.content === "API v1 key rotates every 90 days")!;
+    const newEntry = entries.find((e) => e.content === "API v2 key rotates every 90 days")!;
+    expect(oldEntry.supersededBy).toBe(newEntry.id);
+    expect(newEntry.supersededBy).toBeUndefined();
+    expect(newEntry.addedAt).toBe("t2");
+
+    const active = flattenScopeFacts(s).filter((f) => f.group === "Notes");
+    expect(active).toHaveLength(1);
+    expect(active[0].text).toBe("API v2 key rotates every 90 days");
+  });
+
+  it("keeps low-overlap notes distinct even when they differ only by a number", () => {
+    // Supersession requires most of the note to match. Short notes whose shared
+    // portion is small ("note-0" vs "note-1": one shared token of three) stay
+    // distinct — the numeric token is preserved by the supersession matcher, so
+    // this is not the silent-merge failure the exact-match dedup fix guarded against.
+    const s = emptyState();
+    const make = ids();
+    const r1 = addNoteFact(s, "note-0", make, () => "t1");
+    const r2 = addNoteFact(s, "note-1", make, () => "t2");
+    expect(r1.changed).toBe(true);
+    expect(r2.changed).toBe(true);
+    expect(r2.superseded).toBeUndefined();
     expect(s.profile!.notes).toHaveLength(2);
-    expect(s.factRegistry!.filter((e) => e.facet === "notes")).toHaveLength(2);
+    expect(s.factRegistry!.filter((e) => e.facet === "notes" && !e.supersededBy)).toHaveLength(2);
+  });
+
+  it("does not supersede across divergent ASCII content behind similar CJK context", () => {
+    // 我决定用PostgreSQL vs 我决定用MySQL: bigram similarity is high, but the
+    // ASCII payloads are disjoint — these are different facts, not a revision.
+    const s = emptyState();
+    const make = ids();
+    addNoteFact(s, "我决定这个项目数据库用PostgreSQL来存储", make, () => "t1");
+    const r2 = addNoteFact(s, "我决定这个项目数据库用MySQL来存储", make, () => "t2");
+    expect(r2.changed).toBe(true);
+    expect(r2.superseded).toBeUndefined();
+    expect(s.profile!.notes).toHaveLength(2);
+  });
+
+  it("supersedes a CJK revision where the context is shared and only the value moves", () => {
+    const s = emptyState();
+    const make = ids();
+    addNoteFact(s, "部署流程改成每周五下午发布到生产环境", make, () => "t1");
+    const r2 = addNoteFact(s, "部署流程改成每周三下午发布到生产环境", make, () => "t2");
+    expect(r2.changed).toBe(true);
+    expect(r2.superseded).toBe("部署流程改成每周五下午发布到生产环境");
+    expect(s.profile!.notes).toEqual(["部署流程改成每周三下午发布到生产环境"]);
+    const entries = s.factRegistry!.filter((e) => e.facet === "notes");
+    const oldEntry = entries.find((e) => e.content.includes("周五"))!;
+    const newEntry = entries.find((e) => e.content.includes("周三"))!;
+    expect(oldEntry.supersededBy).toBe(newEntry.id);
+  });
+
+  it("never matches a retired note for supersession", () => {
+    // A note evicted by the cap is out of the active set; re-remembering similar
+    // content later is a fresh fact, not a revision of something already retired.
+    const s = emptyState();
+    const make = ids();
+    addNoteFact(s, "API v1 key rotates every 90 days", make, () => "t0");
+    for (let i = 1; i <= 30; i++) {
+      addNoteFact(s, `note about word${i}x`, make, () => `t${i}`);
+    }
+    // "API v1 key…" is now retired via cap eviction.
+    const r = addNoteFact(s, "API v2 key rotates every 90 days", make, () => "t31");
+    expect(r.changed).toBe(true);
+    expect(r.superseded).toBeUndefined();
+    const v1 = s.factRegistry!.find((e) => e.content === "API v1 key rotates every 90 days")!;
+    expect(v1.retiredAt).toBeDefined();
+    expect(v1.supersededBy).toBeUndefined();
   });
 });
