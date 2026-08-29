@@ -43,6 +43,13 @@ describe("RetrieveService — lexical candidate stream", () => {
     );
     expect(result.events[0].id).toBe("old1");
     expect(result.retrieval.degraded).toBeUndefined();
+
+    // Candidate provenance: which stream surfaced each match is part of the
+    // ranking's audit trail.
+    const oldMatch = result.retrieval.matches.find((m) => m.id === "old1");
+    const recentMatch = result.retrieval.matches.find((m) => m.id === "r1");
+    expect(oldMatch?.rankingReason).toContain("sources=lexical");
+    expect(recentMatch?.rankingReason).toContain("sources=recency");
   });
 
   it("reports a lexical_search degradation and still serves recency results when the index query throws", async () => {

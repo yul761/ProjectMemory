@@ -524,6 +524,12 @@ export class RetrieveService {
     let vectorSearchSucceeded = false;
     let mergedItems = events.items;
 
+    // Which stream surfaced each candidate — reported per match as part of the
+    // ranking's audit trail. A candidate can come from several streams at once.
+    const recencyIdSet = new Set(events.items.map((e) => e.id));
+    const lexicalIdSet = new Set<string>();
+    const vectorIdSet = new Set<string>();
+
     // Lexical candidate stream: the inverted token index reaches events the
     // recency window aged out. Default-on wherever the repo provides it; the
     // pool only widens — final ranking still belongs to the scorer below.
@@ -532,6 +538,7 @@ export class RetrieveService {
       if (queryTokens.length) {
         try {
           const lexicalIds = await this.memories.searchByTokens(scopeId, queryTokens, candidateSize);
+          for (const id of lexicalIds) lexicalIdSet.add(id);
           const poolIds = new Set(mergedItems.map((e) => e.id));
           const newIds = lexicalIds.filter((id) => !poolIds.has(id));
           if (newIds.length) {
@@ -561,6 +568,7 @@ export class RetrieveService {
           const vectorIds = await this.options.vectorSearchFn(queryVector, candidateSize, scopeId);
           vectorSearchMs = Date.now() - tVectorSearch;
           vectorSearchSucceeded = true;
+          for (const id of vectorIds) vectorIdSet.add(id);
           if (vectorIds.length) {
             // Dedupe against the whole pool so far (recency + lexical), and
             // append rather than rebuild, or the lexical stream would be lost.
@@ -610,8 +618,14 @@ export class RetrieveService {
     rerankMs = Date.now() - tRerank;
 
     const matches = reranked.slice(0, limit).map((item) => {
+      const sources = [
+        recencyIdSet.has(item.event.id) ? "recency" : null,
+        lexicalIdSet.has(item.event.id) ? "lexical" : null,
+        vectorIdSet.has(item.event.id) ? "vector" : null
+      ].filter(Boolean);
       const reasonParts = [
         item.embeddingScore !== undefined ? "embedding_rerank" : "heuristic_rank",
+        sources.length ? `sources=${sources.join("|")}` : null,
         item.matchedConcepts.length ? `concepts=${item.matchedConcepts.join("|")}` : null,
         item.matchedTerms.length ? `terms=${item.matchedTerms.slice(0, 5).join("|")}` : null,
         item.phraseBoostApplied ? "phrase_boost" : null,
