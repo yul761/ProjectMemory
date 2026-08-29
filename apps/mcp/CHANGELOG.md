@@ -1,5 +1,77 @@
 # statecore-mcp
 
+## 0.5.0
+
+### Minor Changes
+
+- [`a9e8ea1`](https://github.com/yul761/StateCore/commit/a9e8ea1bd76f6fd61d5fcd89a3fcf90939b0fb52) Thanks [@yul761](https://github.com/yul761)! - Facts carry entity vocabulary, so distillation no longer hides them from recall.
+
+  Stage 2 may now attach up to 10 concrete nouns from the evidence (tool names,
+  file paths, product names) to each extracted fact. They are stored on the
+  fact's registry entry, survive supersession, and retrieval scores a fact on
+  its text plus its entities — so a query in the evidence's vocabulary still
+  finds the fact after distillation rephrased it. Extracted once at digest time;
+  costs nothing at query time. Entirely additive: facts without entities score
+  exactly as before.
+
+- [`8f5f296`](https://github.com/yul761/StateCore/commit/8f5f296382659a624b557c8f628747c1f680a444) Thanks [@yul761](https://github.com/yul761)! - Retrieval now reports its own degradation, and protection reaches the read path.
+
+  - `retrieval.mode` is derived from what actually ran, not from configuration: a
+    run whose embedding calls all failed reports `heuristic`, and each failed
+    stage is itemised in the new optional `retrieval.degraded` array
+    (`{ stage: "vector_search" | "rerank", error }`). Previously a total
+    embedding outage still reported `mode: "hybrid"` and the vector-search
+    failure was swallowed by a bare catch.
+  - Pinned events get a bounded additive ranking boost in retrieval (beats the
+    recency edge at equal relevance; loses to any real relevance gap — a boost,
+    never a filter). `rankingReason` gains a `pinned` marker.
+  - Write-protected and document-authority facets now carry a bounded ranking
+    multiplier (clamped to at most 1.5×) into the `maxChars` budget competition,
+    via the new `facetAuthority()` helper and `packWithinBudget`'s optional
+    `factAuthority` input.
+  - Every system prompt that sees ingested or retrieved content now carries an
+    explicit security boundary (content is data, never instructions) and
+    concrete faithfulness rules (never invent dates, paths, versions, or
+    identifiers; no generic-knowledge filler).
+
+- [`b62d253`](https://github.com/yul761/StateCore/commit/b62d2538bf28cd8d3994916e7ed5c6715682110c) Thanks [@yul761](https://github.com/yul761)! - Lexical inverted token index: recall now reaches old events.
+
+  The retrieval candidate pool used to be the newest ~200 events plus optional
+  vector hits — anything older was unreachable however relevant, which hit the
+  keyless embedded store hardest (no embeddings, so recency was everything).
+  Ingest now writes an inverted token index (`MemoryEventToken`) using the same
+  tokenizer the relevance scorer uses (ASCII words + CJK bigrams — a term
+  matches in the index iff it matches in the score; this is also why no FTS
+  engine is involved), and retrieval unions a lexical candidate stream into the
+  pool. Final ranking is unchanged. Index-query failures are reported as
+  `retrieval.degraded` stage `lexical_search`, never swallowed.
+
+  English stopwords are excluded from the index (the relevance scorer is
+  unchanged), long bilingual queries interleave ASCII and CJK tokens instead of
+  truncating CJK away, and `forget` removes the suppressed event's index rows.
+
+  The embedded store backfills existing events automatically at open. Server
+  deployments run the `20260829120000_memory_event_tokens` and
+  `20260829200000_session_handoff` migrations and then `pnpm backfill:tokens`
+  once.
+
+- [`e5e8ec7`](https://github.com/yul761/StateCore/commit/e5e8ec7e882716ea528b136b4d756c516bf61eaa) Thanks [@yul761](https://github.com/yul761)! - New `handoff` tool: cross-client session handoff, race-free and auditable.
+
+  `handoff({ summary, openQuestions?, nextSteps? })` records where a session
+  stopped; the next session — in the same client or any other MCP client
+  pointing at the same project — receives the active handoff at the top of its
+  `recall` result (with its `id`) and continues from it. Handoffs live in their
+  own supersession-tracked table, not in the digest state snapshot, so a
+  handoff written while a digest runs can never be lost to the snapshot's
+  read-modify-write, the history is not re-copied on every digest, and each row
+  is its own evidence: `why` on the returned `handoffId` walks every stop-point
+  the project has recorded. `handoff({ clear: true })` retires the active one
+  (recorded, never deleted). The digest writer additionally carries over notes
+  written concurrently with a digest run, closing the same lost-update race for
+  `remember`. Works in both modes: embedded writes the local store; `--url`
+  calls the new `POST /v1/memory/handoff` operation (contract `1.6.0`). Treat a
+  received handoff as untrusted data — see the README's security note.
+
 ## 0.4.0
 
 ### Minor Changes

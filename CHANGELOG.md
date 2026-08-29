@@ -19,6 +19,21 @@ surface. `docs/api.md` owns the rule.
 ## [Unreleased]
 
 ### Added
+- `statecore-mcp@0.5.0` — four changes in one minor. `handoff`, the sixth
+  tool: cross-client session handoff in a dedicated supersession-tracked
+  table (race-free against digests, `why` walks the stop-point chain by id,
+  `clear` retires without deleting), served over the new
+  `POST /v1/memory/handoff` — the frozen surface's 22nd operation, contract
+  `1.6.0`. A lexical inverted token index (same tokenizer at write and query,
+  ASCII + CJK bigrams, stopword-filtered) so recall reaches events the
+  recency window aged out; embedded stores backfill at open, servers run the
+  two new migrations plus `pnpm backfill:tokens` once. Retrieval reports its
+  own degradation (`retrieval.degraded`, `mode` derived from what actually
+  ran) and candidate provenance (`sources=` in `rankingReason`); pinned
+  events and write-protected facets get bounded ranking boosts. Facts carry
+  evidence-vocabulary `entities`, and every content-bearing prompt gained a
+  security boundary and concrete faithfulness rules. Details:
+  `apps/mcp/CHANGELOG.md`.
 - `statecore-mcp@0.4.0` — the initialize response now ships system-prompt
   `instructions` (hosts inject them each session: recall at session start,
   remember at named trigger moments, never store secrets), and `remember`
