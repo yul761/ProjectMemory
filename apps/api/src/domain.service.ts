@@ -120,6 +120,25 @@ export class DomainService {
               orderBy: [{ createdAt: "desc" }, { id: "desc" }]
             })
           : Promise.resolve([]),
+      replaceTokens: async (eventId: string, scopeId: string, tokens: string[]) => {
+        await prisma.$transaction([
+          prisma.memoryEventToken.deleteMany({ where: { eventId } }),
+          ...(tokens.length
+            ? [prisma.memoryEventToken.createMany({ data: tokens.map((token) => ({ eventId, scopeId, token })) })]
+            : [])
+        ]);
+      },
+      searchByTokens: async (scopeId: string, tokens: string[], limit: number) => {
+        if (!tokens.length) return [];
+        const groups = await prisma.memoryEventToken.groupBy({
+          by: ["eventId"],
+          where: { scopeId, token: { in: tokens } },
+          _count: { token: true },
+          orderBy: { _count: { token: "desc" } },
+          take: limit
+        });
+        return groups.map((group) => group.eventId);
+      },
       listByLookback: (scopeId: string, since: Date, limit: number) =>
         prisma.memoryEvent.findMany({
           where: { scopeId, createdAt: { gte: since }, suppressedAt: null },

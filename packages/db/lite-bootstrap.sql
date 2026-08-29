@@ -171,3 +171,16 @@ CREATE INDEX IF NOT EXISTS "ForgottenFact_userId_scopeId_idx" ON "ForgottenFact"
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "ForgottenFact_scopeId_factKey_key" ON "ForgottenFact"("scopeId", "factKey");
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "MemoryEventToken" (
+    "eventId" TEXT NOT NULL,
+    "scopeId" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+
+    PRIMARY KEY ("eventId", "token"),
+    CONSTRAINT "MemoryEventToken_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "MemoryEvent" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "MemoryEventToken_scopeId_token_idx" ON "MemoryEventToken"("scopeId", "token");

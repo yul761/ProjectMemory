@@ -197,7 +197,7 @@ export const RetrieveOutput = z.object({
     degraded: z
       .array(
         z.object({
-          stage: z.enum(["vector_search", "rerank"]),
+          stage: z.enum(["lexical_search", "vector_search", "rerank"]),
           error: z.string()
         })
       )

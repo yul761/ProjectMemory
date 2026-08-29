@@ -1,6 +1,7 @@
 import pino from "pino";
 import { createHash } from "crypto";
 import { z } from "zod";
+import { tokenizeForIndex, tokenizeText } from "./lexical-index";
 export {
   LlmClient,
   EmbeddingClient,
@@ -172,6 +173,15 @@ export interface MemoryRepo {
   listRecent: (scopeId: string, limit: number, cursor?: string | null) => Promise<{ items: MemoryEvent[]; nextCursor: string | null }>;
   listByLookback: (scopeId: string, since: Date, limit: number) => Promise<MemoryEvent[]>;
   findByIds: (ids: string[]) => Promise<MemoryEvent[]>;
+  /**
+   * Optional inverted token index (see lexical-index.ts for why it exists and
+   * why both methods must use `tokenizeForIndex`). `replaceTokens` swaps an
+   * event's index rows on write; `searchByTokens` returns event ids ordered by
+   * how many of the given tokens they match. A repo without these still works —
+   * retrieval just falls back to the recency-only candidate pool.
+   */
+  replaceTokens?: (eventId: string, scopeId: string, tokens: string[]) => Promise<void>;
+  searchByTokens?: (scopeId: string, tokens: string[], limit: number) => Promise<string[]>;
 }
 
 export interface DigestRepo {
@@ -255,9 +265,10 @@ export class MemoryService {
     occurredAt?: Date;
     pinned?: boolean;
   }) {
+    let event: MemoryEvent;
     if (input.type === "document" && input.key) {
       const contentHash = createHash("sha256").update(input.content).digest("hex");
-      return this.memories.upsertDocument({
+      event = await this.memories.upsertDocument({
         userId: input.userId,
         scopeId: input.scopeId,
         source: input.source,
@@ -267,17 +278,27 @@ export class MemoryService {
         ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
         ...(input.pinned !== undefined ? { pinned: input.pinned } : {})
       });
+    } else {
+      event = await this.memories.create({
+        userId: input.userId,
+        scopeId: input.scopeId,
+        type: input.type,
+        source: input.source,
+        key: input.key,
+        content: input.content,
+        ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
+        ...(input.pinned !== undefined ? { pinned: input.pinned } : {})
+      });
     }
-    return this.memories.create({
-      userId: input.userId,
-      scopeId: input.scopeId,
-      type: input.type,
-      source: input.source,
-      key: input.key,
-      content: input.content,
-      ...(input.occurredAt ? { createdAt: input.occurredAt } : {}),
-      ...(input.pinned !== undefined ? { pinned: input.pinned } : {})
-    });
+    if (this.memories.replaceTokens) {
+      try {
+        await this.memories.replaceTokens(event.id, event.scopeId, tokenizeForIndex(input.content));
+      } catch (err) {
+        // The event is stored; only lexical recall misses it until a backfill.
+        logger.warn({ err, eventId: event.id }, "Token index write failed");
+      }
+    }
+    return event;
   }
 
   async listEvents(scopeId: string, limit: number, cursor?: string | null) {
@@ -315,7 +336,7 @@ export class DigestService {
  * what actually ran, and this entry states what did not.
  */
 export interface RetrievalDegradation {
-  stage: "vector_search" | "rerank";
+  stage: "lexical_search" | "vector_search" | "rerank";
   error: string;
 }
 
@@ -355,25 +376,10 @@ export class RetrieveService {
     status: ["status", "progress", "done", "shipped", "completed"]
   };
 
+  // Shared with the inverted token index — a term matches in the index iff it
+  // matches in this scorer. See lexical-index.ts.
   private tokenize(text: string) {
-    const lower = text.toLowerCase();
-    const asciiTokens = lower
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter((token) => token.length > 2);
-    const cjkTokens: string[] = [];
-    // Contiguous runs of CJK ideographs / Japanese kana / Korean syllables.
-    const runs = lower.match(/[一-鿿぀-ヿ가-힯]+/g) ?? [];
-    for (const run of runs) {
-      if (run.length === 1) {
-        cjkTokens.push(run); // single-char run: keep as unigram
-        continue;
-      }
-      for (let i = 0; i < run.length - 1; i += 1) {
-        cjkTokens.push(run.slice(i, i + 2)); // adjacent bigram
-      }
-    }
-    return [...asciiTokens, ...cjkTokens];
+    return tokenizeText(text);
   }
 
   /**
@@ -517,6 +523,28 @@ export class RetrieveService {
     const degraded: RetrievalDegradation[] = [];
     let vectorSearchSucceeded = false;
     let mergedItems = events.items;
+
+    // Lexical candidate stream: the inverted token index reaches events the
+    // recency window aged out. Default-on wherever the repo provides it; the
+    // pool only widens — final ranking still belongs to the scorer below.
+    if (this.memories.searchByTokens) {
+      const queryTokens = tokenizeForIndex(query, 24);
+      if (queryTokens.length) {
+        try {
+          const lexicalIds = await this.memories.searchByTokens(scopeId, queryTokens, candidateSize);
+          const poolIds = new Set(mergedItems.map((e) => e.id));
+          const newIds = lexicalIds.filter((id) => !poolIds.has(id));
+          if (newIds.length) {
+            const lexicalEvents = (await this.memories.findByIds(newIds)).filter((e) => e.scopeId === scopeId);
+            mergedItems = [...mergedItems, ...lexicalEvents];
+          }
+        } catch (err) {
+          logger.warn({ err }, "Lexical index search failed, falling back to recency candidates");
+          degraded.push({ stage: "lexical_search", error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }
+
     if (
       query?.trim() &&
       this.options?.useVectorSearch &&
@@ -534,13 +562,15 @@ export class RetrieveService {
           vectorSearchMs = Date.now() - tVectorSearch;
           vectorSearchSucceeded = true;
           if (vectorIds.length) {
-            const keywordIdSet = new Set(events.items.map((e) => e.id));
-            const newIds = vectorIds.filter((id) => !keywordIdSet.has(id));
+            // Dedupe against the whole pool so far (recency + lexical), and
+            // append rather than rebuild, or the lexical stream would be lost.
+            const poolIdSet = new Set(mergedItems.map((e) => e.id));
+            const newIds = vectorIds.filter((id) => !poolIdSet.has(id));
             if (newIds.length) {
               const vectorEvents = (await this.memories.findByIds(newIds)).filter(
                 (e) => e.scopeId === scopeId
               );
-              mergedItems = [...events.items, ...vectorEvents];
+              mergedItems = [...mergedItems, ...vectorEvents];
             }
           }
         }
@@ -769,6 +799,7 @@ export async function generateAnswer(input: {
   ]);
 }
 
+export * from "./lexical-index";
 export * from "./digest-control";
 export * from "./provenance";
 export * from "./drift-metrics";

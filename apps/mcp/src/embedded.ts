@@ -13,6 +13,7 @@ import {
   computeFactKey,
   facetAuthority,
   packWithinBudget,
+  tokenizeForIndex,
   type DigestState,
   type ProjectRepo,
   type UserStateRepo,
@@ -95,6 +96,25 @@ function makeMemoryRepo(prisma: LitePrisma): MirroredMemoryRepo {
             orderBy: [{ createdAt: "desc" }, { id: "desc" }]
           })
         : Promise.resolve([]),
+    replaceTokens: async (eventId, scopeId, tokens) => {
+      await prisma.$transaction([
+        prisma.memoryEventToken.deleteMany({ where: { eventId } }),
+        ...(tokens.length
+          ? [prisma.memoryEventToken.createMany({ data: tokens.map((token) => ({ eventId, scopeId, token })) })]
+          : [])
+      ]);
+    },
+    searchByTokens: async (scopeId, tokens, limit) => {
+      if (!tokens.length) return [];
+      const groups = await prisma.memoryEventToken.groupBy({
+        by: ["eventId"],
+        where: { scopeId, token: { in: tokens } },
+        _count: { token: true },
+        orderBy: { _count: { token: "desc" } },
+        take: limit
+      });
+      return groups.map((group) => group.eventId);
+    },
     listByLookback: (scopeId, since, limit) =>
       prisma.memoryEvent.findMany({
         where: { scopeId, createdAt: { gte: since }, suppressedAt: null },
@@ -269,6 +289,17 @@ export function createEmbeddedBackend(opts: {
           "project"
         )).id;
       startupCatchUp = runStartupDigestCatchUp(store.prisma, opts.env, opts.digestLlm);
+      // Backfill the lexical index for events ingested before it existed.
+      // Embedded stores are per-project and small, so doing it inline at open
+      // is cheap; the server deployment has scripts/backfill-tokens.ts instead.
+      const repo = makeMemoryRepo(store.prisma);
+      const unindexed = await store.prisma.memoryEvent.findMany({
+        where: { scopeId, suppressedAt: null, tokens: { none: {} } },
+        select: { id: true, content: true }
+      });
+      for (const event of unindexed) {
+        await repo.replaceTokens?.(event.id, scopeId, tokenizeForIndex(event.content));
+      }
     },
 
     async remember({ text, consolidate }) {

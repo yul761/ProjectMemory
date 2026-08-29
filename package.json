@@ -26,6 +26,7 @@
     "benchmark:trend": "node ./scripts/benchmark/generate-trend-report.mjs",
     "profile:state-layer": "pnpm --filter @statecore/worker exec tsx --tsconfig ../../tsconfig.dev.json ../../scripts/profile-state-layer.ts",
     "consolidate:scope": "pnpm --filter @statecore/worker exec tsx --tsconfig ../../tsconfig.dev.json ../../scripts/consolidate-scope.ts",
+    "backfill:tokens": "pnpm --filter @statecore/worker exec tsx --tsconfig ../../tsconfig.dev.json ../../scripts/backfill-tokens.ts",
     "ci:runtime-readiness": "./scripts/ci/runtime-readiness.sh",
     "smoke:no-llm": "./scripts/smoke-no-llm.sh",
     "smoke:llm": "./scripts/smoke-llm.sh",

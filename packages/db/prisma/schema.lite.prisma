@@ -107,8 +107,9 @@ model MemoryEvent {
   // which drops durable inputs first.
   pinned               Boolean   @default(false)
 
-  user  User         @relation(fields: [userId], references: [id])
-  scope ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  user   User               @relation(fields: [userId], references: [id])
+  scope  ProjectScope       @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  tokens MemoryEventToken[]
 
   @@unique([scopeId, key])
   @@index([userId, scopeId, createdAt])
@@ -189,4 +190,21 @@ model ForgottenFact {
 
   @@unique([scopeId, factKey])
   @@index([userId, scopeId])
+}
+
+// Inverted lexical index over event content: one row per (event, token),
+// written at ingest with the same tokenizer retrieval queries with
+// (packages/core/src/lexical-index.ts — a term matches in the index iff it
+// matches in the scorer). Gives retrieval a lexical candidate stream that
+// reaches events the recency window has aged out.
+model MemoryEventToken {
+  eventId String
+  // Denormalized from the event so the hot query needs no join.
+  scopeId String
+  token   String
+
+  event MemoryEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, token])
+  @@index([scopeId, token])
 }
