@@ -24,7 +24,12 @@ FROM deps AS build
 COPY . .
 
 RUN pnpm db:generate
-RUN pnpm build
+# Build only the server apps and their workspace dependencies. The root
+# `pnpm build` recurses into every workspace — including apps/mcp, whose
+# package.json this image never COPYs, so its devDependencies (tsup) are not
+# installed and the recursive build dies on `tsup: not found`. The `...`
+# suffix pulls in packages/* in topological order.
+RUN pnpm --filter "@statecore/api..." --filter "@statecore/worker..." build
 
 FROM node:20-bookworm-slim AS runtime-base
 
