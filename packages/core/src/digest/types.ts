@@ -68,6 +68,14 @@ export interface FactRegistryEntry {
   supersededBy?: string;
   facet?: string;
   /**
+   * Concrete nouns from the evidence that the distilled fact text may have
+   * dropped (tool names, file paths, product names). Retrieval scores a fact
+   * on content plus entities, so a query in the evidence's vocabulary still
+   * finds the fact after distillation rephrased it. Extracted by stage 2 at
+   * digest time; costs nothing at query time.
+   */
+  entities?: string[];
+  /**
    * Set when the fact left the active set without being replaced by a newer
    * version — capacity eviction, or an explicit forget. Distinct from
    * `supersededBy`, which points at the fact that took its place.
@@ -164,6 +172,7 @@ export const DigestOutputSchema = z.object({
   nextSteps: z.array(z.string()),
   profileFacts: z.array(z.object({
     facet: z.string(),
-    value: z.string()
+    value: z.string(),
+    entities: z.array(z.string().max(64)).max(10).optional()
   })).optional()
 });

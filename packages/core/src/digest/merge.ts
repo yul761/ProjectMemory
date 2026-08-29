@@ -361,7 +361,7 @@ function mergeProfileFacets(
 
 export function applyProfileFactsFromDigest(
   state: DigestState,
-  profileFacts: { facet: string; value: string }[],
+  profileFacts: { facet: string; value: string; entities?: string[] }[],
   documents: MemoryEvent[],
   streamEvidence: DigestEvidenceRef | null,
   makeId: () => string,
@@ -380,6 +380,7 @@ export function applyProfileFactsFromDigest(
   for (const pf of profileFacts) {
     const facet = pf.facet.trim();
     const value = stripInternalIds(pf.value.trim());
+    const entities = (pf.entities ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean).slice(0, 10);
     if (!value) continue;
     if (!isRegisteredFacet(pack, facet)) {
       if (dropLog) recordDrop(dropLog, "facet_not_registered", { facet, value });
@@ -461,7 +462,7 @@ export function applyProfileFactsFromDigest(
       if (evidence) {
         const authorityIncreased = activeEntry !== undefined && authority > activeEntry.confidence;
         if (contentChanged || authorityIncreased) {
-          supersedeFact(state, existing, value, evidence, makeId, { facet, confidence: authority, type: "profile" }, makeNow);
+          supersedeFact(state, existing, value, evidence, makeId, { facet, confidence: authority, type: "profile", entities }, makeNow);
         }
       }
       if (contentChanged) facetFacts[existingIdx] = value;
@@ -483,7 +484,7 @@ export function applyProfileFactsFromDigest(
 
     facetFacts.push(value);
     if (evidence) {
-      promoteToFactRegistry(state, value, "profile", authority, evidence, makeId, facet, makeNow);
+      promoteToFactRegistry(state, value, "profile", authority, evidence, makeId, facet, makeNow, entities);
     }
   }
 }

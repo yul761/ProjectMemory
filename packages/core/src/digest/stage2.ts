@@ -305,7 +305,13 @@ async function runStage2Pass(input: Stage2Input): Promise<DigestOutput> {
       changes: validated.data.changes.map((c) => c.trim()).filter(Boolean).slice(0, 3),
       nextSteps: validated.data.nextSteps.map((n) => n.trim()).filter(Boolean).slice(0, 3),
       profileFacts: (validated.data.profileFacts ?? [])
-        .map((pf) => ({ facet: pf.facet.trim(), value: pf.value.trim() }))
+        .map((pf) => ({
+          facet: pf.facet.trim(),
+          value: pf.value.trim(),
+          ...(pf.entities?.length
+            ? { entities: pf.entities.map((e) => e.trim().toLowerCase()).filter(Boolean).slice(0, 10) }
+            : {})
+        }))
         .filter((pf) => Boolean(pf.facet) && Boolean(pf.value))
     };
 

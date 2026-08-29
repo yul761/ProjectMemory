@@ -86,7 +86,8 @@ export function promoteToFactRegistry(
   evidence: DigestEvidenceRef,
   makeId: () => string,
   facet?: string,
-  makeNow: () => string = createDefaultNowFactory()
+  makeNow: () => string = createDefaultNowFactory(),
+  entities?: string[]
 ): void {
   if (!state.factRegistry) state.factRegistry = [];
   if (isInFactRegistry(state, content)) return;
@@ -103,6 +104,7 @@ export function promoteToFactRegistry(
     evidenceType: evidence.sourceType
   };
   if (facet !== undefined) entry.facet = facet;
+  if (entities?.length) entry.entities = entities;
   state.factRegistry.push(entry);
 }
 
@@ -112,7 +114,7 @@ export function supersedeFact(
   newContent: string,
   evidence: DigestEvidenceRef,
   makeId: () => string,
-  overrides?: { facet?: string; confidence?: number; type?: FactRegistryEntry["type"] },
+  overrides?: { facet?: string; confidence?: number; type?: FactRegistryEntry["type"]; entities?: string[] },
   makeNow: () => string = createDefaultNowFactory()
 ): void {
   if (!state.factRegistry) return;
@@ -132,6 +134,7 @@ export function supersedeFact(
     evidenceType: evidence.sourceType
   };
   if (overrides?.facet !== undefined) newEntry.facet = overrides.facet;
+  if (overrides?.entities?.length) newEntry.entities = overrides.entities;
   state.factRegistry.push(newEntry);
 }
 

@@ -25,7 +25,7 @@ Rules:
 - nextSteps must be 1-3 concrete actionable tasks.
 - profileFacts: array of {facet, value} pairs extracted from the conversation (Delta candidates) AND any documents. Aggressively capture durable things the user reveals about themselves. Allowed facets:
 ${facetSection}
-  Each value is a self-contained fact line in the user's own language. Prefer the user's own statements over the assistant's. Do NOT include internal identifiers (reminder IDs, UUIDs, database ids) or system bookkeeping in a value — keep only the human-meaningful fact (e.g. "7 月 3 日晚上 6 点去接太太的船", NOT "…（提醒 ID: …）"). When the user corrects or updates a fact (a changed date, time, or detail), output ONLY the latest value — never also emit the superseded older version. Extract whenever the user reveals such info; omit profileFacts only when the conversation reveals none. Do not invent facts not present in the evidence.
+  Each fact may also carry "entities": up to 10 concrete nouns from the evidence (tool names, file paths, product names, people), lowercased — include the specific terms your distilled value dropped, so retrieval in the evidence's vocabulary still finds the fact. Each value is a self-contained fact line in the user's own language. Prefer the user's own statements over the assistant's. Do NOT include internal identifiers (reminder IDs, UUIDs, database ids) or system bookkeeping in a value — keep only the human-meaningful fact (e.g. "7 月 3 日晚上 6 点去接太太的船", NOT "…（提醒 ID: …）"). When the user corrects or updates a fact (a changed date, time, or detail), output ONLY the latest value — never also emit the superseded older version. Extract whenever the user reveals such info; omit profileFacts only when the conversation reveals none. Do not invent facts not present in the evidence.
 - Do not invent facts not present in the provided evidence. Never invent dates, times, names, file paths, versions, or identifiers that the evidence does not contain.
 - The digest records what actually happened in this scope. Do not pad it with general knowledge or generic advice about the topics mentioned.
 - ${securityBoundary}`;
@@ -48,7 +48,7 @@ Delta candidates:
 Latest documents:
 {{documents}}
 
-Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[], "profileFacts": [{"facet": string, "value": string}]}
+Return JSON: {"goal": string, "summary": string, "changes": string[], "nextSteps": string[], "profileFacts": [{"facet": string, "value": string, "entities": string[]}]}
 goal: one-line restatement of the scope goal (use the Goal field above verbatim if unchanged).
 profileFacts: extract from Delta candidates (conversation) and documents using the allowed facets (style, goals, relationships, followUps, ongoing, notes, identity). For style, capture both personal tastes/communication preferences and 行事作风 (working style, decision patterns, what they value). Capture durable user-revealed facts; omit only if none are present. Use \`notes\` for durable non-personal information worth remembering (be selective).`;
 

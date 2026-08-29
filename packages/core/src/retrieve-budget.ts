@@ -52,6 +52,13 @@ export interface BudgetFact {
   content: string;
   confidence: number;
   addedAt: string;
+  /** Evidence-vocabulary nouns scored alongside content — see FactRegistryEntry.entities. */
+  entities?: string[];
+}
+
+/** What relevance is scored against: the fact text plus its entity vocabulary. */
+function searchText(fact: BudgetFact): string {
+  return fact.entities?.length ? `${fact.content}\n${fact.entities.join(" ")}` : fact.content;
 }
 
 export interface BudgetEvent {
@@ -100,7 +107,7 @@ export function rankFacts<F extends BudgetFact>(
     const authority = authorityOf ? clampAuthority(authorityOf(fact)) : 1;
     return {
       fact,
-      score: (scoreFact ? scoreFact(fact.content) : 0) * authority,
+      score: (scoreFact ? scoreFact(searchText(fact)) : 0) * authority,
       confidence: fact.confidence * authority
     };
   });
@@ -174,7 +181,7 @@ export function packWithinBudget<F extends BudgetFact, E extends BudgetEvent>(
       id: fact.id,
       chars: cost,
       reason: factReason,
-      ...(scoreFact ? { score: scoreFact(fact.content) } : {})
+      ...(scoreFact ? { score: scoreFact(searchText(fact)) } : {})
     });
   }
   remaining -= factChars;
