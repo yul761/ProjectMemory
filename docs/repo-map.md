@@ -68,6 +68,8 @@ why tsconfig `paths` cannot be used for it.
 docs/start-here.md          Orientation for new contributors
 docs/repo-map.md            This file
 docs/philosophy.md          What the engine is for, and why auditability is the centre
+docs/why-auditable.md       Audit mechanisms compared with other memory systems, factually
+docs/prior-art-failure-modes.md  Documented failure modes this design answers, with verified issue citations
 docs/glossary.md            Vocabulary: facet, pack, supersession, retirement, drop log
 docs/api.md                 Full API reference and the /v1 contract rules
 docs/vision-and-roadmap.md  Positioning and roadmap (with a status map at the top)

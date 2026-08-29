@@ -22,13 +22,16 @@ claude mcp add statecore -- npx -y statecore-mcp     # Claude Code
 
 ## Capture is easy. Trust is hard.
 
-Most agent-memory tools compete on capturing more — hook every event, compress the transcript, inject it back. Capture is the solved half of the problem. The unsolved half is what those tools' own issue trackers are full of: memories that silently stop being written, stale decisions injected as if still current, cross-project leakage, and no way to audit or repair what the store believes.
+Most agent-memory tools compete on capturing more — hook every event, compress the transcript, inject it back. Capture is the solved half of the problem. The unsolved half is what those tools' own issue trackers are full of: memories that silently stop being written, stale decisions injected as if still current, cross-project leakage, and no way to audit or repair what the store believes. That is not a rhetorical claim — [docs/prior-art-failure-modes.md](docs/prior-art-failure-modes.md) cites the verified issues, by number, across five systems.
 
 StateCore is built for that second half:
 
 - **Nothing is silently lost.** Every discard is logged against a fixed set of reasons; every replaced fact keeps a `supersededBy` chain; retired facts are marked, never deleted.
 - **Nothing is silently believed.** Writes go through a deterministic pipeline with consistency gates — an LLM proposal alone cannot promote itself into stable state.
+- **Nothing degrades silently.** A failed digest carries `degraded`; the budget reports what it refused; retrieval reports which embedding stages failed and derives its `mode` from what actually ran, not from what was configured.
 - **Everything is checkable.** `why` returns a fact's evidence and full version history; a digest's selection report shows exactly what it kept and dropped.
+
+How this compares to other memory systems, mechanism by mechanism: [docs/why-auditable.md](docs/why-auditable.md).
 
 ## Features
 
@@ -38,7 +41,7 @@ StateCore is built for that second half:
 - **Auditable facts** — every fact carries its evidence and its supersession chain, and a fact that leaves the active set is retired rather than deleted, so "why do you believe this, and what did you believe before" stays answerable
 - **Recorded discards** — the digest logs what it dropped and why, against a fixed set of reasons; losing information is survivable, losing it silently is not
 - **Replaceable ontology** — facets come from a pack resolved per tenant and scope, so the engine stores, protects and supersedes without knowing what a facet means
-- **Retrieval** — hybrid keyword + optional pgvector semantic search over events and digests, packed into a caller-declared character budget that reports what it refused
+- **Retrieval** — hybrid keyword + optional pgvector semantic search over events and digests, packed into a caller-declared character budget that reports what it refused; pinned events and write-protected facts get a bounded ranking boost (never a filter), and embedding failures are itemised in `retrieval.degraded` instead of silently downgrading quality
 - **Reminders** — daily reminder job surfaces follow-up items from active scopes
 - **Benchmarks** — a published [LongMemEval comparison](docs/longmemeval.md) against mem0 OSS at an equal context budget, plus a built-in synthetic regression suite that guards fact retention, goal stability, decision continuity, and retrieval MRR across commits
 - **MCP server** — `statecore-mcp`, a zero-deploy [Model Context Protocol](https://modelcontextprotocol.io) front end for coding agents; keyless by default, one SQLite file, no infrastructure
@@ -175,10 +178,17 @@ file), keylessly by default:
 npx -y statecore-mcp --data ~/.statecore
 ```
 
-Point any MCP client at it (dsh, Claude Code, Cursor configs included), or run
-it against a full StateCore deployment via `--url` for shared/multi-agent
-memory. Full docs, host configs, and the keyless/keyed capability matrix:
-[`apps/mcp/README.md`](apps/mcp/README.md).
+Point any MCP client at it, or run it against a full StateCore deployment via
+`--url` for shared/multi-agent memory. Full docs, host configs, and the
+keyless/keyed capability matrix: [`apps/mcp/README.md`](apps/mcp/README.md).
+
+| Client | Setup |
+|---|---|
+| Claude Code | `claude mcp add statecore -- npx -y statecore-mcp` ([config](apps/mcp/README.md)) |
+| dsh | pinned-executable overlay config included ([config](apps/mcp/README.md)) |
+| Cursor | `.cursor/mcp.json` config included ([config](apps/mcp/README.md)) |
+| Codex CLI, Gemini CLI, Windsurf, Zed, Cline, OpenCode, Claude Desktop, VS Code Copilot | standard MCP stdio config — `npx -y statecore-mcp` as the command |
+| Anything else that speaks [MCP](https://modelcontextprotocol.io) | same stdio command; HTTP via `--url` against a deployment |
 
 **Team memory:** one self-hosted deployment as the shared project brain for every agent your team runs — dsh sessions, Claude Code, CI — with one audit trail across all of them: [`docs/team-memory.md`](docs/team-memory.md).
 
@@ -262,6 +272,8 @@ per-question judge verdicts:
 - `docs/start-here.md` — orientation for new contributors
 - `docs/repo-map.md` — repo structure, where code belongs, and the full doc index
 - `docs/philosophy.md` — what the engine is for, and why auditability is the centre
+- `docs/why-auditable.md` — audit mechanisms compared with other memory systems, factually
+- `docs/prior-art-failure-modes.md` — the documented failure modes this design answers, with verified issue citations
 - `docs/glossary.md` — facet, pack, supersession, retirement, drop log
 - `docs/api.md` — full API reference and the `/v1` contract rules
 - `docs/vision-and-roadmap.md` — positioning and roadmap, with a status map
