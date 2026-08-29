@@ -105,7 +105,7 @@ a replaced fact carries `supersededBy`, and one evicted or forgotten carries
 `retiredAt`/`retiredReason`.
 
 ### Contract rules
-`/v1` is frozen and additive-only — 21 operations across 19 paths, registered in
+`/v1` is frozen and additive-only — 22 operations across 20 paths, registered in
 `PublicV1Contracts` (`packages/contracts/src/index.ts`). Serving a handler at
 `/v1` without registering it there is the drift that shipped twice;
 `v1-surface-guard.integration.test.ts` now fails on it. Full rules in

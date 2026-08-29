@@ -21,14 +21,13 @@ export interface MemoryBackend {
    * Each handoff supersedes the previous one on the same audit chain every
    * other fact uses; the next session (any MCP client) receives the active
    * handoff in its `recall` result. `superseded`: whether a previous handoff
-   * was replaced. Remote mode reports `unsupported` until the frozen `/v1`
-   * surface grows a handoff operation.
+   * was replaced. Remote mode calls `POST /v1/memory/handoff`.
    */
   handoff(input: {
     summary: string;
     openQuestions?: string[];
     nextSteps?: string[];
-  }): Promise<{ ok: true; superseded: boolean } | { ok: false; reason: "unsupported" }>;
+  }): Promise<{ ok: true; superseded: boolean }>;
   /**
    * Demands a digest pass now, regardless of the pending-event threshold —
    * for callers at a moment when raw context is about to disappear from a

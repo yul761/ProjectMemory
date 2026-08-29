@@ -319,6 +319,12 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
             "content": {
               "type": "string",
             },
+            "entities": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
             "evidenceId": {
               "type": "string",
             },
@@ -773,6 +779,68 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
       "type": "object",
     },
   },
+  "POST /memory/handoff": {
+    "request": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "nextSteps": {
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 10,
+          "type": "array",
+        },
+        "openQuestions": {
+          "items": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 10,
+          "type": "array",
+        },
+        "scopeId": {
+          "format": "uuid",
+          "type": "string",
+        },
+        "summary": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string",
+        },
+      },
+      "required": [
+        "scopeId",
+        "summary",
+      ],
+      "type": "object",
+    },
+    "response": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "handoffId": {
+          "type": "string",
+        },
+        "ok": {
+          "const": true,
+          "type": "boolean",
+        },
+        "superseded": {
+          "type": "boolean",
+        },
+      },
+      "required": [
+        "ok",
+        "handoffId",
+        "superseded",
+      ],
+      "type": "object",
+    },
+  },
   "POST /memory/notes": {
     "request": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -997,6 +1065,12 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
               "content": {
                 "type": "string",
               },
+              "entities": {
+                "items": {
+                  "type": "string",
+                },
+                "type": "array",
+              },
               "evidenceId": {
                 "type": "string",
               },
@@ -1043,6 +1117,34 @@ exports[`public /v1 contract surface (frozen) > matches the committed JSON-schem
             "type": "object",
           },
           "type": "array",
+        },
+        "handoff": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "addedAt": {
+                  "type": "string",
+                },
+                "content": {
+                  "type": "string",
+                },
+                "versionCount": {
+                  "minimum": 1,
+                  "type": "integer",
+                },
+              },
+              "required": [
+                "content",
+                "addedAt",
+                "versionCount",
+              ],
+              "type": "object",
+            },
+            {
+              "type": "null",
+            },
+          ],
         },
       },
       "required": [

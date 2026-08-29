@@ -11,10 +11,10 @@ const toJsonSchema = zodToJsonSchema as unknown as (
 ) => unknown;
 
 describe("public /v1 contract surface (frozen)", () => {
-  // These are 21 *operations* — method plus path. They occupy 19 paths in the
+  // These are 22 *operations* — method plus path. They occupy 20 paths in the
   // generated OpenAPI document, because /v1/scopes and /v1/reminders each carry
   // both a GET and a POST. `openapi.test.ts` pins that relationship.
-  it("has exactly the 21 designated operations", () => {
+  it("has exactly the 22 designated operations", () => {
     expect(Object.keys(PublicV1Contracts).sort()).toEqual(
       [
         "DELETE /scopes/:id",
@@ -31,6 +31,7 @@ describe("public /v1 contract surface (frozen)", () => {
         "POST /memory/digest",
         "POST /memory/events",
         "POST /memory/facts/forget",
+        "POST /memory/handoff",
         "POST /memory/notes",
         "POST /memory/retrieve",
         "POST /memory/runtime/turn",

@@ -61,6 +61,12 @@ merely stored. All are frozen under `/v1`.
 - `POST /memory/notes`
   - body: `{ scopeId, text }` (max 500 chars)
   - deterministic durable note writer with exact-match dedup
+- `POST /memory/handoff`
+  - body: `{ scopeId, summary, openQuestions?, nextSteps? }`
+  - records where a session stopped as a supersession-tracked registry fact;
+    the next session (any client against the same scope) receives the active
+    handoff in retrieve's `handoff` field and can walk earlier stop-points via
+    provenance
 - `GET /memory/digests/:digestId/selection`
   - what that digest kept, and what it discarded with reasons; `null`-era digests
     predate the log and return empty arrays
@@ -296,7 +302,7 @@ layers (the hosted version, the GPT-API integration layer) should depend ONLY on
 `/v1`. Every `/v1` endpoint is also served at its legacy unversioned path for
 backward compatibility; existing integrations continue to use the legacy paths.
 
-The subset is **21 operations across 19 paths** — `/v1/scopes` and
+The subset is **22 operations across 20 paths** — `/v1/scopes` and
 `/v1/reminders` each carry both a `GET` and a `POST`. Count operations when
 checking against `PublicV1Contracts`, and paths when checking against
 `openapi.json`; both tests pin both numbers.
@@ -334,6 +340,7 @@ checking against `PublicV1Contracts`, and paths when checking against
 | POST | `/v1/memory/facts/forget` |
 | GET | `/v1/facet-pack` |
 | POST | `/v1/memory/notes` |
+| POST | `/v1/memory/handoff` |
 | GET | `/v1/memory/relationship-context/:scopeId` |
 | POST | `/v1/reminders` |
 | GET | `/v1/reminders` |

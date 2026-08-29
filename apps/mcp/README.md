@@ -34,9 +34,10 @@ written from one MCP client is read by whichever client starts next in the
 same project — stop mid-task in Claude Code, continue in Codex or Cursor
 without re-explaining where you were. Unlike an ad-hoc "notes" convention,
 handoffs are supersession-tracked facts: `why` on a handoff's fact id walks
-every stop-point this project has ever recorded. Embedded mode only for now;
-`--url` mode reports `unsupported` until the frozen `/v1` surface grows a
-handoff operation.
+every stop-point this project has ever recorded. Works in both modes: embedded
+writes the local store, and `--url` mode calls `POST /v1/memory/handoff` on the
+shared deployment — which is what makes multi-agent handoff work, several
+agents reading and writing the same scope's stop-points.
 
 ## Keyless vs. keyed
 

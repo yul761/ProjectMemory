@@ -1,5 +1,5 @@
 import { Injectable, Optional } from "@nestjs/common";
-import { flattenScopeFacts, groupFactsForDisplay, addNoteFact, resolveFacetPackForScope, type DisplayFact } from "@statecore/core";
+import { flattenScopeFacts, groupFactsForDisplay, addNoteFact, resolveFacetPackForScope, setHandoffFact, type DisplayFact } from "@statecore/core";
 import type { DigestState } from "@statecore/core";
 import { prisma as defaultPrisma } from "@statecore/db";
 import { randomUUID } from "node:crypto";
@@ -90,6 +90,52 @@ export class MemoryFactsService {
     }
 
     return { ok: true };
+  }
+
+  // Persistence mirrors addNote above; the handoff itself is a supersession-
+  // tracked registry fact (packages/core/src/handoff.ts).
+  async setHandoff(
+    scopeId: string,
+    input: { summary: string; openQuestions?: string[]; nextSteps?: string[] }
+  ): Promise<{ ok: true; handoffId: string; superseded: boolean }> {
+    const snap = await this.prisma.digestStateSnapshot.findFirst({
+      where: { scopeId },
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (snap) {
+      const state = snap.state as unknown as DigestState;
+      const result = setHandoffFact(state, input, () => randomUUID(), () => new Date().toISOString());
+      if (!result.changed) {
+        // Input validation guarantees a non-empty summary, so this is unreachable
+        // in practice; stated rather than silently returning a fake id.
+        throw new Error("handoff not stored: empty summary");
+      }
+      await this.prisma.digestStateSnapshot.update({
+        where: { id: snap.id },
+        data: { state: state as any }
+      });
+      return { ok: true, handoffId: result.id, superseded: result.supersededId !== undefined };
+    }
+
+    const state: DigestState = {
+      stableFacts: { decisions: [] },
+      workingNotes: {},
+      todos: [],
+      factRegistry: [],
+      profile: {}
+    };
+    const result = setHandoffFact(state, input, () => randomUUID(), () => new Date().toISOString());
+    if (!result.changed) throw new Error("handoff not stored: empty summary");
+    await this.prisma.$transaction(async (tx: any) => {
+      const digest = await tx.digest.create({
+        data: { scopeId, summary: "Notes", changes: "", nextSteps: [] }
+      });
+      await tx.digestStateSnapshot.create({
+        data: { scopeId, digestId: digest.id, state: state as any, consistency: null }
+      });
+    });
+    return { ok: true, handoffId: result.id, superseded: false };
   }
 
   async getFacts(scopeId: string, userId: string) {

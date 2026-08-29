@@ -19,6 +19,8 @@ import {
   MemoryEventOutput,
   ForgetFactInput,
   AddNoteInput,
+  SetHandoffInput,
+  SetHandoffOutput,
   MemoryFactsOutput,
   RetrieveOutput,
   RuntimeTurnInput,
@@ -44,6 +46,7 @@ import {
   facetAuthority,
   generateAnswer,
   getActiveFactRegistry,
+  getActiveHandoff,
   getDomainConfig,
   normalizeSelectionLog,
   packWithinBudget,
@@ -553,6 +556,21 @@ export class MemoryController {
     return this.memoryFacts.addNote(req.userId, input.scopeId, input.text);
   }
 
+  @Post(["/memory/handoff", "/v1/memory/handoff"])
+  async setHandoff(@Req() req: RequestWithUser, @Body() body: unknown) {
+    const input = SetHandoffInput.parse(body);
+    const scope = await this.domain.projectService.getScope(req.userId, input.scopeId);
+    if (!scope) throw new NotFoundException("Scope not found");
+    return parseOutput(
+      SetHandoffOutput,
+      await this.memoryFacts.setHandoff(input.scopeId, {
+        summary: input.summary,
+        openQuestions: input.openQuestions,
+        nextSteps: input.nextSteps
+      })
+    );
+  }
+
   @Get("/memory/events")
   async listEvents(
     @Req() req: RequestWithUser,
@@ -807,6 +825,9 @@ export class MemoryController {
       this.domain.getLatestDigestState(input.scopeId)
     ]);
     const activeFactRegistry = snapshot ? getActiveFactRegistry(snapshot.state) : [];
+    // The active session handoff rides on every retrieve, budget or not: it is
+    // the "continue from here" briefing, never in the budget competition.
+    const handoff = snapshot ? getActiveHandoff(snapshot.state) : null;
     const digest = result.digest ? result.digest.summary : null;
     const events = result.events.map((event) => ({
       id: event.id,
@@ -815,9 +836,11 @@ export class MemoryController {
     }));
 
     // Without a budget the response must be byte-identical to what callers got
-    // before this feature existed — same fact order, same count, same events.
+    // before this feature existed — same fact order, same count, same events —
+    // plus the additive-optional `handoff` field.
     if (input.maxChars === undefined) {
       return parseOutput(RetrieveOutput, {
+        handoff,
         digest,
         events,
         factRegistry: activeFactRegistry,
@@ -866,6 +889,7 @@ export class MemoryController {
       : result.retrieval;
 
     return parseOutput(RetrieveOutput, {
+      handoff,
       digest: packed.digest,
       events: packed.events,
       factRegistry: packed.facts,

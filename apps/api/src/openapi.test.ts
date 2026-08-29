@@ -13,21 +13,21 @@ describe("buildOpenApiDocument", () => {
     expect(typeof doc.info).toBe("object");
   });
 
-  it("documents exactly the 21 /v1 operations across 19 paths", () => {
+  it("documents exactly the 22 /v1 operations across 20 paths", () => {
     // Two numbers describe this surface and they are not the same number.
-    // `/v1/scopes` and `/v1/reminders` each carry both GET and POST, so 21
-    // operations sit on 19 paths. Anyone counting `Object.keys(doc.paths)`
-    // against the contract registry's 21 entries finds a mismatch that is not
+    // `/v1/scopes` and `/v1/reminders` each carry both GET and POST, so 22
+    // operations sit on 20 paths. Anyone counting `Object.keys(doc.paths)`
+    // against the contract registry's 22 entries finds a mismatch that is not
     // one; pinning both here means the relationship is stated rather than
     // rediscovered. It also catches a real fault the operation count alone
-    // would miss: a path registered twice keeps the operation count at 21
+    // would miss: a path registered twice keeps the operation count at 22
     // while the path count moves.
     const opCount = Object.values(paths).reduce(
       (n, methods) => n + Object.keys(methods).length,
       0
     );
-    expect(opCount).toBe(21);
-    expect(Object.keys(paths)).toHaveLength(19);
+    expect(opCount).toBe(22);
+    expect(Object.keys(paths)).toHaveLength(20);
     expect(Object.keys(paths).every((p) => p.startsWith("/v1/"))).toBe(true);
   });
 

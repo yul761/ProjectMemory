@@ -139,6 +139,9 @@ export const FactRegistryEntrySchema = z.object({
   evidenceType: z.enum(["event", "document"]),
   supersededBy: z.string().optional(),
   facet: z.string().optional(),
+  // Additive and optional: evidence-vocabulary nouns retrieval scores alongside
+  // the fact text. Absent on every entry written before entities existed.
+  entities: z.array(z.string()).optional(),
   // Additive and optional: a fact that left the active set without a replacement
   // (capacity eviction, explicit forget). Absent on every pre-existing entry.
   retiredAt: z.string().optional(),
@@ -170,7 +173,34 @@ export const BudgetReportSchema = z.object({
   itemsOmitted: z.number().int().min(0)
 });
 
+// Session handoff: "where the last session stopped", written by an agent about
+// to end a session, read by whichever agent — same client or another vendor's —
+// starts the next one against the same scope. Stored as a supersession-tracked
+// registry fact, so the chain of stop-points stays walkable via provenance.
+export const SetHandoffInput = z.object({
+  scopeId: z.string().uuid(),
+  summary: z.string().trim().min(1).max(2000),
+  openQuestions: z.array(z.string().trim().min(1).max(500)).max(10).optional(),
+  nextSteps: z.array(z.string().trim().min(1).max(500)).max(10).optional()
+});
+
+export const SetHandoffOutput = z.object({
+  ok: z.literal(true),
+  handoffId: z.string(),
+  superseded: z.boolean()
+});
+
+export const ActiveHandoffSchema = z.object({
+  content: z.string(),
+  addedAt: z.string(),
+  versionCount: z.number().int().min(1)
+});
+
 export const RetrieveOutput = z.object({
+  // Additive and optional: the scope's active session handoff (see
+  // SetHandoffInput). Rides on every retrieve, budget or not — it is the
+  // "continue from here" briefing, never in the budget competition.
+  handoff: ActiveHandoffSchema.nullable().optional(),
   digest: z.string().nullable(),
   events: z.array(
     z.object({
@@ -819,6 +849,9 @@ export const PublicV1Contracts = {
   // way and is better stated than assumed.
   "GET /facet-pack": { query: OptionalScopeIdQuery, response: FacetPackOutput },
   "POST /memory/notes": { request: AddNoteInput, response: AddNoteOutput },
+  // Cross-session (and cross-vendor) handoff: the write side of the briefing
+  // that `POST /memory/retrieve` hands back in its `handoff` field.
+  "POST /memory/handoff": { request: SetHandoffInput, response: SetHandoffOutput },
   // Narrowed like RetrieveOutput above: the live response also carries
   // `personaPrompt`, a persona string the scope's domain template supplies. That
   // is a statement about how a client should *speak*, not about what this engine
