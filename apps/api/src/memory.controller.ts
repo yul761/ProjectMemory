@@ -45,8 +45,9 @@ import {
   createModelProvider,
   facetAuthority,
   generateAnswer,
+  activeHandoffFromRows,
   getActiveFactRegistry,
-  getActiveHandoff,
+  handoffRowsToRegistry,
   HANDOFF_FACET,
   getDomainConfig,
   normalizeSelectionLog,
@@ -535,9 +536,19 @@ export class MemoryController {
     const scope = await this.domain.projectService.getScope(req.userId, scopeId);
     if (!scope) throw new NotFoundException("Scope not found");
     const snapshot = await this.domain.getLatestDigestState(scopeId);
-    if (!snapshot) throw new NotFoundException("No digest state for scope");
-    const result = buildFactProvenance(snapshot.state as DigestState, factId);
-    if (!result) throw new NotFoundException("Fact not found");
+    let result = snapshot ? buildFactProvenance(snapshot.state as DigestState, factId) : null;
+    if (!result) {
+      // Handoffs live in their own table, not the registry; their chain is
+      // walkable through the same endpoint by mapping rows into entry shape.
+      const rows = await prisma.sessionHandoff.findMany({ where: { scopeId } });
+      if (rows.some((r) => r.id === factId)) {
+        result = buildFactProvenance(
+          { stableFacts: { decisions: [] }, workingNotes: {}, todos: [], profile: {}, factRegistry: handoffRowsToRegistry(rows) },
+          factId
+        );
+      }
+    }
+    if (!result) throw new NotFoundException(snapshot ? "Fact not found" : "No digest state for scope");
     return result;
   }
 
@@ -567,7 +578,8 @@ export class MemoryController {
       await this.memoryFacts.setHandoff(input.scopeId, {
         summary: input.summary,
         openQuestions: input.openQuestions,
-        nextSteps: input.nextSteps
+        nextSteps: input.nextSteps,
+        clear: input.clear
       })
     );
   }
@@ -821,9 +833,10 @@ export class MemoryController {
       throw new NotFoundException("Scope not found");
     }
     const limit = input.limit ?? 20;
-    const [result, snapshot] = await Promise.all([
+    const [result, snapshot, handoffRows] = await Promise.all([
       this.domain.retrieveService.retrieve(input.scopeId, limit, input.query),
-      this.domain.getLatestDigestState(input.scopeId)
+      this.domain.getLatestDigestState(input.scopeId),
+      prisma.sessionHandoff.findMany({ where: { scopeId: input.scopeId } })
     ]);
     // Handoff entries are excluded from the registry output: the handoff rides
     // in its own field below, and a registry copy would both duplicate it and
@@ -833,7 +846,7 @@ export class MemoryController {
     );
     // The active session handoff rides on every retrieve, budget or not: it is
     // the "continue from here" briefing, never in the budget competition.
-    const handoff = snapshot ? getActiveHandoff(snapshot.state) : null;
+    const handoff = activeHandoffFromRows(handoffRows);
     const digest = result.digest ? result.digest.summary : null;
     const events = result.events.map((event) => ({
       id: event.id,

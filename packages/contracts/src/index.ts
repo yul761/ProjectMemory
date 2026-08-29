@@ -177,20 +177,34 @@ export const BudgetReportSchema = z.object({
 // to end a session, read by whichever agent — same client or another vendor's —
 // starts the next one against the same scope. Stored as a supersession-tracked
 // registry fact, so the chain of stop-points stays walkable via provenance.
-export const SetHandoffInput = z.object({
-  scopeId: z.string().uuid(),
-  summary: z.string().trim().min(1).max(2000),
-  openQuestions: z.array(z.string().trim().min(1).max(500)).max(10).optional(),
-  nextSteps: z.array(z.string().trim().min(1).max(500)).max(10).optional()
-});
+export const SetHandoffInput = z
+  .object({
+    scopeId: z.string().uuid(),
+    summary: z.string().trim().max(2000).optional(),
+    openQuestions: z.array(z.string().trim().min(1).max(500)).max(10).optional(),
+    nextSteps: z.array(z.string().trim().min(1).max(500)).max(10).optional(),
+    // Retires the active handoff (retiredAt/retiredReason, never deleted)
+    // instead of writing a new one. With clear, the other fields are ignored.
+    clear: z.boolean().optional()
+  })
+  .superRefine((value, ctx) => {
+    if (!value.clear && !value.summary?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "summary is required unless clear is true" });
+    }
+  });
 
 export const SetHandoffOutput = z.object({
   ok: z.literal(true),
-  handoffId: z.string(),
-  superseded: z.boolean()
+  // The new stop-point's id — feed it to the provenance endpoint (or the MCP
+  // `why` tool) to walk the chain. Absent on a clear.
+  handoffId: z.string().optional(),
+  superseded: z.boolean(),
+  // Present on a clear: whether an active handoff was actually retired.
+  cleared: z.boolean().optional()
 });
 
 export const ActiveHandoffSchema = z.object({
+  id: z.string(),
   content: z.string(),
   addedAt: z.string(),
   versionCount: z.number().int().min(1)

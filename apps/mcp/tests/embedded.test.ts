@@ -43,23 +43,37 @@ describe("embedded backend, keyless", () => {
     expect(res.mode).toBe("event");
   });
 
-  it("handoff → recall returns it; a second handoff supersedes the first on the chain", async () => {
+  it("handoff → recall returns it; a second supersedes the first; why() walks the chain; clear retires", async () => {
     const first = await be.handoff({ summary: "stopped mid-migration", nextSteps: ["wire the controller"] });
-    expect(first).toEqual({ ok: true, superseded: false });
+    expect(first).toMatchObject({ ok: true, superseded: false });
+    expect(first.handoffId).toBeTruthy();
 
     const afterFirst: any = await be.recall({});
     expect(afterFirst.handoff?.content).toContain("stopped mid-migration");
     expect(afterFirst.handoff?.content).toContain("wire the controller");
+    expect(afterFirst.handoff?.id).toBe(first.handoffId);
     // The handoff rides only in its own field: duplicating it into factRegistry
     // would also let it compete for the maxChars budget it is promised out of.
     expect((afterFirst.factRegistry as any[]).some((f) => f.facet === "handoff")).toBe(false);
 
     const second = await be.handoff({ summary: "controller wired, tests failing", openQuestions: ["flaky or real?"] });
-    expect(second).toEqual({ ok: true, superseded: true });
+    expect(second).toMatchObject({ ok: true, superseded: true });
 
     const afterSecond: any = await be.recall({ query: "controller" });
     expect(afterSecond.handoff?.content).toContain("tests failing");
     expect(afterSecond.handoff?.versionCount).toBe(2);
+
+    // The chain is walkable through the same why() every fact uses.
+    const prov: any = await be.why({ factId: second.handoffId! });
+    expect(prov.chain.map((e: any) => e.id)).toEqual([first.handoffId, second.handoffId]);
+
+    // clear retires (never deletes): recall stops carrying it, history remains.
+    const cleared = await be.handoff({ clear: true });
+    expect(cleared).toMatchObject({ ok: true, cleared: true });
+    const afterClear: any = await be.recall({});
+    expect(afterClear.handoff).toBeNull();
+    const provAfterClear: any = await be.why({ factId: second.handoffId! });
+    expect(provAfterClear.fact.retiredReason).toBe("user_cleared");
   });
 
   // Regression for a first-wins vs. last-wins factId join bug: two registry

@@ -69,6 +69,7 @@ model ProjectScope {
   userStates    UserState[]
 
   @@index([userId])
+  handoffs SessionHandoff[]
 }
 
 model UserState {
@@ -207,4 +208,27 @@ model MemoryEventToken {
 
   @@id([eventId, token])
   @@index([scopeId, token])
+}
+
+// Session handoffs: "where the last session stopped", one row per stop-point.
+// A dedicated table, NOT part of the digest state snapshot, for three reasons
+// found in review: (1) snapshot JSON is read-modify-write, so a handoff written
+// while a digest ran vanished from the new snapshot's lineage — rows in their
+// own table are transactional and race-free; (2) the registry is copied into
+// every new snapshot, so per-session handoffs accumulated without bound;
+// (3) rows are their own evidence, so provenance needs no fabricated ids.
+// Supersession works like the fact registry: a new handoff stamps supersededBy
+// on the previous active rows; clear stamps retiredAt. Never deleted.
+model SessionHandoff {
+  id            String    @id @default(uuid())
+  scopeId       String
+  content       String
+  createdAt     DateTime  @default(now())
+  supersededBy  String?
+  retiredAt     DateTime?
+  retiredReason String?
+
+  scope ProjectScope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@index([scopeId, createdAt])
 }

@@ -1,78 +1,113 @@
 import { describe, it, expect } from "vitest";
-import { setHandoffFact, getActiveHandoff, HANDOFF_FACET } from "./handoff";
+import {
+  formatHandoff,
+  activeHandoffFromRows,
+  handoffRowsToRegistry,
+  carryOverConcurrentNotes,
+  HANDOFF_FACET,
+  type HandoffRow
+} from "./handoff";
+import { buildFactProvenance } from "./provenance";
 import type { DigestState } from "./digest-control";
 
-function emptyState(): DigestState {
-  return { stableFacts: { decisions: [] }, workingNotes: {}, todos: [], factRegistry: [], profile: {} };
-}
+const row = (partial: Partial<HandoffRow> & Pick<HandoffRow, "id" | "content">): HandoffRow => ({
+  createdAt: new Date("2026-08-29T12:00:00Z"),
+  supersededBy: null,
+  retiredAt: null,
+  retiredReason: null,
+  ...partial
+});
 
-let counter = 0;
-const makeId = () => `id-${++counter}`;
-const makeNow = () => "2026-08-29T12:00:00.000Z";
-
-describe("setHandoffFact", () => {
-  it("stores a handoff as a registry fact under the handoff facet", () => {
-    const state = emptyState();
-    const result = setHandoffFact(
-      state,
-      { summary: "Migrating retrieve to RRF; stage 2 half done", openQuestions: ["keep the old scorer?"], nextSteps: ["wire the api controller"] },
-      makeId,
-      makeNow
-    );
-
-    expect(result.changed).toBe(true);
-    const entry = state.factRegistry!.find((f) => f.facet === HANDOFF_FACET);
-    expect(entry).toBeDefined();
-    expect(entry!.content).toContain("Migrating retrieve to RRF");
-    expect(entry!.content).toContain("keep the old scorer?");
-    expect(entry!.content).toContain("wire the api controller");
-  });
-
-  it("supersedes the previous handoff instead of accumulating", () => {
-    const state = emptyState();
-    setHandoffFact(state, { summary: "first stop point" }, makeId, makeNow);
-    const second = setHandoffFact(state, { summary: "second stop point" }, makeId, makeNow);
-
-    expect(second.changed).toBe(true);
-    const entries = state.factRegistry!.filter((f) => f.facet === HANDOFF_FACET);
-    expect(entries).toHaveLength(2);
-    const [first, latest] = entries;
-    expect(first.supersededBy).toBe(latest.id);
-    expect(latest.supersededBy).toBeUndefined();
-    expect(second.changed && second.supersededId).toBe(first.id);
-  });
-
-  it("rejects an empty summary", () => {
-    const state = emptyState();
-    expect(setHandoffFact(state, { summary: "   " }, makeId, makeNow)).toEqual({ changed: false });
-    expect(state.factRegistry).toHaveLength(0);
+describe("formatHandoff", () => {
+  it("composes summary, open questions, and next steps", () => {
+    const text = formatHandoff({
+      summary: "stopped mid-migration",
+      openQuestions: ["flaky or real?"],
+      nextSteps: ["wire the controller"]
+    });
+    expect(text).toContain("stopped mid-migration");
+    expect(text).toContain("Open questions:\n- flaky or real?");
+    expect(text).toContain("Next steps:\n- wire the controller");
   });
 });
 
-describe("getActiveHandoff", () => {
-  it("returns null when no handoff was ever set", () => {
-    expect(getActiveHandoff(emptyState())).toBeNull();
+describe("activeHandoffFromRows", () => {
+  it("returns null for no rows and for all-retired rows", () => {
+    expect(activeHandoffFromRows([])).toBeNull();
+    expect(activeHandoffFromRows([row({ id: "a", content: "x", retiredAt: new Date() })])).toBeNull();
   });
 
-  it("returns the latest handoff with its version count", () => {
-    const state = emptyState();
-    setHandoffFact(state, { summary: "first" }, makeId, makeNow);
-    setHandoffFact(state, { summary: "second" }, makeId, makeNow);
+  it("returns the newest active row with the total stop-point count", () => {
+    const rows = [
+      row({ id: "a", content: "first", supersededBy: "b", createdAt: new Date("2026-08-01T00:00:00Z") }),
+      row({ id: "b", content: "second", createdAt: new Date("2026-08-02T00:00:00Z") })
+    ];
+    const active = activeHandoffFromRows(rows);
+    expect(active).toMatchObject({ id: "b", content: "second", versionCount: 2 });
+    expect(active!.addedAt).toBe("2026-08-02T00:00:00.000Z");
+  });
+});
 
-    const active = getActiveHandoff(state);
-    expect(active).not.toBeNull();
-    expect(active!.content).toContain("second");
-    expect(active!.addedAt).toBe("2026-08-29T12:00:00.000Z");
-    expect(active!.versionCount).toBe(2);
+describe("handoffRowsToRegistry — provenance compatibility", () => {
+  it("maps rows so buildFactProvenance walks the stop-point chain", () => {
+    const rows = [
+      row({ id: "a", content: "first", supersededBy: "b", createdAt: new Date("2026-08-01T00:00:00Z") }),
+      row({ id: "b", content: "second", createdAt: new Date("2026-08-02T00:00:00Z") })
+    ];
+    const registry = handoffRowsToRegistry(rows);
+    expect(registry.every((e) => e.facet === HANDOFF_FACET)).toBe(true);
+    // A handoff row is its own evidence — no fabricated foreign ids.
+    expect(registry[0].evidenceId).toBe("a");
+
+    const state: DigestState = { stableFacts: { decisions: [] }, workingNotes: {}, todos: [], factRegistry: registry, profile: {} };
+    const provenance = buildFactProvenance(state, "b");
+    expect(provenance?.chain.map((e) => e.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("carryOverConcurrentNotes", () => {
+  const baseState = (): DigestState => ({
+    stableFacts: { decisions: [] },
+    workingNotes: {},
+    todos: [],
+    factRegistry: [],
+    profile: {}
   });
 
-  it("ignores a retired handoff", () => {
-    const state = emptyState();
-    setHandoffFact(state, { summary: "only one" }, makeId, makeNow);
-    const entry = state.factRegistry!.find((f) => f.facet === HANDOFF_FACET)!;
-    entry.retiredAt = makeNow();
-    entry.retiredReason = "user_forget";
+  const noteEntry = (id: string, content: string) => ({
+    id,
+    content,
+    type: "profile" as const,
+    confidence: 0.9,
+    addedAt: "2026-08-29T12:00:00.000Z",
+    evidenceId: `${id}-ev`,
+    evidenceType: "event" as const,
+    facet: "notes"
+  });
 
-    expect(getActiveHandoff(state)).toBeNull();
+  it("carries a note written concurrently into the pipeline's state", () => {
+    const pipeline = baseState();
+    const latest = baseState();
+    latest.factRegistry!.push(noteEntry("n1", "written mid-digest"));
+    (latest.profile as Record<string, string[]>).notes = ["written mid-digest"];
+
+    const carried = carryOverConcurrentNotes(pipeline, latest);
+
+    expect(carried).toBe(1);
+    expect(pipeline.factRegistry!.some((e) => e.id === "n1")).toBe(true);
+    expect((pipeline.profile as Record<string, string[]>).notes).toContain("written mid-digest");
+  });
+
+  it("does not duplicate entries the pipeline already has, and ignores non-note facets", () => {
+    const pipeline = baseState();
+    pipeline.factRegistry!.push(noteEntry("n1", "already there"));
+    const latest = baseState();
+    latest.factRegistry!.push(noteEntry("n1", "already there"));
+    latest.factRegistry!.push({ ...noteEntry("g1", "a goal"), facet: "goals" });
+
+    const carried = carryOverConcurrentNotes(pipeline, latest);
+
+    expect(carried).toBe(0);
+    expect(pipeline.factRegistry!).toHaveLength(1);
   });
 });

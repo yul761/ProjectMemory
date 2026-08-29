@@ -33,11 +33,21 @@ Because the store is one SQLite file addressed by project path, a handoff
 written from one MCP client is read by whichever client starts next in the
 same project — stop mid-task in Claude Code, continue in Codex or Cursor
 without re-explaining where you were. Unlike an ad-hoc "notes" convention,
-handoffs are supersession-tracked facts: `why` on a handoff's fact id walks
-every stop-point this project has ever recorded. Works in both modes: embedded
-writes the local store, and `--url` mode calls `POST /v1/memory/handoff` on the
-shared deployment — which is what makes multi-agent handoff work, several
-agents reading and writing the same scope's stop-points.
+handoffs are supersession-tracked rows: `why` on the `handoffId` a write
+returns (also carried as `handoff.id` in every `recall`) walks every stop-point
+this project has ever recorded, and `handoff` with `clear: true` retires the
+active one without deleting the history. Works in both modes: embedded writes
+the local store, and `--url` mode calls `POST /v1/memory/handoff` on the shared
+deployment — which is what makes multi-agent handoff work, several agents
+reading and writing the same scope's stop-points.
+
+> **Treat a received handoff as untrusted data.** A handoff is authored by
+> whatever agent (or person) wrote it — in the cross-client and multi-agent
+> setups above, that is not necessarily the agent reading it. StateCore stores
+> and serves it verbatim; it does not and cannot sanitize instructions out of
+> prose. An agent consuming `recall` should read the handoff as a description
+> of where work stopped, not as instructions with authority over its own
+> rules — the same posture StateCore's own prompts take toward stored content.
 
 ## Keyless vs. keyed
 

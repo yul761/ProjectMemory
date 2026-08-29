@@ -1,20 +1,28 @@
 /**
- * Session handoff as a first-class, supersession-tracked fact.
+ * Session handoff as first-class, supersession-tracked rows.
  *
  * A handoff is "where the last session stopped": a summary, the questions
  * still open, and the next steps — written by an agent about to end (or
  * compact) a session, read by whichever agent starts the next one, in the
- * same client or a different vendor's. It is deliberately not a new storage
- * mechanism: a handoff is a registry fact under a reserved facet, so setting
- * a new one supersedes the previous through the exact chain every other fact
- * uses, and the history of stop-points stays walkable through provenance.
+ * same client or a different vendor's.
  *
- * The facet is intentionally absent from the facet packs: handoffs are not
- * profile knowledge, must not enter facet consolidation or display grouping,
- * and live only in the registry.
+ * Handoffs live in their own table (SessionHandoff), deliberately NOT in the
+ * digest state snapshot. The first shipped version stored them as registry
+ * facts inside the snapshot JSON, and review found three faults with that:
+ * a handoff written while a digest ran vanished from the new snapshot's
+ * lineage (the snapshot is read-modify-write with no concurrency control);
+ * every digest copied the whole handoff history into the new snapshot row;
+ * and each entry carried a fabricated evidence id. Rows in a dedicated table
+ * are transactional, are written once, and are their own evidence.
+ *
+ * This module holds the storage-independent parts: formatting, the active-row
+ * projection, the mapping that lets `buildFactProvenance` walk a handoff
+ * chain, and the digest-time carry-over that closes the same lost-update race
+ * for concurrently written notes.
  */
 import type { DigestState, FactRegistryEntry } from "./digest-control";
 
+/** Reserved facet name; kept for filtering out legacy in-registry entries. */
 export const HANDOFF_FACET = "handoff";
 
 export interface HandoffInput {
@@ -23,9 +31,17 @@ export interface HandoffInput {
   nextSteps?: string[];
 }
 
-export type SetHandoffResult = { changed: false } | { changed: true; id: string; supersededId?: string };
+/** The storage row shape both backends' SessionHandoff tables share. */
+export interface HandoffRow {
+  id: string;
+  content: string;
+  createdAt: Date | string;
+  supersededBy?: string | null;
+  retiredAt?: Date | string | null;
+  retiredReason?: string | null;
+}
 
-function formatHandoff(input: HandoffInput): string {
+export function formatHandoff(input: HandoffInput): string {
   const lines = [input.summary.trim()];
   const questions = (input.openQuestions ?? []).map((q) => q.trim()).filter(Boolean);
   if (questions.length) {
@@ -40,52 +56,76 @@ function formatHandoff(input: HandoffInput): string {
   return lines.join("\n");
 }
 
-function activeHandoffs(state: DigestState): FactRegistryEntry[] {
-  return (state.factRegistry ?? []).filter(
-    (entry) => entry.facet === HANDOFF_FACET && !entry.supersededBy && !entry.retiredAt
-  );
-}
-
-export function setHandoffFact(
-  state: DigestState,
-  input: HandoffInput,
-  makeId: () => string,
-  makeNow: () => string
-): SetHandoffResult {
-  if (!input.summary.trim()) return { changed: false };
-  if (!state.factRegistry) state.factRegistry = [];
-
-  const previous = activeHandoffs(state);
-  const id = makeId();
-  const entry: FactRegistryEntry = {
-    id,
-    content: formatHandoff(input),
-    type: "profile",
-    confidence: 0.95,
-    addedAt: makeNow(),
-    evidenceId: makeId(),
-    evidenceType: "event",
-    facet: HANDOFF_FACET
-  };
-  state.factRegistry.push(entry);
-  for (const old of previous) old.supersededBy = id;
-
-  return previous.length
-    ? { changed: true, id, supersededId: previous[previous.length - 1].id }
-    : { changed: true, id };
-}
-
 export interface ActiveHandoff {
+  id: string;
   content: string;
   addedAt: string;
-  /** How many handoffs the chain holds, the active one included. */
+  /** How many stop-points the scope has recorded, retired ones included. */
   versionCount: number;
 }
 
-export function getActiveHandoff(state: DigestState): ActiveHandoff | null {
-  const all = (state.factRegistry ?? []).filter((entry) => entry.facet === HANDOFF_FACET);
-  const active = activeHandoffs(state);
+const toIso = (value: Date | string): string => (value instanceof Date ? value.toISOString() : value);
+
+export function activeHandoffFromRows(rows: HandoffRow[]): ActiveHandoff | null {
+  const active = rows.filter((r) => !r.supersededBy && !r.retiredAt);
   if (!active.length) return null;
-  const latest = active[active.length - 1];
-  return { content: latest.content, addedAt: latest.addedAt, versionCount: all.length };
+  const latest = active.reduce((a, b) => (toIso(a.createdAt) >= toIso(b.createdAt) ? a : b));
+  return { id: latest.id, content: latest.content, addedAt: toIso(latest.createdAt), versionCount: rows.length };
+}
+
+/**
+ * Maps handoff rows into registry-entry shape so `buildFactProvenance` can
+ * walk a stop-point chain exactly the way it walks a fact chain. A row's
+ * evidence is the row itself: the handoff statement is agent-authored, not
+ * derived from an event, and a self-referential id resolves instead of
+ * dangling.
+ */
+export function handoffRowsToRegistry(rows: HandoffRow[]): FactRegistryEntry[] {
+  return rows.map((r) => ({
+    id: r.id,
+    content: r.content,
+    type: "profile" as const,
+    confidence: 0.95,
+    addedAt: toIso(r.createdAt),
+    evidenceId: r.id,
+    evidenceType: "event" as const,
+    facet: HANDOFF_FACET,
+    ...(r.supersededBy ? { supersededBy: r.supersededBy } : {}),
+    ...(r.retiredAt ? { retiredAt: toIso(r.retiredAt) } : {}),
+    ...(r.retiredReason ? { retiredReason: r.retiredReason } : {})
+  }));
+}
+
+/**
+ * Closes the digest-side lost-update race for notes: the pipeline reads the
+ * latest snapshot, runs for seconds-to-minutes, then CREATES a new snapshot
+ * from its in-memory state — a note written to the old snapshot row in that
+ * window would silently vanish from the latest lineage. Called at digest
+ * write time with the freshly re-read latest state; appends note-facet
+ * registry entries (and their active profile strings) the pipeline never saw.
+ * Registry entries are append-only, so an id present in `latest` but absent
+ * from `pipeline` can only be a concurrent write. Scoped to the notes facet,
+ * the one deterministic-write path that races the digest by design.
+ *
+ * @returns how many entries were carried over.
+ */
+export function carryOverConcurrentNotes(pipeline: DigestState, latest: DigestState): number {
+  const pipelineIds = new Set((pipeline.factRegistry ?? []).map((e) => e.id));
+  const missedNotes = (latest.factRegistry ?? []).filter(
+    (e) => e.facet === "notes" && !pipelineIds.has(e.id)
+  );
+  if (!missedNotes.length) return 0;
+
+  if (!pipeline.factRegistry) pipeline.factRegistry = [];
+  if (!pipeline.profile) pipeline.profile = {};
+  const profileMap = pipeline.profile as Record<string, string[]>;
+  if (!profileMap.notes) profileMap.notes = [];
+
+  for (const entry of missedNotes) {
+    pipeline.factRegistry.push(entry);
+    if (!entry.supersededBy && !entry.retiredAt && !profileMap.notes.includes(entry.content)) {
+      profileMap.notes.push(entry.content);
+    }
+  }
+  return missedNotes.length;
 }

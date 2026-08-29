@@ -54,7 +54,8 @@ describe("MemoryFactsService.forgetFact", () => {
     const mockPrisma = makeMockPrisma({
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue({ state: snapshotState }) },
       forgottenFact: { upsert: vi.fn().mockResolvedValue({}) },
-      memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) }
+      memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      memoryEventToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) }
     }, { template: "personal" });
 
     const service = new MemoryFactsService(mockPrisma);
@@ -79,7 +80,8 @@ describe("MemoryFactsService.forgetFact", () => {
     const mockPrisma = makeMockPrisma({
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue({ state: snapshotState }) },
       forgottenFact: { upsert: vi.fn().mockResolvedValue({}) },
-      memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) }
+      memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      memoryEventToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) }
     }, { template: "personal" });
 
     const service = new MemoryFactsService(mockPrisma);
@@ -116,7 +118,8 @@ describe("MemoryFactsService.forgetFact", () => {
       digestStateSnapshot: { findFirst: vi.fn().mockResolvedValue({ state: stateWithNote }) },
       forgottenFact: { upsert: vi.fn().mockResolvedValue({}) },
       // updateMany matches 0 rows harmlessly — no throw (unlike update which throws P2025)
-      memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) }
+      memoryEvent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      memoryEventToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) }
     }, { template: "personal" });
 
     const service = new MemoryFactsService(mockPrisma);

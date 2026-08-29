@@ -62,11 +62,13 @@ merely stored. All are frozen under `/v1`.
   - body: `{ scopeId, text }` (max 500 chars)
   - deterministic durable note writer with exact-match dedup
 - `POST /memory/handoff`
-  - body: `{ scopeId, summary, openQuestions?, nextSteps? }`
-  - records where a session stopped as a supersession-tracked registry fact;
-    the next session (any client against the same scope) receives the active
-    handoff in retrieve's `handoff` field and can walk earlier stop-points via
-    provenance
+  - body: `{ scopeId, summary, openQuestions?, nextSteps? }`, or
+    `{ scopeId, clear: true }` to retire the active handoff (recorded, never
+    deleted)
+  - records where a session stopped as a supersession-tracked row in its own
+    table; the next session (any client against the same scope) receives the
+    active handoff — content, `id`, `versionCount` — in retrieve's `handoff`
+    field, and the provenance endpoint walks the stop-point chain by that id
 - `GET /memory/digests/:digestId/selection`
   - what that digest kept, and what it discarded with reasons; `null`-era digests
     predate the log and return empty arrays

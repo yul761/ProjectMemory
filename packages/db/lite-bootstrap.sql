@@ -184,3 +184,18 @@ CREATE TABLE IF NOT EXISTS "MemoryEventToken" (
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "MemoryEventToken_scopeId_token_idx" ON "MemoryEventToken"("scopeId", "token");
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "SessionHandoff" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "scopeId" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "supersededBy" TEXT,
+    "retiredAt" DATETIME,
+    "retiredReason" TEXT,
+    CONSTRAINT "SessionHandoff_scopeId_fkey" FOREIGN KEY ("scopeId") REFERENCES "ProjectScope" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "SessionHandoff_scopeId_createdAt_idx" ON "SessionHandoff"("scopeId", "createdAt");

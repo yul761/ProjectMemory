@@ -25,6 +25,7 @@ const BATCH = 500;
 async function main() {
   const { scopeId } = parseArgs(process.argv.slice(2));
   let indexed = 0;
+  let sentinels = 0;
   for (;;) {
     const events = await prisma.memoryEvent.findMany({
       where: { ...(scopeId ? { scopeId } : {}), suppressedAt: null, tokens: { none: {} } },
@@ -41,6 +42,7 @@ async function main() {
           data: [{ eventId: event.id, scopeId: event.scopeId, token: "" }],
           skipDuplicates: true
         });
+        sentinels += 1;
         continue;
       }
       await prisma.memoryEventToken.createMany({
@@ -51,7 +53,9 @@ async function main() {
     }
     console.log(`indexed ${indexed} events so far...`);
   }
-  console.log(`done: ${indexed} events indexed${scopeId ? ` in scope ${scopeId}` : ""}`);
+  console.log(
+    `done: ${indexed} events indexed, ${sentinels} without indexable tokens marked${scopeId ? `, scope ${scopeId}` : ""}`
+  );
 }
 
 main()

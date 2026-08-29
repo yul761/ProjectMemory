@@ -14,6 +14,11 @@ engine is involved), and retrieval unions a lexical candidate stream into the
 pool. Final ranking is unchanged. Index-query failures are reported as
 `retrieval.degraded` stage `lexical_search`, never swallowed.
 
+English stopwords are excluded from the index (the relevance scorer is
+unchanged), long bilingual queries interleave ASCII and CJK tokens instead of
+truncating CJK away, and `forget` removes the suppressed event's index rows.
+
 The embedded store backfills existing events automatically at open. Server
-deployments run the `20260829120000_memory_event_tokens` migration and then
-`pnpm backfill:tokens` once.
+deployments run the `20260829120000_memory_event_tokens` and
+`20260829200000_session_handoff` migrations and then `pnpm backfill:tokens`
+once.

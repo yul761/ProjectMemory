@@ -11,11 +11,12 @@ import {
   getActiveFactRegistry,
   factToGroup,
   computeFactKey,
+  activeHandoffFromRows,
   facetAuthority,
-  getActiveHandoff,
+  formatHandoff,
+  handoffRowsToRegistry,
   HANDOFF_FACET,
   packWithinBudget,
-  setHandoffFact,
   tokenizeForIndex,
   type DigestState,
   type ProjectRepo,
@@ -345,27 +346,26 @@ export function createEmbeddedBackend(opts: {
     },
 
     async handoff(input) {
-      // Persistence mirrors remember's note path above; keep in sync.
-      const snap = await latestState();
-      if (snap) {
-        const result = setHandoffFact(snap.state, input, () => randomUUID(), () => new Date().toISOString());
-        if (result.changed) {
-          await store.prisma.digestStateSnapshot.update({
-            where: { id: snap.id },
-            data: { state: snap.state as any }
-          });
-        }
-        return { ok: true, superseded: result.changed ? result.supersededId !== undefined : false };
-      }
-      const state: DigestState = { stableFacts: { decisions: [] }, workingNotes: {}, todos: [], factRegistry: [], profile: {} };
-      setHandoffFact(state, input, () => randomUUID(), () => new Date().toISOString());
-      await store.prisma.$transaction(async (tx) => {
-        const digest = await tx.digest.create({ data: { scopeId, summary: "Notes", changes: "", nextSteps: [] } });
-        await tx.digestStateSnapshot.create({
-          data: { scopeId, digestId: digest.id, state: state as any, consistency: Prisma.JsonNull }
+      // Mirrors apps/api/src/memory-facts.service.ts#setHandoff; keep in sync.
+      // Handoffs live in their own table — see packages/core/src/handoff.ts.
+      if (input.clear) {
+        const retired = await store.prisma.sessionHandoff.updateMany({
+          where: { scopeId, supersededBy: null, retiredAt: null },
+          data: { retiredAt: new Date(), retiredReason: "user_cleared" }
         });
+        return { ok: true, superseded: false, cleared: retired.count > 0 };
+      }
+      const summary = input.summary?.trim();
+      if (!summary) throw new Error("handoff not stored: empty summary");
+      const content = formatHandoff({ summary, openQuestions: input.openQuestions, nextSteps: input.nextSteps });
+      return store.prisma.$transaction(async (tx) => {
+        const created = await tx.sessionHandoff.create({ data: { scopeId, content } });
+        const superseded = await tx.sessionHandoff.updateMany({
+          where: { scopeId, supersededBy: null, retiredAt: null, NOT: { id: created.id } },
+          data: { supersededBy: created.id }
+        });
+        return { ok: true as const, handoffId: created.id, superseded: superseded.count > 0 };
       });
-      return { ok: true, superseded: false };
     },
 
     async recall({ query, maxChars }) {
@@ -386,7 +386,7 @@ export function createEmbeddedBackend(opts: {
       // The active session handoff rides on every recall, budget or not: it is
       // the "continue from here" briefing, so it must never lose a budget
       // competition to ordinary events.
-      const handoff = snap ? getActiveHandoff(snap.state) : null;
+      const handoff = activeHandoffFromRows(await store.prisma.sessionHandoff.findMany({ where: { scopeId } }));
 
       if (maxChars === undefined) {
         return { handoff, digest, events, factRegistry: activeFactRegistry, retrieval: (result as { retrieval?: unknown }).retrieval ?? null };
@@ -446,7 +446,16 @@ export function createEmbeddedBackend(opts: {
 
     async why({ factId }) {
       const snap = await latestState();
-      return snap ? buildFactProvenance(snap.state, factId) : null;
+      const fromRegistry = snap ? buildFactProvenance(snap.state, factId) : null;
+      if (fromRegistry) return fromRegistry;
+      // Handoffs live in their own table; their chain is walkable through the
+      // same tool by mapping rows into entry shape.
+      const rows = await store.prisma.sessionHandoff.findMany({ where: { scopeId } });
+      if (!rows.some((r) => r.id === factId)) return null;
+      return buildFactProvenance(
+        { stableFacts: { decisions: [] }, workingNotes: {}, todos: [], profile: {}, factRegistry: handoffRowsToRegistry(rows) },
+        factId
+      );
     },
 
     async digestNow() {
@@ -495,6 +504,9 @@ export function createEmbeddedBackend(opts: {
           where: { id: match.evidenceId },
           data: { suppressedAt: new Date() }
         });
+        // A suppressed event must also leave the lexical index, or it keeps
+        // occupying candidate slots that findByIds then filters out.
+        await store.prisma.memoryEventToken.deleteMany({ where: { eventId: match.evidenceId } });
       }
       return { ok: true };
     },

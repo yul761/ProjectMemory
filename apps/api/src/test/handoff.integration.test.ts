@@ -50,6 +50,24 @@ describe("POST /v1/memory/handoff", () => {
       .send({ scopeId, query: "controller" });
     expect(afterSecond.body.handoff?.content).toContain("tests failing");
     expect(afterSecond.body.handoff?.versionCount).toBe(2);
+
+    // Provenance walks the stop-point chain by the returned id.
+    const prov = await request(app.getHttpServer())
+      .get(`/v1/memory/facts/${second.body.handoffId}/provenance?scopeId=${scopeId}`)
+      .set("x-user-id", USER);
+    expect(prov.status).toBe(200);
+    expect(prov.body.chain.map((e: any) => e.id)).toEqual([first.body.handoffId, second.body.handoffId]);
+
+    // clear retires the active handoff; the record survives.
+    const cleared = await request(app.getHttpServer())
+      .post("/v1/memory/handoff").set("x-user-id", USER)
+      .send({ scopeId, clear: true });
+    expect(cleared.status).toBe(201);
+    expect(cleared.body).toMatchObject({ ok: true, cleared: true });
+    const afterClear = await request(app.getHttpServer())
+      .post("/v1/memory/retrieve").set("x-user-id", USER)
+      .send({ scopeId, query: "controller" });
+    expect(afterClear.body.handoff ?? null).toBeNull();
   });
 
   it("rejects an empty summary and a foreign scope", async () => {

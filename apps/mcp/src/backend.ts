@@ -18,16 +18,18 @@ export interface MemoryBackend {
   forget(input: { factKey: string }): Promise<{ ok: true }>;
   /**
    * Records where this session stopped — summary, open questions, next steps.
-   * Each handoff supersedes the previous one on the same audit chain every
-   * other fact uses; the next session (any MCP client) receives the active
-   * handoff in its `recall` result. `superseded`: whether a previous handoff
-   * was replaced. Remote mode calls `POST /v1/memory/handoff`.
+   * Each handoff supersedes the previous one on an audit chain (`why` on the
+   * returned `handoffId` walks it); the next session (any MCP client) receives
+   * the active handoff in its `recall` result. `clear: true` retires the
+   * active handoff instead (never deleted). Remote mode calls
+   * `POST /v1/memory/handoff`.
    */
   handoff(input: {
-    summary: string;
+    summary?: string;
     openQuestions?: string[];
     nextSteps?: string[];
-  }): Promise<{ ok: true; superseded: boolean }>;
+    clear?: boolean;
+  }): Promise<{ ok: true; handoffId?: string; superseded: boolean; cleared?: boolean }>;
   /**
    * Demands a digest pass now, regardless of the pending-event threshold —
    * for callers at a moment when raw context is about to disappear from a

@@ -1060,6 +1060,9 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "clear": {
+                    "type": "boolean",
+                  },
                   "nextSteps": {
                     "items": {
                       "maxLength": 500,
@@ -1084,13 +1087,11 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                   },
                   "summary": {
                     "maxLength": 2000,
-                    "minLength": 1,
                     "type": "string",
                   },
                 },
                 "required": [
                   "scopeId",
-                  "summary",
                 ],
                 "type": "object",
               },
@@ -1105,6 +1106,9 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                 "schema": {
                   "additionalProperties": true,
                   "properties": {
+                    "cleared": {
+                      "type": "boolean",
+                    },
                     "handoffId": {
                       "type": "string",
                     },
@@ -1120,7 +1124,6 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                   },
                   "required": [
                     "ok",
-                    "handoffId",
                     "superseded",
                   ],
                   "type": "object",
@@ -1582,12 +1585,16 @@ exports[`buildOpenApiDocument > matches the committed snapshot 1`] = `
                         "content": {
                           "type": "string",
                         },
+                        "id": {
+                          "type": "string",
+                        },
                         "versionCount": {
                           "minimum": 1,
                           "type": "integer",
                         },
                       },
                       "required": [
+                        "id",
                         "content",
                         "addedAt",
                         "versionCount",

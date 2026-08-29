@@ -103,14 +103,14 @@ export function createHttpBackend(opts: { baseUrl: string; userId: string; scope
       return { ran: false, reason: "unsupported" } as const;
     },
 
-    async handoff({ summary, openQuestions, nextSteps }) {
-      const result = (await call("POST", "/v1/memory/handoff", {
+    async handoff({ summary, openQuestions, nextSteps, clear }) {
+      return (await call("POST", "/v1/memory/handoff", {
         scopeId,
-        summary,
+        ...(summary !== undefined ? { summary } : {}),
         ...(openQuestions?.length ? { openQuestions } : {}),
-        ...(nextSteps?.length ? { nextSteps } : {})
-      })) as { ok: true; handoffId: string; superseded: boolean };
-      return { ok: true, superseded: result.superseded } as const;
+        ...(nextSteps?.length ? { nextSteps } : {}),
+        ...(clear ? { clear } : {})
+      })) as { ok: true; handoffId?: string; superseded: boolean; cleared?: boolean };
     },
 
     async close() {

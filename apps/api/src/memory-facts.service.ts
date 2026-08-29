@@ -1,5 +1,5 @@
 import { Injectable, Optional } from "@nestjs/common";
-import { flattenScopeFacts, groupFactsForDisplay, addNoteFact, resolveFacetPackForScope, setHandoffFact, type DisplayFact } from "@statecore/core";
+import { flattenScopeFacts, groupFactsForDisplay, addNoteFact, resolveFacetPackForScope, formatHandoff, type DisplayFact } from "@statecore/core";
 import type { DigestState } from "@statecore/core";
 import { prisma as defaultPrisma } from "@statecore/db";
 import { randomUUID } from "node:crypto";
@@ -52,6 +52,9 @@ export class MemoryFactsService {
         where: { id: match.evidenceId },
         data: { suppressedAt: new Date() }
       });
+      // A suppressed event must also leave the lexical index, or it keeps
+      // occupying candidate slots that findByIds then filters out.
+      await this.prisma.memoryEventToken.deleteMany({ where: { eventId: match.evidenceId } });
     }
     return { ok: true };
   }
@@ -92,50 +95,33 @@ export class MemoryFactsService {
     return { ok: true };
   }
 
-  // Persistence mirrors addNote above; the handoff itself is a supersession-
-  // tracked registry fact (packages/core/src/handoff.ts).
+  // Handoffs live in their own table (SessionHandoff), deliberately not in the
+  // digest state snapshot — see packages/core/src/handoff.ts for why. The
+  // transaction makes supersession atomic: concurrent writers serialize instead
+  // of overwriting each other's whole-JSON state.
   async setHandoff(
     scopeId: string,
-    input: { summary: string; openQuestions?: string[]; nextSteps?: string[] }
-  ): Promise<{ ok: true; handoffId: string; superseded: boolean }> {
-    const snap = await this.prisma.digestStateSnapshot.findFirst({
-      where: { scopeId },
-      orderBy: { createdAt: "desc" }
-    });
-
-    if (snap) {
-      const state = snap.state as unknown as DigestState;
-      const result = setHandoffFact(state, input, () => randomUUID(), () => new Date().toISOString());
-      if (!result.changed) {
-        // Input validation guarantees a non-empty summary, so this is unreachable
-        // in practice; stated rather than silently returning a fake id.
-        throw new Error("handoff not stored: empty summary");
-      }
-      await this.prisma.digestStateSnapshot.update({
-        where: { id: snap.id },
-        data: { state: state as any }
+    input: { summary?: string; openQuestions?: string[]; nextSteps?: string[]; clear?: boolean }
+  ): Promise<{ ok: true; handoffId?: string; superseded: boolean; cleared?: boolean }> {
+    if (input.clear) {
+      const retired = await this.prisma.sessionHandoff.updateMany({
+        where: { scopeId, supersededBy: null, retiredAt: null },
+        data: { retiredAt: new Date(), retiredReason: "user_cleared" }
       });
-      return { ok: true, handoffId: result.id, superseded: result.supersededId !== undefined };
+      return { ok: true, superseded: false, cleared: retired.count > 0 };
     }
-
-    const state: DigestState = {
-      stableFacts: { decisions: [] },
-      workingNotes: {},
-      todos: [],
-      factRegistry: [],
-      profile: {}
-    };
-    const result = setHandoffFact(state, input, () => randomUUID(), () => new Date().toISOString());
-    if (!result.changed) throw new Error("handoff not stored: empty summary");
-    await this.prisma.$transaction(async (tx: any) => {
-      const digest = await tx.digest.create({
-        data: { scopeId, summary: "Notes", changes: "", nextSteps: [] }
+    const summary = input.summary?.trim();
+    // Input validation guarantees this; stated rather than silently no-oping.
+    if (!summary) throw new Error("handoff not stored: empty summary");
+    const content = formatHandoff({ summary, openQuestions: input.openQuestions, nextSteps: input.nextSteps });
+    return this.prisma.$transaction(async (tx: any) => {
+      const created = await tx.sessionHandoff.create({ data: { scopeId, content } });
+      const superseded = await tx.sessionHandoff.updateMany({
+        where: { scopeId, supersededBy: null, retiredAt: null, NOT: { id: created.id } },
+        data: { supersededBy: created.id }
       });
-      await tx.digestStateSnapshot.create({
-        data: { scopeId, digestId: digest.id, state: state as any, consistency: null }
-      });
+      return { ok: true as const, handoffId: created.id, superseded: superseded.count > 0 };
     });
-    return { ok: true, handoffId: result.id, superseded: false };
   }
 
   async getFacts(scopeId: string, userId: string) {

@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { createDigestWithSnapshot, type DigestWritePrisma, type DigestWriteTx } from "./digest-write";
 
-function makePrismaStub(snapshotShouldReject = false): {
+function makePrismaStub(
+  snapshotShouldReject = false,
+  latestSnapshotState: unknown = null
+): {
   prisma: DigestWritePrisma;
   calls: string[];
   digestCreateArgs: any[];
@@ -27,6 +30,10 @@ function makePrismaStub(snapshotShouldReject = false): {
             snapshotCreateArgs.push(args);
             if (snapshotShouldReject) throw new Error("snapshot write failed");
             return {};
+          }),
+          findFirst: vi.fn(async () => {
+            calls.push("snapshot.findFirst");
+            return latestSnapshotState ? { state: latestSnapshotState } : null;
           })
         }
       };
@@ -50,7 +57,7 @@ describe("createDigestWithSnapshot", () => {
       consistency: { score: 1 }
     });
 
-    expect(calls).toEqual(["digest.create", "snapshot.create"]);
+    expect(calls).toEqual(["snapshot.findFirst", "digest.create", "snapshot.create"]);
   });
 
   it("passes the created digest's id as digestId on the snapshot", async () => {
@@ -162,5 +169,52 @@ describe("createDigestWithSnapshot", () => {
     });
 
     expect(digestCreateArgs[0].data).not.toHaveProperty("selectionLog");
+  });
+});
+
+describe("createDigestWithSnapshot — concurrent-note carry-over", () => {
+  const noteEntry = {
+    id: "n-conc",
+    content: "note written while the digest ran",
+    type: "profile",
+    confidence: 0.9,
+    addedAt: "2026-08-29T12:00:00.000Z",
+    evidenceId: "n-conc-ev",
+    evidenceType: "event",
+    facet: "notes"
+  };
+
+  it("carries a note added to the latest snapshot after the pipeline's read", async () => {
+    const latestState = { profile: { notes: [noteEntry.content] }, factRegistry: [noteEntry] };
+    const { prisma, snapshotCreateArgs } = makePrismaStub(false, latestState);
+
+    await createDigestWithSnapshot(prisma, {
+      scopeId: "scope-1",
+      summary: "s",
+      changes: "",
+      nextSteps: [],
+      state: { profile: {}, factRegistry: [] },
+      consistency: null
+    });
+
+    const written = snapshotCreateArgs[0].data.state as any;
+    expect(written.factRegistry.some((e: any) => e.id === "n-conc")).toBe(true);
+    expect(written.profile.notes).toContain(noteEntry.content);
+  });
+
+  it("writes the pipeline state untouched when nothing was written concurrently", async () => {
+    const { prisma, snapshotCreateArgs } = makePrismaStub(false, { profile: {}, factRegistry: [] });
+
+    await createDigestWithSnapshot(prisma, {
+      scopeId: "scope-1",
+      summary: "s",
+      changes: "",
+      nextSteps: [],
+      state: { profile: {}, factRegistry: [] },
+      consistency: null
+    });
+
+    const written = snapshotCreateArgs[0].data.state as any;
+    expect(written.factRegistry).toEqual([]);
   });
 });
