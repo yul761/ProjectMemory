@@ -305,6 +305,36 @@ export class DigestService {
   }
 }
 
+/**
+ * One embedding-backed stage that failed during a retrieve.
+ *
+ * Digests report `degraded`, the budget packer reports `dropped`, the merge
+ * reports a drop log — retrieval was the one subsystem that could not say its
+ * own quality had fallen: `mode` was derived from configuration, so a run
+ * whose every embedding call threw still reported "hybrid". Now `mode` states
+ * what actually ran, and this entry states what did not.
+ */
+export interface RetrievalDegradation {
+  stage: "vector_search" | "rerank";
+  error: string;
+}
+
+/**
+ * Bounded additive ranking boost for pinned events.
+ *
+ * `pinned` protected an event in the digest's budget competition but meant
+ * nothing to retrieval, so the resume uploaded once and never touched again —
+ * always the oldest candidate — kept losing to recency. 0.25 beats the maximum
+ * recency edge (0.2) at equal relevance; any relevance gap above ~0.31 still
+ * wins, so a pinned but irrelevant document cannot outrank a relevant event.
+ * A boost, never a filter.
+ */
+const PINNED_RETRIEVAL_BOOST = 0.25;
+
+function pinnedBoost(event: MemoryEvent): number {
+  return event.pinned ? PINNED_RETRIEVAL_BOOST : 0;
+}
+
 export class RetrieveService {
   constructor(
     private digests: DigestRepo,
@@ -419,10 +449,11 @@ export class RetrieveService {
       embeddingScore?: number;
       finalScore?: number;
       reranked?: boolean;
-    }>
+    }>,
+    degraded: RetrievalDegradation[]
   ) {
     if (!this.options?.useEmbeddingRerank || !this.options.embeddingModel || !ranked.length) {
-      return ranked;
+      return { items: ranked, applied: false };
     }
 
     const candidateLimit = Math.min(this.options.embeddingCandidateLimit ?? 24, ranked.length);
@@ -432,14 +463,15 @@ export class RetrieveService {
       const queryVector = embeddings[0];
       const contentVectors = embeddings.slice(1);
       if (!queryVector || contentVectors.length !== topCandidates.length) {
-        return ranked;
+        degraded.push({ stage: "rerank", error: "embedding count mismatch" });
+        return { items: ranked, applied: false };
       }
 
       const originalOrder = new Map(topCandidates.map((item, index) => [item.event.id, index]));
       const rerankedTop = topCandidates
         .map((item, index) => {
           const embeddingScore = this.cosineSimilarity(queryVector, contentVectors[index]);
-          const finalScore = embeddingScore * 0.55 + item.score * 0.25 + item.recency * 0.2;
+          const finalScore = embeddingScore * 0.55 + item.score * 0.25 + item.recency * 0.2 + pinnedBoost(item.event);
           return {
             ...item,
             embeddingScore,
@@ -457,10 +489,11 @@ export class RetrieveService {
           reranked: (originalOrder.get(item.event.id) ?? index) !== index
         }));
 
-      return [...rerankedTop, ...ranked.slice(candidateLimit)];
+      return { items: [...rerankedTop, ...ranked.slice(candidateLimit)], applied: true };
     } catch (err) {
       logger.warn({ err }, "Embedding rerank failed, falling back to heuristic ranking");
-      return ranked;
+      degraded.push({ stage: "rerank", error: err instanceof Error ? err.message : String(err) });
+      return { items: ranked, applied: false };
     }
   }
 
@@ -481,6 +514,8 @@ export class RetrieveService {
       return { digest, events: events.items.slice(0, limit) };
     }
 
+    const degraded: RetrievalDegradation[] = [];
+    let vectorSearchSucceeded = false;
     let mergedItems = events.items;
     if (
       query?.trim() &&
@@ -497,6 +532,7 @@ export class RetrieveService {
           const tVectorSearch = Date.now();
           const vectorIds = await this.options.vectorSearchFn(queryVector, candidateSize, scopeId);
           vectorSearchMs = Date.now() - tVectorSearch;
+          vectorSearchSucceeded = true;
           if (vectorIds.length) {
             const keywordIdSet = new Set(events.items.map((e) => e.id));
             const newIds = vectorIds.filter((id) => !keywordIdSet.has(id));
@@ -508,8 +544,10 @@ export class RetrieveService {
             }
           }
         }
-      } catch {
-        // Vector search failed — fall back to keyword candidates only
+      } catch (err) {
+        // Fall back to keyword candidates only — recorded, not swallowed.
+        logger.warn({ err }, "Vector search failed, falling back to keyword candidates");
+        degraded.push({ stage: "vector_search", error: err instanceof Error ? err.message : String(err) });
       }
     }
 
@@ -530,14 +568,15 @@ export class RetrieveService {
         };
       })
       .sort((a, b) => {
-        const combinedA = a.score * 0.8 + a.recency * 0.2;
-        const combinedB = b.score * 0.8 + b.recency * 0.2;
+        const combinedA = a.score * 0.8 + a.recency * 0.2 + pinnedBoost(a.event);
+        const combinedB = b.score * 0.8 + b.recency * 0.2 + pinnedBoost(b.event);
         if (combinedB !== combinedA) return combinedB - combinedA;
         return b.event.createdAt.getTime() - a.event.createdAt.getTime();
       });
 
     const tRerank = Date.now();
-    const reranked = await this.rerankWithEmbeddings(query, ranked);
+    const rerankResult = await this.rerankWithEmbeddings(query, ranked, degraded);
+    const reranked = rerankResult.items;
     rerankMs = Date.now() - tRerank;
 
     const matches = reranked.slice(0, limit).map((item) => {
@@ -546,11 +585,12 @@ export class RetrieveService {
         item.matchedConcepts.length ? `concepts=${item.matchedConcepts.join("|")}` : null,
         item.matchedTerms.length ? `terms=${item.matchedTerms.slice(0, 5).join("|")}` : null,
         item.phraseBoostApplied ? "phrase_boost" : null,
+        item.event.pinned ? "pinned" : null,
         item.reranked ? "position_changed" : null
       ].filter(Boolean);
       const finalScore = item.embeddingScore !== undefined
-        ? item.finalScore ?? (item.embeddingScore * 0.55 + item.score * 0.25 + item.recency * 0.2)
-        : item.score * 0.8 + item.recency * 0.2;
+        ? item.finalScore ?? (item.embeddingScore * 0.55 + item.score * 0.25 + item.recency * 0.2 + pinnedBoost(item.event))
+        : item.score * 0.8 + item.recency * 0.2 + pinnedBoost(item.event);
       return {
         id: item.event.id,
         sourceType: item.event.type ?? "stream",
@@ -574,14 +614,18 @@ export class RetrieveService {
         .map((item) => item.event)
         .slice(0, limit),
       retrieval: {
-        mode: this.options?.useEmbeddingRerank && this.options?.embeddingModel ? "hybrid" : "heuristic",
+        // Derived from what actually ran, not from what was configured: a run
+        // whose every embedding call failed is heuristic, whatever the config
+        // hoped for, and the failures are itemised in `degraded`.
+        mode: vectorSearchSucceeded || rerankResult.applied ? ("hybrid" as const) : ("heuristic" as const),
         embeddingRequested: Boolean(this.options?.useEmbeddingRerank),
         embeddingConfigured: Boolean(this.options?.embeddingModel),
         reranked: matches.some((item) => item.rankingReason.includes("embedding_rerank")),
         candidateCount: ranked.length,
         returnedCount: matches.length,
         embeddingCandidateLimit: this.options?.embeddingModel ? Math.min(this.options.embeddingCandidateLimit ?? 24, ranked.length) : undefined,
-        matches
+        matches,
+        ...(degraded.length ? { degraded } : {})
       }
     };
   }

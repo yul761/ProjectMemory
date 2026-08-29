@@ -41,6 +41,7 @@ import {
   createRuntimePolicyBundle,
   createRuntimeRecallPolicy,
   createModelProvider,
+  facetAuthority,
   generateAnswer,
   getActiveFactRegistry,
   getDomainConfig,
@@ -825,6 +826,16 @@ export class MemoryController {
     }
 
     const query = input.query?.trim();
+    const pack = await resolveFacetPackForScope(
+      {
+        findFacetPack: async (id: string) => {
+          const row = await prisma.user.findUnique({ where: { id }, select: { facetPack: true } });
+          return row?.facetPack ?? null;
+        }
+      },
+      req.userId,
+      (scope as { template?: string | null }).template ?? undefined
+    );
     const packed = packWithinBudget({
       digest,
       facts: activeFactRegistry,
@@ -834,7 +845,10 @@ export class MemoryController {
       // and recency rather than pretending to rank by relevance.
       scoreFact: query
         ? (content: string) => this.domain.retrieveService.scoreText(query, content)
-        : undefined
+        : undefined,
+      // Write protection and document authority carry into the budget
+      // competition as a bounded ranking boost.
+      factAuthority: (fact) => facetAuthority(pack, fact.facet)
     });
 
     // `retrieval.matches`/`returnedCount` were computed by retrieve() before the

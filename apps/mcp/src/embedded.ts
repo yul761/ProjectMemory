@@ -11,6 +11,7 @@ import {
   getActiveFactRegistry,
   factToGroup,
   computeFactKey,
+  facetAuthority,
   packWithinBudget,
   type DigestState,
   type ProjectRepo,
@@ -326,6 +327,7 @@ export function createEmbeddedBackend(opts: {
 
       // Mirrors apps/api/src/memory.controller.ts#retrieve (maxChars branch); keep in sync.
       const trimmedQuery = query?.trim();
+      const facetPack = await packFor();
       const packed = packWithinBudget({
         digest,
         facts: activeFactRegistry,
@@ -333,7 +335,10 @@ export function createEmbeddedBackend(opts: {
         maxChars,
         // No query means no relevance signal; the packer falls back to confidence
         // and recency rather than pretending to rank by relevance.
-        scoreFact: trimmedQuery ? (content: string) => retrieve.scoreText(trimmedQuery, content) : undefined
+        scoreFact: trimmedQuery ? (content: string) => retrieve.scoreText(trimmedQuery, content) : undefined,
+        // Write protection and document authority carry into the budget
+        // competition as a bounded ranking boost.
+        factAuthority: (fact) => facetAuthority(facetPack, fact.facet)
       });
 
       const retrieval = (result as { retrieval?: { matches: Array<{ id: string }>; returnedCount: number } }).retrieval;

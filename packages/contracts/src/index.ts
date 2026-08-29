@@ -189,7 +189,19 @@ export const RetrieveOutput = z.object({
   // its seven required fields, which parseOutput rejected as a 500).
   budget: BudgetReportSchema.optional(),
   retrieval: z.object({
+    // `mode` states what actually ran, not what was configured: embedding
+    // failures downgrade it to "heuristic" and are itemised in `degraded`.
     mode: z.enum(["heuristic", "hybrid"]),
+    // Additive and optional: embedding-backed stages that failed during this
+    // retrieve. Absent means every configured stage completed.
+    degraded: z
+      .array(
+        z.object({
+          stage: z.enum(["vector_search", "rerank"]),
+          error: z.string()
+        })
+      )
+      .optional(),
     embeddingRequested: z.boolean(),
     embeddingConfigured: z.boolean(),
     reranked: z.boolean(),

@@ -66,6 +66,12 @@ export interface PackInput<F extends BudgetFact, E extends BudgetEvent> {
   maxChars: number;
   /** Relevance score for one text. Absent when the caller supplied no query. */
   scoreFact?: (content: string) => number;
+  /**
+   * Bounded ranking multiplier per fact (clamped to [1, 1.5] before use), from
+   * the facet pack's write-protection and document-authority flags. A boost,
+   * never a filter: it reorders the budget competition, it excludes nothing.
+   */
+  factAuthority?: (fact: F) => number;
 }
 
 export interface PackResult<F, E> {
@@ -84,15 +90,23 @@ export interface PackResult<F, E> {
  */
 export function rankFacts<F extends BudgetFact>(
   facts: F[],
-  scoreFact?: (content: string) => number
+  scoreFact?: (content: string) => number,
+  authorityOf?: (fact: F) => number
 ): F[] {
-  const scored = facts.map((fact) => ({
-    fact,
-    score: scoreFact ? scoreFact(fact.content) : 0
-  }));
+  // The clamp keeps authority an adjustment: at 1.5 a protected fact wins a
+  // close call, but a fact with a large relevance deficit stays behind.
+  const clampAuthority = (value: number) => Math.min(Math.max(value, 1), 1.5);
+  const scored = facts.map((fact) => {
+    const authority = authorityOf ? clampAuthority(authorityOf(fact)) : 1;
+    return {
+      fact,
+      score: (scoreFact ? scoreFact(fact.content) : 0) * authority,
+      confidence: fact.confidence * authority
+    };
+  });
   scored.sort((a, b) => {
     if (scoreFact && b.score !== a.score) return b.score - a.score;
-    if (b.fact.confidence !== a.fact.confidence) return b.fact.confidence - a.fact.confidence;
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
     return b.fact.addedAt.localeCompare(a.fact.addedAt);
   });
   return scored.map((entry) => entry.fact);
@@ -101,7 +115,7 @@ export function rankFacts<F extends BudgetFact>(
 export function packWithinBudget<F extends BudgetFact, E extends BudgetEvent>(
   input: PackInput<F, E>
 ): PackResult<F, E> {
-  const { digest, facts, events, maxChars, scoreFact } = input;
+  const { digest, facts, events, maxChars, scoreFact, factAuthority } = input;
 
   const droppedCounts = { digest: 0, fact: 0, event: 0 };
   const dropped: BudgetDrop[] = [];
@@ -144,7 +158,7 @@ export function packWithinBudget<F extends BudgetFact, E extends BudgetEvent>(
   const factReason: BudgetDropReason =
     factShareCap <= remaining ? "fact_share_cap" : "budget_exhausted";
 
-  const ranked = rankFacts(facts, scoreFact);
+  const ranked = rankFacts(facts, scoreFact, factAuthority);
   const keptFacts: F[] = [];
   let factChars = 0;
   for (const fact of ranked) {

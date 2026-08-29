@@ -73,7 +73,10 @@ describe("RetrieveService — embedding reranking", () => {
     expect(result.events[0].id).toBe("e2");
     expect(result.retrieval.matches[0].embeddingScore).toBeUndefined();
     expect(result.retrieval.matches[0].rankingReason).toContain("heuristic_rank");
-    expect(result.retrieval.mode).toBe("hybrid");
+    // The rerank never ran, so the run was heuristic — mode used to claim
+    // "hybrid" here because it was derived from configuration, not outcome.
+    expect(result.retrieval.mode).toBe("heuristic");
+    expect(result.retrieval.degraded).toEqual([{ stage: "rerank", error: expect.stringContaining("API timeout") }]);
     expect(result.retrieval.reranked).toBe(false);
   });
 

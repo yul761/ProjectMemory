@@ -194,6 +194,28 @@ export function isDocumentAuthorityFacet(pack: FacetPack, facet: string): boolea
 }
 
 /**
+ * Bounded retrieval-ranking multiplier for a fact, from its facet's standing.
+ *
+ * Write protection and document authority were write-path rules only: they
+ * decided what could overwrite a fact, and then the read path ranked that fact
+ * as if the pack had never spoken. This carries the same signals into ranking
+ * as a bounded multiplier — protected facts win when scores are close, and a
+ * runaway value can never let an irrelevant fact outrank a relevant one. It is
+ * a boost, never a filter: no fact is excluded by it.
+ */
+export const WRITE_PROTECTED_AUTHORITY_BOOST = 0.25;
+export const DOCUMENT_AUTHORITY_BOOST = 0.15;
+export const MAX_FACT_AUTHORITY = 1.5;
+
+export function facetAuthority(pack: FacetPack, facet: string | undefined): number {
+  if (!facet || !isRegisteredFacet(pack, facet)) return 1;
+  let authority = 1;
+  if (isWriteProtectedFacet(pack, facet)) authority += WRITE_PROTECTED_AUTHORITY_BOOST;
+  if (isDocumentAuthorityFacet(pack, facet)) authority += DOCUMENT_AUTHORITY_BOOST;
+  return Math.min(authority, MAX_FACT_AUTHORITY);
+}
+
+/**
  * Where a classified event lands, if anywhere. Returns the destination facet
  * together with its rules, read from the facet itself so there is only one
  * place that says what a facet's cap and protection are.
