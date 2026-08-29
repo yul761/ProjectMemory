@@ -103,6 +103,12 @@ export function createHttpBackend(opts: { baseUrl: string; userId: string; scope
       return { ran: false, reason: "unsupported" } as const;
     },
 
+    async handoff() {
+      // The frozen /v1 surface has no handoff operation yet; report that
+      // honestly instead of writing it somewhere the next session won't look.
+      return { ok: false, reason: "unsupported" } as const;
+    },
+
     async close() {
       // Nothing to release: every call above is a one-shot fetch, no held connection.
     }

@@ -106,9 +106,9 @@ describe("built binary, keyless end-to-end over stdio", () => {
     expect(firstLine).toBe("#!/usr/bin/env node");
   });
 
-  it("lists exactly the five memory tools", async () => {
+  it("lists exactly the six memory tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["facts", "forget", "recall", "remember", "why"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["facts", "forget", "handoff", "recall", "remember", "why"]);
   });
 
   it("initialize ships the system-prompt instructions (hosts inject them per session)", () => {

@@ -37,9 +37,9 @@ describe("server instructions over the protocol", () => {
     expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
   });
 
-  it("createServer registers the five tools (main.ts builds through it)", async () => {
+  it("createServer registers the six tools (main.ts builds through it)", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["facts", "forget", "recall", "remember", "why"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["facts", "forget", "handoff", "recall", "remember", "why"]);
   });
 
   it("instructions carry the trigger moments, not just a description", () => {

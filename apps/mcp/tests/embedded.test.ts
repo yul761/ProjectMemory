@@ -43,6 +43,22 @@ describe("embedded backend, keyless", () => {
     expect(res.mode).toBe("event");
   });
 
+  it("handoff → recall returns it; a second handoff supersedes the first on the chain", async () => {
+    const first = await be.handoff({ summary: "stopped mid-migration", nextSteps: ["wire the controller"] });
+    expect(first).toEqual({ ok: true, superseded: false });
+
+    const afterFirst: any = await be.recall({});
+    expect(afterFirst.handoff?.content).toContain("stopped mid-migration");
+    expect(afterFirst.handoff?.content).toContain("wire the controller");
+
+    const second = await be.handoff({ summary: "controller wired, tests failing", openQuestions: ["flaky or real?"] });
+    expect(second).toEqual({ ok: true, superseded: true });
+
+    const afterSecond: any = await be.recall({ query: "controller" });
+    expect(afterSecond.handoff?.content).toContain("tests failing");
+    expect(afterSecond.handoff?.versionCount).toBe(2);
+  });
+
   // Regression for a first-wins vs. last-wins factId join bug: two registry
   // entries in different facets that share a displayGroup and normalize to the
   // same content collide on the same factKey (computeFactKey hashes

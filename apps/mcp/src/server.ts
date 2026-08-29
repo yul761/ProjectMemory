@@ -18,7 +18,7 @@ export const SERVER_INSTRUCTIONS = [
   "- the user states a durable preference, or corrects you on one;",
   "- a decision is made (architecture, tooling, approach), including reversals of earlier decisions;",
   "- a non-obvious constraint, gotcha, or environment fact is discovered the hard way;",
-  "- work ends in a state the next session must know about.",
+  "- work ends in a state the next session must know about — for that, call `handoff` (summary, open questions, next steps) instead; `recall` hands it to the next session, so continue from a handoff when one appears.",
   "Store one self-contained fact per call, under 500 characters; pass consolidate: true for longer conversational context.",
   "When a fact changes, simply remember the corrected version — the engine detects revisions and keeps the old version on an auditable chain (`why` shows a fact's evidence and history; `forget` retires without deleting).",
   "Never store secrets, credentials, or tokens."

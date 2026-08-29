@@ -17,6 +17,19 @@ export interface MemoryBackend {
   /** Retires a fact by its `factKey` and suppresses its evidence event; the record is kept, not deleted. */
   forget(input: { factKey: string }): Promise<{ ok: true }>;
   /**
+   * Records where this session stopped — summary, open questions, next steps.
+   * Each handoff supersedes the previous one on the same audit chain every
+   * other fact uses; the next session (any MCP client) receives the active
+   * handoff in its `recall` result. `superseded`: whether a previous handoff
+   * was replaced. Remote mode reports `unsupported` until the frozen `/v1`
+   * surface grows a handoff operation.
+   */
+  handoff(input: {
+    summary: string;
+    openQuestions?: string[];
+    nextSteps?: string[];
+  }): Promise<{ ok: true; superseded: boolean } | { ok: false; reason: "unsupported" }>;
+  /**
    * Demands a digest pass now, regardless of the pending-event threshold —
    * for callers at a moment when raw context is about to disappear from a
    * model's view (e.g. a host compacting its conversation). Never rejects.

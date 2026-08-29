@@ -27,9 +27,9 @@ describe("MCP tool surface, keyless via InMemoryTransport", () => {
     await backend.close();
   });
 
-  it("lists exactly the five memory tools", async () => {
+  it("lists exactly the six memory tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["facts", "forget", "recall", "remember", "why"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["facts", "forget", "handoff", "recall", "remember", "why"]);
   });
 
   it("remember → facts → why walks a real evidence chain over the protocol", async () => {

@@ -18,7 +18,7 @@ claude mcp add statecore -- npx -y statecore-mcp     # Claude Code
 
 ![statecore-mcp demo: remember, facts, why, forget — all keyless](https://raw.githubusercontent.com/yul761/StateCore/main/apps/mcp/demo/statecore-demo.gif)
 
-`remember` a decision in one session, ask `why` in the next: you get the fact, the evidence behind it, and its version history — superseded and retired facts stay on the record, marked, never deleted. Configs for Cursor, dsh, and every other MCP host: [`apps/mcp/README.md`](apps/mcp/README.md).
+`remember` a decision in one session, ask `why` in the next: you get the fact, the evidence behind it, and its version history — superseded and retired facts stay on the record, marked, never deleted. And sessions hand off across vendors: `handoff` records where one session stopped, and the next one — Claude Code, Codex, Cursor, any MCP client on the same project — receives it at the top of `recall`, with every earlier stop-point still on the audit chain. Configs for Cursor, dsh, and every other MCP host: [`apps/mcp/README.md`](apps/mcp/README.md).
 
 ## Capture is easy. Trust is hard.
 

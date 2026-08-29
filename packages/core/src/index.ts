@@ -800,6 +800,7 @@ export async function generateAnswer(input: {
 }
 
 export * from "./lexical-index";
+export * from "./handoff";
 export * from "./digest-control";
 export * from "./provenance";
 export * from "./drift-metrics";

@@ -23,8 +23,20 @@ That starts the server over stdio with no configuration and no model key. Point 
 | `facts` | List everything currently believed, grouped, with fact ids |
 | `why` | A fact's evidence and its full version chain — the differentiator: not just what is believed, but why, and what it replaced |
 | `forget` | Retire a fact by key. The record is kept and marked retired, not deleted |
+| `handoff` | Record where this session stopped — summary, open questions, next steps. The next session (this client or any other MCP client) gets it at the top of `recall`; each handoff supersedes the previous one on an auditable chain |
 
 `remember` → `facts` → `why` → `forget` is the whole loop, and every step of it works with no model key configured.
+
+### Cross-client handoff
+
+Because the store is one SQLite file addressed by project path, a handoff
+written from one MCP client is read by whichever client starts next in the
+same project — stop mid-task in Claude Code, continue in Codex or Cursor
+without re-explaining where you were. Unlike an ad-hoc "notes" convention,
+handoffs are supersession-tracked facts: `why` on a handoff's fact id walks
+every stop-point this project has ever recorded. Embedded mode only for now;
+`--url` mode reports `unsupported` until the frozen `/v1` surface grows a
+handoff operation.
 
 ## Keyless vs. keyed
 

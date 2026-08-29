@@ -102,6 +102,20 @@ export function registerTools(server: McpServer, backend: MemoryBackend): void {
     },
     async (args) => json(await backend.forget(args as { factKey: string }))
   );
+  registrar.registerTool(
+    "handoff",
+    {
+      description:
+        "Record where this session stopped — a summary, open questions, and next steps — before ending or compacting. The next session (in this client or any other MCP client) receives it at the top of recall; each handoff supersedes the previous one on an auditable chain.",
+      inputSchema: {
+        summary: z.string().trim().min(1).max(2000),
+        openQuestions: z.array(z.string().trim().min(1).max(500)).max(10).optional(),
+        nextSteps: z.array(z.string().trim().min(1).max(500)).max(10).optional()
+      }
+    },
+    async (args) =>
+      json(await backend.handoff(args as { summary: string; openQuestions?: string[]; nextSteps?: string[] }))
+  );
 }
 
 const json = (v: unknown): ToolResult => ({ content: [{ type: "text", text: JSON.stringify(v, null, 2) }] });

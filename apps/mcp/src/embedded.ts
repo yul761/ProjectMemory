@@ -12,7 +12,9 @@ import {
   factToGroup,
   computeFactKey,
   facetAuthority,
+  getActiveHandoff,
   packWithinBudget,
+  setHandoffFact,
   tokenizeForIndex,
   type DigestState,
   type ProjectRepo,
@@ -341,6 +343,30 @@ export function createEmbeddedBackend(opts: {
       return { ok: true, mode: "event" };
     },
 
+    async handoff(input) {
+      // Persistence mirrors remember's note path above; keep in sync.
+      const snap = await latestState();
+      if (snap) {
+        const result = setHandoffFact(snap.state, input, () => randomUUID(), () => new Date().toISOString());
+        if (result.changed) {
+          await store.prisma.digestStateSnapshot.update({
+            where: { id: snap.id },
+            data: { state: snap.state as any }
+          });
+        }
+        return { ok: true, superseded: result.changed ? result.supersededId !== undefined : false };
+      }
+      const state: DigestState = { stableFacts: { decisions: [] }, workingNotes: {}, todos: [], factRegistry: [], profile: {} };
+      setHandoffFact(state, input, () => randomUUID(), () => new Date().toISOString());
+      await store.prisma.$transaction(async (tx) => {
+        const digest = await tx.digest.create({ data: { scopeId, summary: "Notes", changes: "", nextSteps: [] } });
+        await tx.digestStateSnapshot.create({
+          data: { scopeId, digestId: digest.id, state: state as any, consistency: Prisma.JsonNull }
+        });
+      });
+      return { ok: true, superseded: false };
+    },
+
     async recall({ query, maxChars }) {
       const retrieve = new RetrieveService(makeDigestRepo(store.prisma), makeMemoryRepo(store.prisma), {});
       const result = await retrieve.retrieve(scopeId, 20, query);
@@ -351,9 +377,13 @@ export function createEmbeddedBackend(opts: {
       // branches match it, not just the maxChars one.
       const snap = await latestState();
       const activeFactRegistry = snap ? getActiveFactRegistry(snap.state) : [];
+      // The active session handoff rides on every recall, budget or not: it is
+      // the "continue from here" briefing, so it must never lose a budget
+      // competition to ordinary events.
+      const handoff = snap ? getActiveHandoff(snap.state) : null;
 
       if (maxChars === undefined) {
-        return { digest, events, factRegistry: activeFactRegistry, retrieval: (result as { retrieval?: unknown }).retrieval ?? null };
+        return { handoff, digest, events, factRegistry: activeFactRegistry, retrieval: (result as { retrieval?: unknown }).retrieval ?? null };
       }
 
       // Mirrors apps/api/src/memory.controller.ts#retrieve (maxChars branch); keep in sync.
@@ -382,6 +412,7 @@ export function createEmbeddedBackend(opts: {
         : (retrieval ?? null);
 
       return {
+        handoff,
         digest: packed.digest,
         events: packed.events,
         factRegistry: packed.facts,
