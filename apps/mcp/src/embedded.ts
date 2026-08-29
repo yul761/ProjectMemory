@@ -13,6 +13,7 @@ import {
   computeFactKey,
   facetAuthority,
   getActiveHandoff,
+  HANDOFF_FACET,
   packWithinBudget,
   setHandoffFact,
   tokenizeForIndex,
@@ -376,7 +377,12 @@ export function createEmbeddedBackend(opts: {
       // whether or not the caller sent maxChars) — computed here too so both
       // branches match it, not just the maxChars one.
       const snap = await latestState();
-      const activeFactRegistry = snap ? getActiveFactRegistry(snap.state) : [];
+      // Handoff entries stay out of the registry output — the handoff rides in
+      // its own field, and a registry copy would compete for the budget it is
+      // promised out of. Mirrors apps/api/src/memory.controller.ts#retrieve.
+      const activeFactRegistry = (snap ? getActiveFactRegistry(snap.state) : []).filter(
+        (entry) => entry.facet !== HANDOFF_FACET
+      );
       // The active session handoff rides on every recall, budget or not: it is
       // the "continue from here" briefing, so it must never lose a budget
       // competition to ordinary events.

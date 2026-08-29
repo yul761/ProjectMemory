@@ -35,6 +35,9 @@ describe("POST /v1/memory/handoff", () => {
     expect(afterFirst.status).toBe(201);
     expect(afterFirst.body.handoff?.content).toContain("stopped mid-migration");
     expect(afterFirst.body.handoff?.content).toContain("wire the controller");
+    // Only in its own field — never duplicated into factRegistry, where it
+    // would compete for the budget it is promised out of.
+    expect((afterFirst.body.factRegistry as any[]).some((f) => f.facet === "handoff")).toBe(false);
 
     const second = await request(app.getHttpServer())
       .post("/v1/memory/handoff").set("x-user-id", USER)

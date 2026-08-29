@@ -50,6 +50,9 @@ describe("embedded backend, keyless", () => {
     const afterFirst: any = await be.recall({});
     expect(afterFirst.handoff?.content).toContain("stopped mid-migration");
     expect(afterFirst.handoff?.content).toContain("wire the controller");
+    // The handoff rides only in its own field: duplicating it into factRegistry
+    // would also let it compete for the maxChars budget it is promised out of.
+    expect((afterFirst.factRegistry as any[]).some((f) => f.facet === "handoff")).toBe(false);
 
     const second = await be.handoff({ summary: "controller wired, tests failing", openQuestions: ["flaky or real?"] });
     expect(second).toEqual({ ok: true, superseded: true });

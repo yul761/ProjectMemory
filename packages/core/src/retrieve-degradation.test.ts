@@ -49,6 +49,24 @@ describe("RetrieveService — degradation is reported, never silent", () => {
     ]);
   });
 
+  it("reports a vector_search degradation when the query embedding comes back empty", async () => {
+    const { digestRepo, memoryRepo } = mockRepos(twoEvents());
+    const embeddingModel = { embed: vi.fn().mockResolvedValue([[]]) };
+
+    const service = new RetrieveService(digestRepo, memoryRepo, {
+      useVectorSearch: true,
+      embeddingModel,
+      vectorSearchFn: vi.fn()
+    });
+
+    const result = await service.retrieve("sc", 2, "xyzzy");
+
+    expect(result.retrieval.mode).toBe("heuristic");
+    expect(result.retrieval.degraded).toEqual([
+      { stage: "vector_search", error: expect.stringContaining("empty query embedding") }
+    ]);
+  });
+
   it("reports a vector_search degradation when the vector search path throws", async () => {
     const { digestRepo, memoryRepo } = mockRepos(twoEvents());
     const embeddingModel = { embed: vi.fn().mockRejectedValue(new Error("embed down")) };

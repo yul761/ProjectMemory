@@ -47,6 +47,7 @@ import {
   generateAnswer,
   getActiveFactRegistry,
   getActiveHandoff,
+  HANDOFF_FACET,
   getDomainConfig,
   normalizeSelectionLog,
   packWithinBudget,
@@ -824,7 +825,12 @@ export class MemoryController {
       this.domain.retrieveService.retrieve(input.scopeId, limit, input.query),
       this.domain.getLatestDigestState(input.scopeId)
     ]);
-    const activeFactRegistry = snapshot ? getActiveFactRegistry(snapshot.state) : [];
+    // Handoff entries are excluded from the registry output: the handoff rides
+    // in its own field below, and a registry copy would both duplicate it and
+    // let it compete for the maxChars budget it is promised out of.
+    const activeFactRegistry = (snapshot ? getActiveFactRegistry(snapshot.state) : []).filter(
+      (entry) => entry.facet !== HANDOFF_FACET
+    );
     // The active session handoff rides on every retrieve, budget or not: it is
     // the "continue from here" briefing, never in the budget competition.
     const handoff = snapshot ? getActiveHandoff(snapshot.state) : null;

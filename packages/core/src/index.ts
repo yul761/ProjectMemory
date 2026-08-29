@@ -581,6 +581,10 @@ export class RetrieveService {
               mergedItems = [...mergedItems, ...vectorEvents];
             }
           }
+        } else {
+          // A provider that returns no vector is the same outage as one that
+          // throws — the stage this feature exists to stop being silent about.
+          degraded.push({ stage: "vector_search", error: "empty query embedding" });
         }
       } catch (err) {
         // Fall back to keyword candidates only — recorded, not swallowed.
@@ -589,8 +593,15 @@ export class RetrieveService {
       }
     }
 
-    const newestTs = mergedItems[0]?.createdAt.getTime() ?? Date.now();
-    const oldestTs = mergedItems[mergedItems.length - 1]?.createdAt.getTime() ?? newestTs;
+    // True min/max over the pool, not positional reads: the merged array is
+    // several batches appended in stream order, so its last element is only
+    // the oldest of the *last batch*. Reading oldestTs positionally gave a
+    // lexical hit older than every vector hit a large negative recency that
+    // buried it below the cutoff — in exactly the embeddings-on configuration
+    // the lexical index was built for.
+    const timestamps = mergedItems.map((e) => e.createdAt.getTime());
+    const newestTs = timestamps.length ? Math.max(...timestamps) : Date.now();
+    const oldestTs = timestamps.length ? Math.min(...timestamps) : newestTs;
     const timeRange = Math.max(1, newestTs - oldestTs);
 
     const ranked = mergedItems
