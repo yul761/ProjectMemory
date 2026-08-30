@@ -92,8 +92,12 @@ services:
     environment:
       PORT: 8787
       CORE_URL: http://api:3000
+    # Both bindings, deliberately: the edge Caddy reaches this via
+    # host.docker.internal, which resolves to the docker0 bridge — loopback
+    # alone is invisible from there (the 2026-08-09 outage's exact shape).
     ports:
       - "127.0.0.1:8787:8787"
+      - "172.17.0.1:8787:8787"
     depends_on:
       - api
     restart: unless-stopped
