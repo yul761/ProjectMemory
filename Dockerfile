@@ -12,6 +12,7 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
+COPY apps/aml-adapter/package.json apps/aml-adapter/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/db/package.json packages/db/package.json
@@ -29,7 +30,7 @@ RUN pnpm db:generate
 # package.json this image never COPYs, so its devDependencies (tsup) are not
 # installed and the recursive build dies on `tsup: not found`. The `...`
 # suffix pulls in packages/* in topological order.
-RUN pnpm --filter "@statecore/api..." --filter "@statecore/worker..." build
+RUN pnpm --filter "@statecore/api..." --filter "@statecore/worker..." --filter "@statecore/aml-adapter..." build
 
 FROM node:20-bookworm-slim AS runtime-base
 
@@ -66,3 +67,9 @@ CMD ["pnpm", "--filter", "@statecore/worker", "start"]
 FROM runtime-base AS migrate
 
 CMD ["pnpm", "db:deploy"]
+
+FROM runtime-base AS aml-adapter-runtime
+
+EXPOSE 8787
+
+CMD ["pnpm", "--filter", "@statecore/aml-adapter", "start"]

@@ -1,0 +1,103 @@
+# Standalone evaluation stack for the Agent Memory Leaderboard
+# (agentmemoryleaderboard.ai): its own postgres/redis/api/worker plus the
+# apps/aml-adapter front door. Deliberately a separate compose project from
+# production — the platform's evaluation traffic is bulk ingestion plus heavy
+# distillation, and it must never share a digest queue or a database with the
+# scopes real users depend on.
+#
+#   docker compose -p statecore-aml -f docker-compose.aml.yml --env-file .env.aml up -d --build
+#
+# .env.aml (untracked) needs: POSTGRES_PASSWORD, DATABASE_URL (aml-postgres),
+# REDIS_URL (aml-redis), LOCAL_USER_TOKEN/CORE_USER_ID (the adapter's core
+# identity), FEATURE_LLM=true + MODEL_API_KEY (+MODEL_NAME), AML_MEMORY_KEY
+# (the secret issued to the platform). The adapter publishes on
+# 127.0.0.1:8787 for the edge proxy; nothing else is exposed.
+services:
+  aml-postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-statecore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.aml}
+      POSTGRES_DB: ${POSTGRES_DB:-statecore_aml}
+    volumes:
+      - amlpgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-statecore} -d ${POSTGRES_DB:-statecore_aml}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aml-redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - amlredisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    env_file:
+      - .env.aml
+    depends_on:
+      aml-postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api-runtime
+    env_file:
+      - .env.aml
+    environment:
+      PORT: 3000
+    depends_on:
+      aml-postgres:
+        condition: service_healthy
+      aml-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker-runtime
+    env_file:
+      - .env.aml
+    depends_on:
+      aml-postgres:
+        condition: service_healthy
+      aml-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  adapter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: aml-adapter-runtime
+    env_file:
+      - .env.aml
+    environment:
+      PORT: 8787
+      CORE_URL: http://api:3000
+    ports:
+      - "127.0.0.1:8787:8787"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  amlpgdata:
+  amlredisdata:
