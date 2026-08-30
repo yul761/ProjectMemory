@@ -1,5 +1,39 @@
 # statecore-mcp
 
+## 0.6.0
+
+### Minor Changes
+
+- [`238e390`](https://github.com/yul761/StateCore/commit/238e39054cc1963b93e508be4d74d326fa7e6253) Thanks [@yul761](https://github.com/yul761)! - Relevance scoring is IDF-weighted from the token index's corpus statistics.
+
+  Measured on a template-heavy corpus (MemoryAgentBench FactConsolidation), the
+  event path — whose candidates come from the inverted index ordered by match
+  count — scored nearly twice the fact path, because uniform overlap scoring
+  lets the template words every record shares drown the one token that
+  distinguishes records. Retrieval now derives per-query IDF weights from the
+  token index (document frequencies + scope event count) and applies them to
+  both the event heuristic and, via the new `RetrieveService.makeScorer`, the
+  fact ranking inside the maxChars budget competition — the two layers agree on
+  what a distinctive token is worth. Deterministic, zero model calls, and
+  absent a token index (or on any stats failure) scoring falls back to the
+  exact legacy uniform behavior.
+
+### Patch Changes
+
+- [`46f188e`](https://github.com/yul761/StateCore/commit/46f188ebcdb74b67e3bd0affd776d55d80ea739f) Thanks [@yul761](https://github.com/yul761)! - The fallback digest model is now gpt-5-mini, matching the README's recommended
+  configuration. The engine is operated with gpt-5-class models (the runtime
+  sends reasoning_effort, which the gpt-4o family rejects), but the embedded and
+  worker fallbacks still said gpt-4o-mini — an explicit MODEL_NAME/OPENAI_MODEL
+  is unaffected.
+
+- [`f405a45`](https://github.com/yul761/StateCore/commit/f405a45b14e56b98d5f1aee9ec35dfdec327912c) Thanks [@yul761](https://github.com/yul761)! - The digest path's default LLM timeout is now 120s (was 20s). Found by a
+  benchmark run: with the recommended gpt-5-mini, a large-backlog distillation
+  chunk routinely exceeds 20s, the call aborts, the retry aborts too, and the
+  whole run fails silently — the recommended default configuration could not
+  digest any real backlog. 20s remains right for interactive calls; the
+  background distillation path now defaults to a timeout that survives
+  reasoning models. MODEL_TIMEOUT_MS still overrides.
+
 ## 0.5.0
 
 ### Minor Changes
