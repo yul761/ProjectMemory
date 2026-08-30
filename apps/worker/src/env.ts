@@ -172,7 +172,7 @@ export const workerEnv = {
   embeddingModelApiKey,
   embeddingModelBaseUrl,
   embeddingModelName,
-  modelTimeoutMs: Number(env.MODEL_TIMEOUT_MS || 20000),
+  modelTimeoutMs: Number(env.MODEL_TIMEOUT_MS || 120000),
   telegramBotToken: env.TELEGRAM_BOT_TOKEN || "",
   maxRecentEvents: Number(env.DIGEST_MAX_RECENT_EVENTS || 50),
   digestFirstRunMaxEvents: Number(env.DIGEST_FIRST_RUN_MAX_EVENTS ?? "200"),

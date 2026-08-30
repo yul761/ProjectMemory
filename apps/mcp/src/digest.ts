@@ -129,7 +129,7 @@ function readDigestEnv(env: NodeJS.ProcessEnv): DigestEnvConfig {
     structuredOutputMaxOutputTokens: env.MODEL_STRUCTURED_OUTPUT_MAX_OUTPUT_TOKENS
       ? Number(env.MODEL_STRUCTURED_OUTPUT_MAX_OUTPUT_TOKENS)
       : undefined,
-    timeoutMs: Number(env.MODEL_TIMEOUT_MS || 20000)
+    timeoutMs: Number(env.MODEL_TIMEOUT_MS || 120000)
   };
 }
 
