@@ -108,7 +108,7 @@ const clean = (value?: string) => {
 };
 const requiresApiKeyForBaseUrl = (baseUrl: string) => /(^https?:\/\/)?api\.openai\.com\/?/i.test(baseUrl);
 const modelBaseUrl = clean(env.MODEL_BASE_URL) || clean(env.OPENAI_BASE_URL) || "https://api.openai.com/v1";
-const modelName = clean(env.MODEL_NAME) || clean(env.OPENAI_MODEL) || "gpt-4o-mini";
+const modelName = clean(env.MODEL_NAME) || clean(env.OPENAI_MODEL) || "gpt-5-mini";
 const chatModelBaseUrl = clean(env.MODEL_CHAT_BASE_URL) || modelBaseUrl;
 const structuredOutputModelBaseUrl = clean(env.MODEL_STRUCTURED_OUTPUT_BASE_URL) || modelBaseUrl;
 const embeddingModelBaseUrl = clean(env.MODEL_EMBEDDING_BASE_URL) || modelBaseUrl;

@@ -110,7 +110,7 @@ function parseDigestThreshold(raw: string | undefined): number {
  */
 function readDigestEnv(env: NodeJS.ProcessEnv): DigestEnvConfig {
   const baseUrl = clean(env.MODEL_BASE_URL) || clean(env.OPENAI_BASE_URL) || "https://api.openai.com/v1";
-  const modelName = clean(env.MODEL_NAME) || clean(env.OPENAI_MODEL) || "gpt-4o-mini";
+  const modelName = clean(env.MODEL_NAME) || clean(env.OPENAI_MODEL) || "gpt-5-mini";
   const apiKey = clean(env.MODEL_API_KEY) || clean(env.OPENAI_API_KEY) || "";
   return {
     featureLlm: env.FEATURE_LLM === "true",
