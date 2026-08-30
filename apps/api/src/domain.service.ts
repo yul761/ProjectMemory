@@ -139,6 +139,18 @@ export class DomainService {
         });
         return groups.map((group) => group.eventId);
       },
+      tokenStats: async (scopeId: string, tokens: string[]) => {
+        if (!tokens.length) return { totalEvents: 0, df: {} };
+        const [totalEvents, groups] = await Promise.all([
+          prisma.memoryEvent.count({ where: { scopeId, suppressedAt: null } }),
+          prisma.memoryEventToken.groupBy({
+            by: ["token"],
+            where: { scopeId, token: { in: tokens } },
+            _count: { token: true }
+          })
+        ]);
+        return { totalEvents, df: Object.fromEntries(groups.map((g) => [g.token, g._count.token])) };
+      },
       listByLookback: (scopeId: string, since: Date, limit: number) =>
         prisma.memoryEvent.findMany({
           where: { scopeId, createdAt: { gte: since }, suppressedAt: null },

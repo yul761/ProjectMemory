@@ -884,10 +884,9 @@ export class MemoryController {
       events,
       maxChars: input.maxChars,
       // No query means no relevance signal; the packer falls back to confidence
-      // and recency rather than pretending to rank by relevance.
-      scoreFact: query
-        ? (content: string) => this.domain.retrieveService.scoreText(query, content)
-        : undefined,
+      // and recency rather than pretending to rank by relevance. The scorer
+      // carries the same IDF weights the event ranking used.
+      scoreFact: query ? await this.domain.retrieveService.makeScorer(input.scopeId, query) : undefined,
       // Write protection and document authority carry into the budget
       // competition as a bounded ranking boost.
       factAuthority: (fact) => facetAuthority(pack, fact.facet)

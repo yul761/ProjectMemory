@@ -119,6 +119,18 @@ function makeMemoryRepo(prisma: LitePrisma): MirroredMemoryRepo {
       });
       return groups.map((group) => group.eventId);
     },
+    tokenStats: async (scopeId, tokens) => {
+      if (!tokens.length) return { totalEvents: 0, df: {} };
+      const [totalEvents, groups] = await Promise.all([
+        prisma.memoryEvent.count({ where: { scopeId, suppressedAt: null } }),
+        prisma.memoryEventToken.groupBy({
+          by: ["token"],
+          where: { scopeId, token: { in: tokens } },
+          _count: { token: true }
+        })
+      ]);
+      return { totalEvents, df: Object.fromEntries(groups.map((group) => [group.token, group._count.token])) };
+    },
     listByLookback: (scopeId, since, limit) =>
       prisma.memoryEvent.findMany({
         where: { scopeId, createdAt: { gte: since }, suppressedAt: null },
@@ -401,8 +413,9 @@ export function createEmbeddedBackend(opts: {
         events,
         maxChars,
         // No query means no relevance signal; the packer falls back to confidence
-        // and recency rather than pretending to rank by relevance.
-        scoreFact: trimmedQuery ? (content: string) => retrieve.scoreText(trimmedQuery, content) : undefined,
+        // and recency rather than pretending to rank by relevance. The scorer
+        // carries the same IDF weights the event ranking used.
+        scoreFact: trimmedQuery ? await retrieve.makeScorer(scopeId, trimmedQuery) : undefined,
         // Write protection and document authority carry into the budget
         // competition as a bounded ranking boost.
         factAuthority: (fact) => facetAuthority(facetPack, fact.facet)

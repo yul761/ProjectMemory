@@ -182,6 +182,12 @@ export interface MemoryRepo {
    */
   replaceTokens?: (eventId: string, scopeId: string, tokens: string[]) => Promise<void>;
   searchByTokens?: (scopeId: string, tokens: string[], limit: number) => Promise<string[]>;
+  /**
+   * Document frequencies for the given tokens plus the scope's event count —
+   * what `idfWeights` turns into per-token weights. Optional like the other
+   * index methods: absent means retrieval scores with uniform weights.
+   */
+  tokenStats?: (scopeId: string, tokens: string[]) => Promise<{ totalEvents: number; df: Record<string, number> }>;
 }
 
 export interface DigestRepo {
@@ -397,7 +403,7 @@ export class RetrieveService {
     return this.explainQueryScore(query, content).score;
   }
 
-  private explainQueryScore(query: string, content: string) {
+  private buildQueryTokens(query: string): { queryTokens: Set<string>; matchedConcepts: Set<string> } {
     const queryTokens = new Set(this.tokenize(query));
     const matchedConcepts = new Set<string>();
     for (const [concept, aliases] of Object.entries(this.queryAliases)) {
@@ -408,6 +414,11 @@ export class RetrieveService {
         for (const token of this.tokenize(alias)) queryTokens.add(token);
       }
     }
+    return { queryTokens, matchedConcepts };
+  }
+
+  private explainQueryScore(query: string, content: string, weightOf?: (token: string) => number) {
+    const { queryTokens, matchedConcepts } = this.buildQueryTokens(query);
     if (!queryTokens.size) {
       return {
         score: 0,
@@ -418,15 +429,62 @@ export class RetrieveService {
     }
     const contentTokens = this.tokenize(content);
     const matchedTerms = [...new Set(contentTokens.filter((token) => queryTokens.has(token)))];
-    const overlap = matchedTerms.length;
+    // Uniform weights reproduce the original overlap ratio exactly; IDF weights
+    // (see idfWeights) let a rare entity token outvote template words that
+    // every record in a corpus shares.
+    const w = weightOf ?? (() => 1);
+    let matchedWeight = 0;
+    for (const token of matchedTerms) matchedWeight += w(token);
+    let totalWeight = 0;
+    for (const token of queryTokens) totalWeight += w(token);
     const phraseBoostApplied = [...queryTokens].some((token) => content.toLowerCase().includes(token));
     const phraseBoost = phraseBoostApplied ? 0.15 : 0;
     return {
-      score: Math.min(1, overlap / queryTokens.size + phraseBoost),
+      score: Math.min(1, (totalWeight > 0 ? matchedWeight / totalWeight : 0) + phraseBoost),
       matchedTerms,
       matchedConcepts: [...matchedConcepts],
       phraseBoostApplied
     };
+  }
+
+  /**
+   * IDF weights for one query, from the inverted token index's document
+   * frequencies. Motivated by a measured gap: on a template-heavy corpus the
+   * event path (candidates ordered by index match count) scored nearly twice
+   * the fact path (uniform overlap ratio), because with uniform weights the
+   * template words every record shares drown the one token that
+   * distinguishes records. Undefined — meaning uniform scoring, the exact
+   * legacy behavior — when the repo has no token index, when the scope has no
+   * events, or when the stats query fails.
+   */
+  private async idfWeights(scopeId: string, query: string): Promise<((token: string) => number) | undefined> {
+    if (!this.memories.tokenStats) return undefined;
+    const { queryTokens } = this.buildQueryTokens(query);
+    if (!queryTokens.size) return undefined;
+    try {
+      const stats = await this.memories.tokenStats(scopeId, [...queryTokens]);
+      if (!stats.totalEvents) return undefined;
+      const weights = new Map<string, number>();
+      for (const token of queryTokens) {
+        weights.set(token, Math.log(1 + stats.totalEvents / (1 + (stats.df[token] ?? 0))));
+      }
+      return (token: string) => weights.get(token) ?? 1;
+    } catch (err) {
+      logger.warn({ err }, "Token stats lookup failed, falling back to uniform scoring");
+      return undefined;
+    }
+  }
+
+  /**
+   * A relevance scorer for one query with the corpus statistics baked in.
+   * Callers ranking facts for the context budget should prefer this over
+   * `scoreText`: same tokenizer and alias table, but weighted by the same IDF
+   * the event ranking uses, so the two layers agree on what a distinctive
+   * token is worth.
+   */
+  async makeScorer(scopeId: string, query: string): Promise<(content: string) => number> {
+    const weights = await this.idfWeights(scopeId, query);
+    return (content: string) => this.explainQueryScore(query, content, weights).score;
   }
 
   private cosineSimilarity(a: number[], b: number[]) {
@@ -523,6 +581,9 @@ export class RetrieveService {
     const degraded: RetrievalDegradation[] = [];
     let vectorSearchSucceeded = false;
     let mergedItems = events.items;
+    // Corpus-statistics weights for this query, shared by every heuristic
+    // score below; undefined degrades to uniform weights (legacy behavior).
+    const weights = await this.idfWeights(scopeId, query);
 
     // Which stream surfaced each candidate — reported per match as part of the
     // ranking's audit trail. A candidate can come from several streams at once.
@@ -606,7 +667,7 @@ export class RetrieveService {
 
     const ranked = mergedItems
       .map((event) => {
-        const heuristic = this.explainQueryScore(query, event.content);
+        const heuristic = this.explainQueryScore(query, event.content, weights);
         return {
           event,
           score: heuristic.score,
